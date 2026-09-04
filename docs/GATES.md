@@ -220,3 +220,5 @@ These are conditions on the work itself, not rows from the sweep.
 | G4 — every number is drawn before it is written | `npm run next-number` output pasted into each PR that claims one | PENDING |
 | G5 — no guard is weakened to make a wave pass | `npm run verify` sub-command count never decreases, and no exemption is added without a written reason | PENDING |
 | G6 — the QA data left in production is dealt with deliberately | an explicit id list, an authorised domain action per row, owner approval, before/after counts, no hard `DELETE` | BLOCKED — owner decision |
+| G7 — the seven blocking decisions are answered | rulings #350-#356 recorded in `docs/OPEN-DECISIONS.md`, `check:decision-numbers` green | **MET** — answered 2026-09-04, guard reports 332 rulings #10-#356, none duplicated |
+| G8 — work is isolated from the shared checkout | a worktree off `origin/main`, its own branch, files staged by name | **MET** — branch `worktree-qa-sweep-20260904` at `ccdfe4c0`, pristine; the shared checkout was left on another agent's branch untouched |

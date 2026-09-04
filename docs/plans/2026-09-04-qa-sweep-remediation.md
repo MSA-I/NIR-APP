@@ -39,112 +39,25 @@ These are not ceremony. Each was measured on 2026-09-04 and each is currently fa
 
 ---
 
-## 2. Decisions that must be settled before building
+## 2. Decisions — settled 2026-09-04
 
-Codex's closing sentence in round 2 is correct and is adopted: *these are security and money
-decisions, not implementation details; no build starts with one open.* Each needs an
-`OPEN-DECISIONS` entry with a number drawn at the time.
+All seven were put to the owner and answered. They are recorded as rulings **#350-#356** in
+`docs/OPEN-DECISIONS.md`, which is where they are maintained; this section says only what each one
+means for the work below.
 
-### D1 — When is an invoice's money considered committed?
+| ruling | question | answer | what it changes here |
+|---|---|---|---|
+| #350 | when is an invoice's money committed? | **at approval, not at creation** | A2 enforces at `p1_transition_payment_request` under the invoice lock, first-committer-wins; the create screen gets a **critical** check against the printed balance. Only `approved` and `sent_for_execution` reserve. `rejected` was named in an earlier draft and **does not exist** in the enum. |
+| #351 | how is employee data hidden? | **column grants, in two phases** | A5 splits into two PRs: the client stops asking for the columns, then the migration removes them. `organizations.settings` needs **no** narrowing — measured, it holds bank-match days, money tolerances and role labels, nothing personal. |
+| #352 | the entrance's enumeration oracle | **recorded as a known risk, not closed now** | Wave D keeps `ENTRY-07` (the rate-limit sentence is dead code) and `ENTRY-10`/`ENTRY-11`; `ENTRY-01` and `ENTRY-03` become a debt entry with a "before the first real customer" trigger. A proxy was rejected because the browser holds the anon key and calls `/auth/v1` directly. |
+| #353 | recording a transfer larger than the balance | **accept it; the excess becomes a supplier advance** | A3's server half is unblocked and needs a named contract: the advance's currency, its place in the monthly report, its reconciliation path, its idempotency, and how the exception closes. It replaces today's `allocation_exceeds_balance` refusal at `/pay` — and **only** there. |
+| #354 | the dark-mode atmosphere | **the orb is off in dark** | F2 becomes a small, safe change: no glow in dark, the approved 17% untouched, the light theme unchanged to the pixel, and `--color-ink-muted` not repainted. `DESIGN.md` moves in the same commit. |
+| #355 | can a Google-authenticated owner end the service? | **no, and the screen says so** | A1 adds a sentence in place of an unfillable password box. Federated step-up is not built: there is no such owner today. |
+| #356 | the on-time threshold | **five receipts, `—` below that** | C3 is unblocked. `Suppliers.tsx` moves to the same threshold — two screens will not hold two rules for one word. |
 
-`create_payment_request` computes an invoice's open balance as
-`total − Σ payment_allocations − Σ credit_requests(offset|closed)` and never subtracts amounts
-already committed by live payment requests, so 300 + 640 both pass against a 640 balance and the
-product's own check reports `amount_matches_open_balance: true` for the second.
-
-Round 1 proposed counting `draft`, `pending_approval`, `approved`, `sent_for_execution` and
-`suspected_duplicate` as reserving. That mixes two models: two `pending_approval` requests would
-each count the other and **both** would fail approval, which is not first-committer-wins and
-cannot be explained to a user. It also named `rejected`, which **does not exist** — the enum
-(`0001_init.sql:16`) is `draft, pending_approval, approved, sent_for_execution, executed, matched,
-investigation, suspected_duplicate, cancelled`, and `investigation` has no stated money semantics.
-
-Two coherent options, and one must be chosen:
-
-- **(a) Approval reserves.** Only `approved` and `sent_for_execution` hold money. Creation shows a
-  **critical** warning against the printed balance; approval takes the invoice lock, re-computes,
-  and refuses the loser. Simple, atomic, no lifecycle. Cost: two requests can sit in the queue and
-  the second learns it is refused only at approval.
-- **(b) Creation reserves.** A real reservation with a lifecycle, an expiry and a release path.
-  Honest at creation. Cost: a new state machine, expiry jobs, and a way to release a stale hold.
-
-**Recommendation: (a).** It is the smaller change, it is atomic under a lock the function already
-takes (`for update of i`, invoice set ordered by id), and it puts the refusal at the moment a human
-is deciding rather than at the moment they are typing.
-
-### D2 — How is employee personal data hidden?
-
-`profiles_select` (`0133:124`) has no role term, so office and accountant receive all six profile
-rows including `phone` and `backup_email`, and `organizations` returns its full row including
-`settings`. RLS is row-level and cannot hide a column.
-
-The mechanism is settled — revoke the **table** grant and re-grant an explicit projection, the
-`0112:51` precedent, because `REVOKE SELECT (col)` does not cancel a table-level `SELECT`. What is
-**not** settled is two things:
-
-- **`organizations.settings` is a JSON column.** A column grant cannot hide individual keys inside
-  it. Either the sensitive keys move out of the JSON, or a role-shaped projection function replaces
-  the direct read. This is a schema decision.
-- **Rollout order.** The matrix deploys the database before the frontend, so a revoke lands while
-  the live bundle and every open tab are still issuing `select('*')` — they get 403 until the new
-  frontend ships. This needs an explicit two-phase rollout: **the client stops asking for the
-  columns first, the migration removes them second.**
-
-### D3 — What is done about the entrance's timing oracle?
-
-`/forgot-password` rate-limits only when there is a mailbox to send to, so the 429 and the 2.1 s
-send announce a registered address. `/login` leaks a constant ~85 ms gap whose ranges never overlap
-across nine measurements, and this deploy widened it: `0296`/`0303`/`0310` added an advisory lock
-and an upsert that run **only when a user row exists**.
-
-A server proxy in front of Supabase Auth is **bypassable**: the browser holds the anon key and can
-call `/auth/v1` directly (`AuthContext.tsx:318`, `ForgotPassword.tsx:34`), so an attacker simply
-ignores the proxy. And routing passwords through our own proxy widens the trust boundary — no
-logging, CORS/CSRF, its own rate limits.
-
-So the honest options are: **enforcement at a layer that cannot be bypassed** (Auth hooks, origin
-restriction, WAF), or **accepting and documenting the risk**. There is no third option that a
-proxy provides. `ENTRY-04` is adjacent: the lockout counter that shipped is switched on by a manual
-owner step with no evidence it ever ran in production.
-
-### D4 — What does `/pay` do when the recording disagrees with the balance?
-
-`/pay` records a transfer **already made at a bank**. The live RPC refuses with
-`allocation_exceeds_balance` (`0031:690`). Refusing after the money moved discards an accounting
-fact; accepting it needs somewhere for the excess to live. "Open an exception" is a UI behaviour,
-not an accounting model — a negative balance and an unapplied amount are different things, and the
-monthly report has to be able to state whichever one is chosen (`monthlyReport.spec.ts:580`).
-
-This needs a named contract: unapplied payment, or advance, or permitted negative balance — with
-its currency, its place in the reports, its reconciliation path, its idempotency, and how the
-exception is closed.
-
-### D5 — The dark-mode atmosphere token
-
-`.app-glow` mixes `--color-action` at 17%, and the dark theme redefines `--color-action` as
-`oklch(95% 0.006 80)` — near-white paper (`index.css:703`). So the "oceanic orb" paints a light band
-over the dark canvas and lifts the background to `#263639..#3e4d4e`, where `--color-ink-muted`
-(dark: `oklch(68%)`) measures 3.07-3.95:1 on 13 of 14 routes. The 17% ceiling in `DESIGN.md:259` was
-swept in **light mode only** and is a recorded owner value.
-
-**Recommendation: give the atmosphere its own token** that does not change meaning between themes.
-Changing the *token* is a code fix; changing the *amount* is an owner decision.
-
-### D6 — Can an owner who signed in with Google end the service?
-
-Not today, and this is not caused by anything in this plan. `request_organization_offboarding`
-calls `assert_recent_password_authentication()` (`0103:2336`), and `ReauthModal` only knows
-`signInWithPassword` (`ReauthModal.tsx:178`), while Google is a supported sign-in
-(`Entrance.tsx:479`). A Google-authenticated owner is shown a password box they cannot satisfy.
-Either a federated/MFA step-up is added, or the product states that this action requires a password
-identity. **Decision needed; the A1 fix below is correct either way.**
-
-### D7 — Which on-time threshold is the business rule?
-
-`/analytics` says "shown after at least 5 receipts" and `Suppliers.tsx:804` uses `> 0`. Two screens,
-two rules, neither confirmed as the business's. `DASH-02` cannot be closed until one is chosen.
-
----
+Two things these answers did **not** dissolve, and they stay owner decisions of their own:
+`MON-04`'s existing 200% bank allocation (which of the two rows is real) and the sweep's leftover
+data in the live tenant. Both are in §6.
 
 ## 3. The work
 
@@ -169,7 +82,8 @@ settings. One click, no dialog, the whole organisation read-only.
 - Oracle: a component test that mounts Settings with a JWT holding a fresh `password` AMR, clicks
   the offboarding button, and asserts the step-up dialog **renders** and the RPC is not called
   until it is satisfied. It fails on today's code.
-- Depends on: **D6** for whether a Google owner gets a route at all.
+- Also closes the Google-owner gap by ruling #355: an owner with no password identity is told
+  so, in place of a password box they cannot fill.
 
 **A2 · `MON-01`, `REQ-02`, `REQ-03`, `REQ-05` — two approved requests over one balance**
 
@@ -191,7 +105,7 @@ amber with a green enabled submit.
 - Oracle: a SQL suite that creates request 1 for part of a balance, approves it, creates request 2
   for the whole balance, and asserts the second is refused with a named code — plus a two-session
   concurrency case where both approvals race and exactly one wins.
-- Blocked by: **D1**.
+- Shaped by ruling #350.
 
 **A3 · `FIN-03`, `FIN-10`, `MON-05`, `REQ-01` — a queue that would over-pay, and a button that
 contradicts the block above it**
@@ -203,7 +117,8 @@ performed, and an enabled approve button sits under a panel stating approval is 
 
 - The **screen** half is unblocked: show the live balance, mark queued requests whose invoice is
   settled, surface the open exception, and never render an enabled primary under a blocking panel.
-- The **server** half is blocked by **D4**.
+- The **server** half follows ruling #353: the recording is accepted and the excess becomes a
+  supplier advance. It needs a named contract before it is written.
 - Oracle: a browser scenario in the QA harness that opens `/pay` with a settled invoice in the
   queue and asserts the balance is visible and the primary is disabled; plus a screenshot read and
   compared, per the project rule that a visual change is not done without one.
@@ -247,7 +162,8 @@ Following the `bank_details` precedent (`0088:15`, `0112:16,51`), and the multi-
 - Oracle: `has_column_privilege` asserted **both ways** for owner, office, accountant and a
   cross-tenant identity; and a seed with three tenants, because one hides every isolation bug and
   two hide the asymmetric ones.
-- Blocked by **D2** for `organizations.settings` and for the two-phase rollout order.
+- Ruling #351: two-phase rollout, client first. `organizations` needs no narrowing — its
+  `settings` column was measured and holds no personal data and no secret.
 
 **A6 · `PERM-02`, `PERM-03`, `PERM-05` — the password-change audit rows**
 
@@ -263,7 +179,8 @@ path. Migration likely for `PERM-02`.
 
 `ENTRY-01`, `ENTRY-03`, `ENTRY-04`, `ENTRY-07`, `ENTRY-09`, `ENTRY-10`/`PERM-04`, `ENTRY-11`.
 
-Blocked by **D3** for the two oracles. Unblocked inside it: `ENTRY-07` (the rate-limit sentence is
+Ruling #352 records the two oracles as known risk rather than closing them, because a proxy is
+  bypassable. Proceeding inside this wave: `ENTRY-07` (the rate-limit sentence is
 dead code because the live message does not match `/rate limit|too many/i` at
 `ForgotPassword.tsx:39` — **the live message text is captured before the regex is touched**),
 `ENTRY-10`/`PERM-04` (no 404; every unknown path silently lands on the dashboard), `ENTRY-11`.
@@ -381,7 +298,7 @@ its link's filter are written independently; the link inherits the count's predi
 stops claiming it.
 
 **C3 — `DASH-02`**: `Analytics.tsx:19` returns `'idle'` below 5 samples but `:54` renders
-`fmtPct(...)` unconditionally — the threshold picks a **colour**, never a value. Blocked by **D7**.
+`fmtPct(...)` unconditionally — the threshold picks a **colour**, never a value. Ruling #356: five receipts, `—` below that, and `Suppliers.tsx:804` moves to the same threshold.
 
 **C4 — `DASH-01`**: `/alerts` runs six named scans (`lib/alerts.ts:212-219`) while the dashboard
 counts a different population, and `/alerts` calls itself the full queue. Coverage or copy — the
@@ -413,7 +330,7 @@ sheet or its own section. Every generated workbook is recalculated and scanned f
 toggling a `columnVisibility` the priority filter then overrides. An explicit picker choice must
 win over the priority default. Closes `RTL-A11Y-02`..`-05` at `ui.tsx`, not on four pages.
 
-**F2 — `RTL-A11Y-06`, `-07`**: per **D5**. Measured on composited pixels in both themes, and
+**F2 — `RTL-A11Y-06`, `-07`**: per ruling #354 the orb is off in dark. Measured on composited pixels in both themes, and
 `DESIGN.md` moves with `src/index.css` in the same commit.
 
 **F3 — the bidi filename** (`DOC-07`, `RTL-A11Y-08`): `<bdi>` and `dir="auto"` do not fix a name
