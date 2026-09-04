@@ -2680,7 +2680,26 @@ export const he = {
     slice: 'שורות לחודש',
     text_29: 'שחזור קבלה באותו אישור',
     setCatalogRevision: 'ניסיון נוסף',
-    text_30: 'אין מוצרים קיימים זמינים להתאמה, ולכן לא ניתן לאשר שורות.',
+    text_30: 'הקטלוג שלך עדיין ריק, אז אין מוצר קיים להתאים אליו את השורות.',
+    // An empty catalogue on a first price list is the normal state of a new customer, not a
+    // failure. The screen used to state it in alert red and disable the only button it offered;
+    // these say what the customer can do instead, and the button below does it.
+    createAllLead: 'אפשר ליצור את המוצרים מהמחירון הזה ואז לקלוט את המחירים.',
+    createAllAction: 'יצירת {count} המוצרים מהמחירון',
+    createAllAction_one: 'יצירת המוצר מהמחירון',
+    createAllBusy: 'יוצר מוצרים…',
+    createAllDone: 'נוצרו {count} מוצרים. אפשר לקלוט את המחירים.',
+    createAllDone_one: 'נוצר מוצר אחד. אפשר לקלוט את המחיר.',
+    createAllFailed: 'יצירת המוצרים נכשלה: ',
+    createAllNone: 'אין במחירון שורה עם שם מוצר שאפשר ליצור ממנה.',
+    // The unit a created product gets when the price list did not state one. It reaches the
+    // catalogue and the reader sees it, so it belongs here rather than as a literal in the
+    // component — the same reason every other displayed unit is read through the dictionary.
+    createAllDefaultUnit: 'יח׳',
+    // The readiness block below is an operator tool — dry runs, calibration batches, Platform.
+    // It stays reachable and stays closed, so a customer reading their own price list is not
+    // handed a failed check they were never meant to run.
+    operationalTools: 'כלי הכנה לאוטומציה (למתקדמים)',
     text_31: 'מתאים את השורות לקטלוג המוצרים…',
     text_32: 'מתוך',
     text_33: 'שורות לא זוהו אוטומטית',

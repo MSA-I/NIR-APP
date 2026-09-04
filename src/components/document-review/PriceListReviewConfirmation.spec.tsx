@@ -6,6 +6,8 @@ import type { DocumentProcessingSnapshot, PriceListPredictedLine } from '../../l
 
 const mocks = vi.hoisted(() => ({
   role: 'owner',
+  /** The tenant's catalogue. Emptied by the first-run test — that is the whole state under test. */
+  catalogue: [] as Array<{ id: string; name: string; unit: string; sku: string | null }>,
   rpc: vi.fn(),
   insert: vi.fn((rows: Array<Record<string, unknown>>) => ({
     data: rows.map((row, index) => ({
@@ -24,10 +26,7 @@ vi.mock('../../lib/supabase', () => ({
     from: () => ({
       select: () => ({
         eq: () => ({
-          order: async () => ({
-            data: [{ id: 'product-1', name: 'מוצר בדיקה', unit: 'unit', sku: 'SKU-1' }],
-            error: null,
-          }),
+          order: async () => ({ data: mocks.catalogue, error: null }),
         }),
       }),
       insert: (rows: Array<Record<string, unknown>>) => ({
@@ -56,6 +55,7 @@ const QUALIFIED_DRY_RUN = {
 
 beforeEach(() => {
   mocks.role = 'owner';
+  mocks.catalogue = [{ id: 'product-1', name: 'מוצר בדיקה', unit: 'unit', sku: 'SKU-1' }];
   mocks.insert.mockClear();
   mocks.rpc.mockReset();
   mocks.rpc.mockImplementation(async (name: string) => {
@@ -266,6 +266,63 @@ describe('אישור מחירון', () => {
     await userEvent.click(selectAll);
     expect(screen.getByTestId('price-list-intake-confirm'))
       .toHaveTextContent(`קליטת ${LONG - UNMATCHED_LINES} המחירים שנבחרו`);
+  });
+
+  /**
+   * The first price list a new tenant uploads, which is where this screen is read for the first
+   * time and where it used to read worst: the catalogue is empty, so nothing matches, so the one
+   * button on offer said "קליטת 0" and was disabled — the screen asked the customer to do the
+   * only thing it could not do. The reported symptom was a scan that read 74 lines perfectly and
+   * a screen that answered with a red banner, a yellow banner and a dead button.
+   */
+  it('בקטלוג ריק מציע ליצור את המוצרים במקום להציע קליטה של אפס', async () => {
+    const NEW_LINES = 4;
+    mocks.catalogue = [];
+    const unknown = predictions(NEW_LINES).map((line, index) => ({
+      ...line,
+      predicted_action: 'create_product' as const,
+      matched_by: null,
+      product_id: null,
+      sku: `NEW-${index}`,
+      product_name: `מוצר חדש ${index + 1}`,
+      unit: 'יח׳',
+      proposed_unit_price: 10 + index,
+      product_would_be_created: true,
+    }));
+
+    render(
+      <MemoryRouter>
+        <PriceListReviewConfirmation snapshot={snapshot(unknown, NEW_LINES)} actorId="owner-1" onRefetch={async () => true} />
+      </MemoryRouter>,
+    );
+
+    // What the customer is told, and what they are offered: a step, not a failure.
+    const empty = await screen.findByTestId('price-list-empty-catalogue');
+    expect(empty.textContent).toContain('הקטלוג שלך עדיין ריק');
+    const create = screen.getByTestId('price-list-create-all');
+    expect(create).toHaveTextContent(`יצירת ${NEW_LINES} המוצרים מהמחירון`);
+    expect(create).toBeEnabled();
+    // The confirm button is still honest about having nothing to confirm — it is simply no
+    // longer the only thing on the screen.
+    expect(screen.getByTestId('price-list-intake-confirm')).toBeDisabled();
+
+    await userEvent.click(create);
+
+    // One insert, one product per distinct name, each carrying the unit the scan read.
+    await waitFor(() => expect(mocks.insert).toHaveBeenCalledTimes(1));
+    const inserted = mocks.insert.mock.calls[0][0];
+    expect(inserted).toHaveLength(NEW_LINES);
+    expect(inserted.map((row) => row.name)).toEqual([
+      'מוצר חדש 1', 'מוצר חדש 2', 'מוצר חדש 3', 'מוצר חדש 4',
+    ]);
+    // `normalizeUnitInput` canonicalises what the scan read — "יח׳" is stored as "יחידה", the
+    // same form the per-line create writes, so a bulk create cannot fork the unit vocabulary.
+    expect(new Set(inserted.map((row) => row.unit))).toEqual(new Set(['יחידה']));
+
+    // And now the confirm button has something to confirm — the prices the scan already read.
+    expect(await screen.findByTestId('price-list-create-all-done')).toHaveTextContent('נוצרו 4 מוצרים');
+    await waitFor(() => expect(screen.getByTestId('price-list-intake-confirm'))
+      .toHaveTextContent(`קליטת ${NEW_LINES} המחירים שנבחרו`));
   });
 
   it('מציג dry-run של מוצרים כשירים בלי ליצור או להפעיל אותם מהמסך', async () => {
