@@ -260,7 +260,7 @@ export default function DocumentOperations() {
       // `invoice-2026-08 סופי.pdf` renders in this RTL cell as `pdf.יפוס invoice-2026-08` — the
       // extension torn off the name and parked at the far margin. Pure-Hebrew and pure-Latin names
       // are unaffected, which is why the defect survived: it needs both scripts in one name.
-      render: (row) => <span className="font-medium text-ink"><bdi>{row.file_name}</bdi></span>,
+      render: (row) => <span className="font-medium text-ink"><bdi dir="ltr">{row.file_name}</bdi></span>,
     },
     {
       key: 'status', header: t('documentOps.text_6'), priority: 1,
@@ -280,7 +280,7 @@ export default function DocumentOperations() {
   const priceReviewColumns: Column<PriceReviewRow>[] = [
     {
       key: 'document', header: t('documentOps.text_9'), priority: 1, sortValue: (row) => row.file_name,
-      render: (row) => <span><strong className="block text-ink"><bdi>{row.file_name}</bdi></strong><span className="text-xs text-ink-muted">{row.supplier_name ?? t('documentOps.text_10')}</span></span>,
+      render: (row) => <span><strong className="block text-ink"><bdi dir="ltr">{row.file_name}</bdi></strong><span className="text-xs text-ink-muted">{row.supplier_name ?? t('documentOps.text_10')}</span></span>,
     },
     {
       key: 'decision', header: t('documentOps.text_11'), priority: 1,
@@ -373,7 +373,7 @@ export default function DocumentOperations() {
             <p id="document-control-attention-title" className="flex items-center gap-1.5 text-xs font-semibold">
               <AlertTriangle size={ICON.xs} aria-hidden="true" /> {t('documentOps.mostUrgentItem')}
             </p>
-            <h2 className="mt-1 truncate text-lg font-semibold text-ink"><bdi>{currentIssue.file_name}</bdi></h2>
+            <h2 className="mt-1 truncate text-lg font-semibold text-ink"><bdi dir="ltr">{currentIssue.file_name}</bdi></h2>
             <p className="mt-1">{(() => {
               const key = attemptUiStatus(currentIssue).descriptionKey;
               return key ? t(key) : null;

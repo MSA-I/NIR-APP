@@ -1,5 +1,6 @@
 import type { TKey } from './i18n/t.ts';
 import { BASE_LOCALE, INTL_LOCALE, type Locale } from './i18n/locale.ts';
+import { storageObjectName } from './storageObjectName';
 import { supabase } from './supabase';
 import { tusUploadToDocuments } from './tusUpload';
 import { unwrap } from './useQuery';
@@ -369,7 +370,9 @@ export async function uploadConsolidatedInvoicePage(input: {
   onStored?: () => void;
   onResume?: (resume: ConsolidatedPageResume) => void;
 }): Promise<{ registration: ConsolidatedInvoicePageRegistration; resume: ConsolidatedPageResume }> {
-  const safeName = input.file.name.replace(/[^\w.\-]+/g, '_');
+  // DOC-10 again, one file away: the same ASCII-only `\w` that deleted the Hebrew half of every
+  // inbox object key was here too, on the consolidated-invoice page uploads.
+  const safeName = storageObjectName(input.file.name);
   const storagePath = input.resume.storagePath
     ?? `${input.orgId}/consolidated-invoices/${input.intakeId}/page-${input.pageNumber}/${safeName}`;
   let resume = input.resume;

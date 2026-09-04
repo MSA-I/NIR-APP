@@ -11,7 +11,7 @@ import { ConfirmDialog, DataTable, ErrorNote, ICON, Modal, Note, PageHeader, Ske
 import { PlanLimitNote } from '../components/PlanLimitNote';
 import { DocumentRemovalDialog } from '../components/DocumentRemovalDialog';
 import { ok } from '../lib/errors';
-import { bidiIsolate, fmtDate, fmtDateTime, todayISO } from '../lib/format';
+import { fmtDate, fmtDateTime, ltrIsolate, todayISO } from '../lib/format';
 import type { DocumentRow } from '../lib/types';
 import {
   DOCUMENT_KIND_OPTIONS,
@@ -252,7 +252,7 @@ function RefileModal({ doc, target, onClose, onDone }: {
 
   return (
     <Modal open onClose={onClose} title={target === 'invoice' ? t('documents.text_6') : t('documents.text_7')} busy={busy} statusMessage={busy ? t('documents.text_8') : undefined}>
-      <p className="mb-3 truncate text-sm text-ink-soft">{t('documents.text_9')} <bdi>{doc.file_name}</bdi></p>
+      <p className="mb-3 truncate text-sm text-ink-soft">{t('documents.text_9')} <bdi dir="ltr">{doc.file_name}</bdi></p>
       <label className="mb-3 block">
         <span className="sr-only">{t('documents.text_10')}</span>
         <span className="relative block">
@@ -820,7 +820,7 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
       render: (doc) => (
         <span className="flex min-w-0 items-center gap-2">
           <FileText size={ICON.sm} className="shrink-0 text-ink-faint" aria-hidden="true" />
-          <span className="min-w-0 truncate font-medium text-ink-body"><bdi>{doc.file_name}</bdi></span>
+          <span className="min-w-0 truncate font-medium text-ink-body"><bdi dir="ltr">{doc.file_name}</bdi></span>
         </span>
       ),
     },
@@ -1017,7 +1017,7 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
           tableLabel={archive ? t('documents.text_62') : t('documents.text_63')}
           rowLabel={(doc) => t('documentsInboxTail.documentRowLabel', { fileName: doc.file_name })}
           onRowClick={(doc) => review(doc)}
-          mobileTitle={(doc) => <bdi>{doc.file_name}</bdi>}
+          mobileTitle={(doc) => <bdi dir="ltr">{doc.file_name}</bdi>}
           mobileTrailing={(doc) => (
             <span className="flex flex-wrap justify-end gap-1">
               <DocumentStatusBadge status={statusFor(doc)} data-testid="document-processing-status"
@@ -1105,7 +1105,7 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
           survived every screenshot review. FSI and PDI measured 0px wide, so nothing is drawn. */}
       <ConfirmDialog open={!!rescueDoc} onClose={() => setRescueDoc(null)} onConfirm={(reason) => void rescue(reason)}
         title={t('documents.title_3')}
-        message={t('documentsInboxTail.rescueMessage', { fileName: bidiIsolate(rescueDoc?.file_name ?? '') })}
+        message={t('documentsInboxTail.rescueMessage', { fileName: ltrIsolate(rescueDoc?.file_name ?? '') })}
         confirmLabel={t('documents.confirmLabel')} requireReason busy={rescuing} />
 
       {/* The one dialog in this app that undoes a financial record nobody authorised by hand, so it
@@ -1117,7 +1117,7 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
         onConfirm={(reason) => void revertAutoAction(reason)}
         title={t('documents.title_4')}
         message={t('documentsInboxTail.revertMessage', {
-          fileName: bidiIsolate(revertDoc?.file_name ?? ''),
+          fileName: ltrIsolate(revertDoc?.file_name ?? ''),
           confidence: revertConfidence,
         })}
         confirmLabel={t('documents.confirmLabel_2')} danger requireReason busy={reverting} />
@@ -1127,7 +1127,7 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
           as destruction and the file is kept. */}
       <ConfirmDialog open={!!deleteDoc} onClose={() => setDeleteDoc(null)} onConfirm={() => void removeDoc()}
         title={t('documents.title_5')}
-        message={t('documentsInboxTail.deleteMessage', { fileName: bidiIsolate(deleteDoc?.file_name ?? '') })}
+        message={t('documentsInboxTail.deleteMessage', { fileName: ltrIsolate(deleteDoc?.file_name ?? '') })}
         confirmLabel={t('documents.confirmLabel_3')} danger busy={deleting} />
 
       <DocumentRemovalDialog

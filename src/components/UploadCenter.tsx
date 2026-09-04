@@ -739,7 +739,7 @@ export function UploadCenter() {
           return (
             <li key={entry.id} className="px-3 py-2.5">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="min-w-0 flex-1 truncate text-sm text-ink-mid" title={entry.fileName}><bdi>{entry.fileName}</bdi></span>
+                <span className="min-w-0 flex-1 truncate text-sm text-ink-mid" title={entry.fileName}><bdi dir="ltr">{entry.fileName}</bdi></span>
                 {entry.size > 0 && <span className="num text-xs text-ink-muted">{formatFileSize(entry.size)}</span>}
                 {processingStatus
                   ? <DocumentStatusBadge status={processingStatus} />

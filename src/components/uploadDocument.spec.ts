@@ -330,6 +330,47 @@ describe('uploadDocument registration recovery', () => {
     expect(mocks.remove).not.toHaveBeenCalled();
   });
 
+  /**
+   * DOC-10. The storage object key of a Hebrew-named upload.
+   *
+   * `file.name.replace(/[^\w.\-]+/g, '_')` looks script-neutral and is not: JavaScript's `\w`
+   * without the `u` flag is `[A-Za-z0-9_]`, so every Hebrew character falls into the negated class
+   * and a whole run of them collapses into ONE underscore. Measured in the sweep, the object key
+   * of `א.ע עלים ירוקים — חשבונית 2026-08.jpeg` was `<uuid>__._2026-08.jpeg` — the entire Hebrew
+   * half of the name gone, while a Latin name keeps every character. Nothing is lost from the
+   * database (the display name is stored on the row), but nothing in the bucket is identifiable
+   * without a lookup, which is the whole reason the name is in the key at all.
+   *
+   * The claim asserted here is the finding's own: a Hebrew name reaches the key TRANSLITERATED,
+   * so it is at least partially recognisable — the treatment a Latin name already gets.
+   */
+  it('carries a Hebrew file name into the storage key transliterated, not deleted', async () => {
+    mocks.rpc.mockImplementation(async (name: string) => {
+      if (name === 'register_uploaded_document') return { data: { document_id: 'doc-he' }, error: null };
+      return { data: { processing_job_id: 'job-he' }, error: null };
+    });
+    const hebrew = new File(['document'], 'א.ע עלים ירוקים — חשבונית 2026-08.jpeg', { type: 'image/jpeg' });
+
+    await uploadDocument('org-1', 'inbox', null, hebrew, {}, { objectKey: 'hebrew-key-0011' });
+
+    const path = mocks.tusUpload.mock.calls[0][1].objectName as string;
+    expect(path.startsWith('org-1/inbox/hebrew-key-0011_')).toBe(true);
+    const safe = path.slice('org-1/inbox/hebrew-key-0011_'.length);
+
+    // The shape of the defect, named so a future reader knows what this is guarding against.
+    expect(safe).not.toBe('_._2026-08.jpeg');
+    // Every Hebrew word reaches the key as letters, not as an underscore.
+    expect(safe).toContain('alym');   // עלים
+    expect(safe).toContain('yrvqym'); // ירוקים
+    expect(safe).toContain('chshbvnyt'); // חשבונית
+    // What the Latin half of the same name already got, unchanged.
+    expect(safe.endsWith('2026-08.jpeg')).toBe(true);
+    // Still an ASCII object key — the bucket policy reads the leading org segment out of this.
+    expect(safe).toMatch(/^[\w.\-]+$/);
+    // And the registration still records the name the person actually sees.
+    expect(mocks.rpc.mock.calls[0][1].p_file_name).toBe('א.ע עלים ירוקים — חשבונית 2026-08.jpeg');
+  });
+
   it('does not fall back after an ambiguous intake transport failure', async () => {
     mocks.rpc.mockImplementation(async (name: string) => {
       if (name === 'register_uploaded_document') {

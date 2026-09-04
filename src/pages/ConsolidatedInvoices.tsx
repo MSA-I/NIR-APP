@@ -498,7 +498,7 @@ function WorkspaceView({ workspace, canWrite, refreshing, onRefresh, onReload }:
                   {/* <bdi> around the file name — the name-isolation rule (DESIGN.md, חוק בידוד
                       השמות). Here the name sits after a page number and a separator, which is
                       exactly the neighbourhood a mixed-script name reorders against. */}
-                  <p className="font-medium">{t('consolidated.pageWord')} {fmtNum(page.page_number)} · <bdi>{page.file_name}</bdi></p>
+                  <p className="font-medium">{t('consolidated.pageWord')} {fmtNum(page.page_number)} · <bdi dir="ltr">{page.file_name}</bdi></p>
                   <p className="mt-1 text-sm text-ink-soft">
                     {page.is_primary ? t('consolidated.text_27') : t('consolidated.text_28')} ·
                     {' '}{t(consolidatedPageTypeKey(page.document_type))} · {t(consolidatedPageStatusKey(page.job_status))}

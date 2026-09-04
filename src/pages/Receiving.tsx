@@ -398,7 +398,7 @@ export function ReceivingList() {
           {source
             ? <>
                 {t('receiving.fromDeliveryNoteLead')}{' '}
-                {source.fileName ? <strong><bdi>{source.fileName}</bdi></strong> : t('receiving.text_8')}
+                {source.fileName ? <strong><bdi dir="ltr">{source.fileName}</bdi></strong> : t('receiving.text_8')}
                 {supplierName ? <> {t('receiving.text_9')} <strong>{supplierName}</strong></> : null}
                 {'. '}{t('receiving.fromDeliveryNoteChoose')}
               </>

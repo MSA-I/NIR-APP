@@ -154,6 +154,19 @@ export const fmtNum = (v: number | null | undefined) => (v == null ? '—' : num
 export const bidiIsolate = (s: string): string => `⁨${s}⁩`; // FSI … PDI
 
 /**
+ * An EXPLICIT LTR isolate for plain-text contexts — the string twin of `<bdi dir="ltr">`, and the
+ * form a FILE NAME takes (`DOC-07`, `RTL-A11Y-08`, 04.09.2026).
+ *
+ * `bidiIsolate` above is first-strong: it fences the name off from its neighbours but resolves the
+ * name's OWN direction from its first strong character. Digits are not strong, so
+ * `93_00002007 — חלק 3.pdf` resolves RTL and its own number and extension are then reordered
+ * inside the fence — measured on screen as `pdf.3 קלח — 00002007_93`. A file name is an atomic
+ * technical identifier, and DESIGN.md already says what those get: isolate AND `dir=ltr`. LRI
+ * supplies both. Like FSI/PDI these measure 0px and draw nothing.
+ */
+export const ltrIsolate = (s: string): string => `⁦${s}⁩`; // LRI … PDI
+
+/**
  * The name to SHOW for a product: the canonical one a person approved (0149), or the raw one
  * until somebody has. `display_name IS NULL` is the normal state — nothing was backfilled — so
  * every call site keeps rendering exactly what it rendered before this helper existed, and starts

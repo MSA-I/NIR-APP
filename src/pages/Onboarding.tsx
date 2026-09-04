@@ -656,7 +656,7 @@ function SheetImport<T extends ImportRow>({ fields, parse, columns, commit, conf
       <div className="space-y-4">
         {failure && <ErrorNote message={failure} />}
         <div className="text-sm text-ink-soft">
-          <b><bdi>{sheet.fileName}</bdi></b> — {t('onboarding.rowsReady', { count: parsed.valid.length })}
+          <b><bdi dir="ltr">{sheet.fileName}</bdi></b> — {t('onboarding.rowsReady', { count: parsed.valid.length })}
           {parsed.skipped.length > 0 && <>{t('onboarding.rowsWillSkip', { count: parsed.skipped.length })}</>}{t('onboarding.nothingSavedYet')}
         </div>
 
@@ -696,7 +696,7 @@ function SheetImport<T extends ImportRow>({ fields, parse, columns, commit, conf
     return (
       <div className="space-y-4">
         <div className="text-sm text-ink-soft">
-          <b><bdi>{sheet.fileName}</bdi></b> — {t('onboarding.mapEachField', { count: sheet.rows.length })}
+          <b><bdi dir="ltr">{sheet.fileName}</bdi></b> — {t('onboarding.mapEachField', { count: sheet.rows.length })}
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {fields.map((f) => (

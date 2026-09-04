@@ -321,7 +321,7 @@ export default function PriceLists() {
                         <StatusBadge meta={SUBMISSION_STATUS[submission.status]} />
                       </div>
                       <div className="mt-1 text-sm text-ink-muted break-words">
-                        <bdi>{submission.file_name ?? t('priceLists.text_14')}</bdi> · {t('priceListsTail.accepted')}{' '}<span className="num">{submission.accepted_count}</span> {t('priceLists.text_15')} <span className="num">{submission.unchanged_count}</span> {t('priceLists.text_16')} <span className="num">{submission.rejected_count}</span>
+                        <bdi dir="ltr">{submission.file_name ?? t('priceLists.text_14')}</bdi> · {t('priceListsTail.accepted')}{' '}<span className="num">{submission.accepted_count}</span> {t('priceLists.text_15')} <span className="num">{submission.unchanged_count}</span> {t('priceLists.text_16')} <span className="num">{submission.rejected_count}</span>
                       </div>
                     </div>
                   ))}

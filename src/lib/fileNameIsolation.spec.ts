@@ -24,7 +24,21 @@ import { join, relative } from 'node:path';
  * anyone happened to look at was single-script.
  *
  * WHAT THIS DOES NOT CLAIM. It is a source scan, not a rendering. It proves each site carries one
- * of the three sanctioned forms; the browser measurement above is what proves those forms work.
+ * of the sanctioned forms; only a browser measurement can prove those forms work.
+ *
+ * 04.09.2026 — AND THAT IS EXACTLY HOW THIS SPEC STAYED GREEN BESIDE A BROKEN SCREEN
+ * (`DOC-07`, `RTL-A11Y-08`). The three forms it used to sanction — `<bdi>`, `bidiIsolate()`,
+ * `dir="auto"` — all resolve the name's OWN direction from its first strong character. Digits are
+ * not strong. So `93_00002007 — חלק 3.pdf` resolves RTL and rendered `pdf.3 קלח — 00002007_93`
+ * (measured, `scripts/filename-bidi-visual-check.cjs`) while this file reported full coverage. The
+ * spec's own worked example, `invoice-2026-08 סופי.pdf`, STARTS with Latin and was therefore the
+ * one case first-strong happens to get right — which is why nobody saw it.
+ *
+ * A file name is an atomic technical identifier, and DESIGN.md already says what those get:
+ * "תמיד isolate ובדרך כלל dir=ltr". Only the first half was applied. The sanctioned form is now
+ * an EXPLICIT LTR isolate — `<bdi dir="ltr">`, `dir="ltr"` on the element already there, or
+ * `ltrIsolate()` in text-only contexts — and the rendered half of the proof is the script named
+ * above, which measures per-character geometry on /documents at 1440×900 and 390×844.
  */
 
 /** `process.cwd()`, the idiom the other source-reading specs in this repository use. `import.meta.url`
@@ -45,8 +59,13 @@ const tsxFiles = (dir: string): string[] => {
 /** A file name reaching the screen: `something.file_name` or `something.fileName`. */
 const READS_A_FILE_NAME = /\.(file_name|fileName)\b/;
 
-/** The three sanctioned forms, all of which appear on the same line as the read. */
-const ISOLATED = /<bdi[\s>]|bidiIsolate\(|dir=["']auto["']/;
+/**
+ * The sanctioned forms, all of which appear on the same line as the read. Every one of them is an
+ * EXPLICIT LTR isolate: `dir="auto"` and a bare `<bdi>` are no longer enough, because both resolve
+ * direction from the first strong character and a Hebrew name reorders its own digits and
+ * extension. See the header.
+ */
+const ISOLATED = /<bdi[^>]*\sdir=["']ltr["']|ltrIsolate\(|\bdir=["']ltr["']/;
 
 /**
  * A line only DRAWS a name if it is markup or a translated sentence. Everything else — building a
@@ -76,8 +95,8 @@ const NOT_A_RENDER = [
   { needle: 'reason:', why: 'text written to audit_logs; control characters must not reach the database' },
 ];
 
-describe('every file name rendered inline is bidi-isolated (DESIGN.md, חוק בידוד השמות)', () => {
-  it('finds no unisolated file-name render anywhere under src/', () => {
+describe('every file name rendered inline carries an explicit LTR isolate (DESIGN.md, חוק בידוד השמות)', () => {
+  it('finds no file-name render left to first-strong direction anywhere under src/', () => {
     const offenders: string[] = [];
     for (const file of tsxFiles(SRC)) {
       const lines = readFileSync(file, 'utf8').split(/\r?\n/);
@@ -88,13 +107,21 @@ describe('every file name rendered inline is bidi-isolated (DESIGN.md, חוק ב
         if (!DRAWS_SOMETHING.test(code)) return;
         // The spoken-channel test reads a small window, because `announce(` and `label={` are
         // routinely written across two or three lines and a per-line test would miss the opener.
-        const window = lines.slice(Math.max(0, i - 2), i + 1).join(' ');
+        //
+        // 04.09.2026 — BUT ONLY WHEN THE LINE ITSELF PAINTS NOTHING. The window is two lines
+        // wide, and `DocumentsInbox.tsx:1020` — `mobileTitle={(doc) => <bdi>{doc.file_name}</bdi>}`
+        // — was exempted by the `rowLabel` on line 1018, a neighbour it has nothing to do with.
+        // That is a drawn element: the browser measured it rendering `pdf.3 קלח — 00002007_93` on
+        // the 390px card while this scan reported it clean. A line that opens markup before the
+        // read is judged on its own text; the window is for continuation lines.
+        const paintsHere = code.slice(0, code.search(READS_A_FILE_NAME)).includes('<');
+        const window = paintsHere ? code : lines.slice(Math.max(0, i - 2), i + 1).join(' ');
         if (SPOKEN_NOT_DRAWN.some((exempt) => window.includes(exempt.needle))) return;
         if (NOT_A_RENDER.some((exempt) => code.includes(exempt.needle))) return;
         offenders.push(`${relative(SRC, file)}:${i + 1}  ${line.trim().slice(0, 120)}`);
       });
     }
-    expect(offenders, `wrap the name in <bdi> (markup) or bidiIsolate() (inside a translated sentence):\n${offenders.join('\n')}`)
+    expect(offenders, `a file name is an atomic technical identifier: wrap it in <bdi dir="ltr"> (markup), put dir="ltr" on the element already there, or use ltrIsolate() inside a translated sentence:\n${offenders.join('\n')}`)
       .toEqual([]);
   });
 
