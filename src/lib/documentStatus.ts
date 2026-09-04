@@ -6,6 +6,16 @@ export type DocumentStatusState =
   | 'stuck'
   | 'failed'
   | 'processing'
+  /**
+   * The scan is saved and a PERSON has to approve it before the reading is allowed to start.
+   *
+   * It is its own state and not a flavour of `processing`, because nothing is processing: no
+   * worker holds the job, no queue will pick it up, and no amount of waiting changes that. It sat
+   * outside `ACTIVE_RAW_STATUSES` for exactly that reason and therefore fell all the way past the
+   * ladder to the residual `unassigned`, which told the reader to attach the document to an
+   * invoice — an action that neither starts the reading nor is possible yet.
+   */
+  | 'awaiting_scan'
   | 'review'
   | 'unassigned'
   | 'assigned'
@@ -62,6 +72,7 @@ export type DocumentStatusFilter =
   | 'stuck'
   | 'failed'
   | 'processing'
+  | 'awaiting_scan'
   | 'review'
   | 'unassigned'
   | 'assigned';
@@ -70,6 +81,9 @@ export const DOCUMENT_STATUS_FILTERS: ReadonlyArray<{ value: DocumentStatusFilte
   { value: 'stuck', labelKey: 'documentStatus.filterStuck' },
   { value: 'failed', labelKey: 'documentStatus.filterFailed' },
   { value: 'processing', labelKey: 'documentStatus.filterProcessing' },
+  // Listed, because a state no filter can name is a state nobody sweeps up. Three of this
+  // tenant's documents had been sitting at this gate for two days when the sweep found them.
+  { value: 'awaiting_scan', labelKey: 'documentStatus.filterAwaitingScan' },
   { value: 'review', labelKey: 'documentStatus.filterReview' },
   { value: 'unassigned', labelKey: 'documentStatus.filterUnassigned' },
   { value: 'assigned', labelKey: 'documentStatus.filterAssigned' },
@@ -176,6 +190,9 @@ function result(
     stuck: 0,
     failed: 0,
     processing: 1,
+    // Ranked with `review`, not below it: both are work that stopped and waits on a person, and
+    // ascending order on this column is what the office sorts by to find that work.
+    awaiting_scan: 2,
     review: 2,
     unassigned: 3,
     assigned: 4,
@@ -274,7 +291,7 @@ export function isDocumentProcessingStuck(input: DocumentStatusInput): boolean {
 
 /**
  * The single precedence ladder for every document surface:
- * failure/stuck > active processing > human review > unassigned > assigned/completed.
+ * failure/stuck > active processing > scan approval > human review > unassigned > assigned/completed.
  */
 export function documentUiStatus(input: DocumentStatusInput): DocumentUiStatus {
   if (input.status === null && !input.job) {
@@ -311,6 +328,21 @@ export function documentUiStatus(input: DocumentStatusInput): DocumentUiStatus {
       true,
       elapsed,
       pageProgress(input.job, status),
+    );
+  }
+  // Ahead of the filing branches, and that ORDER is the fix. `awaiting_scan` is not in
+  // `ACTIVE_RAW_STATUSES` — correctly, nothing is running — so before this branch existed the
+  // document fell through every processing test and landed on `isUnassigned`, which is true of it
+  // and is not what is wrong with it. The elapsed time rides along: this gate is the one place a
+  // document can sit for days with no worker to blame, and the sweep found three that had.
+  if (status === 'awaiting_scan') {
+    return result(
+      'awaiting_scan',
+      'documentStatus.awaitingScanApproval',
+      'await',
+      'documentStatus.awaitingScanApprovalDescription',
+      false,
+      elapsed,
     );
   }
   if (status === 'review') {

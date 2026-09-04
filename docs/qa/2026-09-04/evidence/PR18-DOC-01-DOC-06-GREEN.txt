@@ -1,0 +1,15 @@
+PR 18 — DOC-01 and DOC-06 — oracle run, fix applied
+worktree: agent-aef072387c1d1282c   base commit: 2001b9af
+command: npx vitest run src/pages/documentsScanApprovalGate.spec.tsx src/components/document-review/noApprovalRoute.spec.tsx
+date: 2026-09-04
+exit code: 0
+----------------------------------------------------------------------
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-aef072387c1d1282c
+
+
+ Test Files  2 passed (2)
+      Tests  12 passed (12)
+   Start at  15:34:32
+   Duration  4.18s (transform 1.75s, setup 891ms, import 2.64s, tests 1.17s, environment 2.31s)
+

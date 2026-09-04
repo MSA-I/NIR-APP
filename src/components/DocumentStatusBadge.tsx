@@ -33,7 +33,11 @@ export function DocumentStatusBadge({ status, ...attributes }: {
       {status.progress && (
         <span className="num text-xs text-ink-muted" data-document-status-progress>· {t('documentStatus.pageProgress', status.progress)}</span>
       )}
-      {elapsedParts && (status.loading || status.state === 'stuck') && (
+      {/* `awaiting_scan` joins the two states that carry their age, and it is the state that needs
+          it most: nothing is running, so nothing will ever look wrong on its own. "2 ימים" beside
+          "ממתין לאישור סריקה" is the difference between a document uploaded a minute ago and the
+          three this tenant had been sitting on since 02.09. */}
+      {elapsedParts && (status.loading || status.state === 'stuck' || status.state === 'awaiting_scan') && (
         <span className="num text-xs text-ink-muted" data-document-status-age>· {t(elapsedParts.key, elapsedParts.vars)}</span>
       )}
       {/* Only when there is a second fact to carry. A state whose description merely repeated the

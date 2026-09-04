@@ -35,6 +35,7 @@ import {
   documentStatusFilterFromParam,
   documentUiStatus,
   type DocumentStatusFilter,
+  type DocumentUiStatus,
 } from '../lib/documentStatus';
 import {
   DOCUMENT_PROCESSING_CHANGED_EVENT,
@@ -405,6 +406,35 @@ function UploadModal({ suppliers, onClose, onDone }: {
         )}
       </div>
     </Modal>
+  );
+}
+
+/**
+ * The way IN to the one action that clears a scan-approval wait, on the row that is waiting.
+ *
+ * DOC-01. The button that releases the document lives on the review screen and nowhere else, and
+ * the library had no way of saying so: the row action menu offers "בדיקת מסמך" behind a click on
+ * a kebab, which is a place to look for something you already know is there. Nobody knew. Three of
+ * this tenant's documents had been at this gate for two days, and two more for 477 seconds, while
+ * the row told the reader to go and file them against an invoice.
+ *
+ * Rendered ONLY for that state. Every other state either moves by itself or is already offered a
+ * control, and a link on every row would be the same non-information the removed sub-lines were.
+ * The click is stopped from bubbling because the desktop row is itself clickable: without it the
+ * row's own handler and the link would both navigate, and React Router would be asked to go to the
+ * same place twice in one tick.
+ */
+function ScanApprovalLink({ doc, status }: { doc: { id: string }; status: DocumentUiStatus }) {
+  const { t } = useT();
+  if (status.state !== 'awaiting_scan') return null;
+  return (
+    <Link
+      className="link text-xs"
+      to={`/documents/${encodeURIComponent(doc.id)}/review`}
+      onClick={(event) => event.stopPropagation()}
+    >
+      {t('documentStatus.reviewScanApproval')}
+    </Link>
   );
 }
 
@@ -859,9 +889,12 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
       // than by name, so ascending puts what waits on a person at the top. See USER_STATE_URGENCY.
       sortValue: (doc) => statusFor(doc).priority,
       render: (doc) => (
-        <DocumentStatusBadge status={statusFor(doc)} data-testid="document-processing-status"
-          data-document-id={doc.id}
-          data-stage={processing.data === null ? undefined : processing.snapshots[doc.id]?.stage ?? 'unprocessed'} />
+        <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+          <DocumentStatusBadge status={statusFor(doc)} data-testid="document-processing-status"
+            data-document-id={doc.id}
+            data-stage={processing.data === null ? undefined : processing.snapshots[doc.id]?.stage ?? 'unprocessed'} />
+          <ScanApprovalLink doc={doc} status={statusFor(doc)} />
+        </span>
       ),
     },
   ] as Array<Column<GalleryDocument> | null>).filter((column): column is Column<GalleryDocument> => column !== null);
@@ -1019,10 +1052,11 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
           onRowClick={(doc) => review(doc)}
           mobileTitle={(doc) => <bdi dir="ltr">{doc.file_name}</bdi>}
           mobileTrailing={(doc) => (
-            <span className="flex flex-wrap justify-end gap-1">
+            <span className="flex flex-wrap items-center justify-end gap-1">
               <DocumentStatusBadge status={statusFor(doc)} data-testid="document-processing-status"
                 data-document-id={doc.id}
                 data-stage={processing.data === null ? undefined : processing.snapshots[doc.id]?.stage ?? 'unprocessed'} />
+              <ScanApprovalLink doc={doc} status={statusFor(doc)} />
             </span>
           )}
           rowActions={(doc) => {

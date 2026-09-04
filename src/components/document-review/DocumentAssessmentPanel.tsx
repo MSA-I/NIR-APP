@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { reasonOr } from '../../lib/reason';
 import { todayISO } from '../../lib/format';
 import { AlertTriangle, Check, CircleCheck, Info, Loader2, ShieldAlert } from 'lucide-react';
+import { Link } from 'react-router';
 import { supabase } from '../../lib/supabase';
 import { fmtMoneyExact, fmtNum } from '../../lib/format';
 import { Disclosure, ICON, Note, ReasonField, useToast } from '../ui';
@@ -17,6 +18,7 @@ import {
   findingText,
   formatLineRanges,
   groupFindings,
+  noApprovalRouteNextStep,
   priceSeedRows,
   resolutionText,
   reviewedProposal,
@@ -160,6 +162,10 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
   const effects = useMemo(
     () => approvalEffects(read?.document_type ?? null, Boolean(orderId)),
     [read?.document_type, orderId]);
+  /** Null for every type the approval command accepts, so the note appears nowhere else. */
+  const nextStep = useMemo(
+    () => (read ? noApprovalRouteNextStep(read.document_type) : null),
+    [read?.document_type, read]);
 
   /** The lines the server could not attach to a product. Membership is fixed by the server's own
    *  answer, so a line does not leave the list the moment it is mapped — the list is the work, and
@@ -405,6 +411,21 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
             </li>
           ))}
         </ul>
+        {/* DOC-06. The list above can end on "this type has no approval route", which is true and
+            leaves the reader with nothing to do: the sweep found a receipt read at full confidence
+            whose only control was dead and whose screen offered no alternative. This is the
+            alternative, and it is only ever rendered where the command really has no route — the
+            same list `canSubmit` now reads, so the sentence and the disabled button cannot drift
+            apart. */}
+        {nextStep && (
+          <p className="mt-3 border-t border-line-soft pt-3 text-sm text-ink-body"
+            data-testid="no-approval-route-next-step">
+            {t(nextStep.textKey)}
+            {nextStep.to && nextStep.linkLabelKey && (
+              <> <Link className="link" to={nextStep.to}>{t(nextStep.linkLabelKey)}</Link>.</>
+            )}
+          </p>
+        )}
       </div>
 
       {/* The decision, above the folded evidence rather than below it. The reconciliation table

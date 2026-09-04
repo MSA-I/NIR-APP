@@ -4138,6 +4138,13 @@ export const he = {
     effectCreditNoOffset: 'הזיכוי לא יקוזז מיתרה בעצם האישור',
     effectCreditNoPayment: 'לא יבוצע תשלום ולא ישתנה סכום חשבונית המקור',
     effectNoApprovalRoute: 'לסוג המסמך הזה אין עדיין מסלול אישור',
+    // DOC-06. „אין מסלול אישור" הוא מצב, לא הוראה. שלוש השורות הבאות אומרות מה כן עושים, וכל אחת
+    // מהן מצביעה על פעולה שקיימת במוצר ושהתפקיד שרואה את המסך הזה רשאי לבצע.
+    nextStepPaymentConfirmation: 'אישור תשלום אינו נרשם כמסמך עסקי בפני עצמו. בהמשך המסך מוצגת ההתאמה לתשלום שכבר בוצע או לבקשת תשלום פתוחה; לאחר שווידאת אותה, אפשר לשייך את המסמך לחשבונית שהוא משלם מתוך',
+    nextStepPriceList: 'מחירון אינו מאושר כאן אלא נטען במסך המחירונים, ושם נקבע אילו שורות ייכנסו. אם הסוג שגוי אפשר לתקן אותו למעלה. למסך המחירונים:',
+    nextStepUnroutedDocument: 'אין פקודת כתיבה בטוחה לסוג הזה, גם בזיהוי מלא. אם הסוג שגוי אפשר לתקן אותו למעלה; אחרת המסמך שמור, ואפשר לשייך אותו לחשבונית או לקבלת סחורה מתוך',
+    nextStepDocumentsFolder: 'תיקיית המסמכים',
+    nextStepPriceScreen: 'מסך המחירונים',
   },
 
   docAssessment: {
@@ -4456,6 +4463,7 @@ export const he = {
     filterStuck: 'עיבוד תקוע',
     filterFailed: 'העיבוד נכשל',
     filterProcessing: 'בעיבוד או בהמתנה',
+    filterAwaitingScan: 'ממתין לאישור סריקה',
     filterReview: 'נדרשת בדיקה',
     filterUnassigned: 'לא משויך',
     filterAssigned: 'משויך',
@@ -4482,6 +4490,12 @@ export const he = {
     processing: 'בעיבוד',
     queuedDescription: 'הקובץ נשמר. אין צורך בפעולה.',
     processingDescription: 'אין צורך בפעולה. המצב יתעדכן מעצמו.',
+    awaitingScanApproval: 'ממתין לאישור סריקה',
+    // Names the person's action, not the pipeline's state. The old sentence on this row —
+    // "צריך לשייך אותו לחשבונית או לקבלת סחורה" — pointed at a filing action that could not have
+    // started the reading, and file_document would have refused it anyway.
+    awaitingScanApprovalDescription: 'צריך לפתוח את המסמך ולאשר את הסריקה כדי שהקריאה תתחיל.',
+    reviewScanApproval: 'אישור הסריקה',
     needsReview: 'נדרשת בדיקה',
     needsReviewDescription: 'הקריאה הסתיימה. צריך לאשר את הנתונים.',
     archived: 'אורכב',

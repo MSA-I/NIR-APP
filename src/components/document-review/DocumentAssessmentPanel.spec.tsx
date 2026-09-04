@@ -9,6 +9,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+// The panel links out to the next step for a document type the approval command has no route for
+// (DOC-06), so it now needs a router the way every other review surface already did.
+import { MemoryRouter } from 'react-router';
 import type { AssessmentLine, DocumentReviewRead } from './assessment';
 
 const rpc = vi.hoisted(() => vi.fn());
@@ -92,7 +95,7 @@ function reviewRead(over: Partial<DocumentReviewRead> = {}): DocumentReviewRead 
 
 async function renderPanel(read: DocumentReviewRead = reviewRead()) {
   rpc.mockResolvedValue({ data: read, error: null });
-  render(<DocumentAssessmentPanel documentId="doc-1" />);
+  render(<MemoryRouter><DocumentAssessmentPanel documentId="doc-1" /></MemoryRouter>);
   return screen.findByRole('button', { name: 'אישור המסמך' });
 }
 
@@ -317,7 +320,7 @@ describe('בטלפון — הפעולה נשארת במקומה בזרימה, ו
 
   it('אין אזור פעולה כשאין מה לאשר — מסמך שכבר אושר אינו מקבל פס פעולה ריק', async () => {
     rpc.mockResolvedValue({ data: reviewRead({ data_approved: true }), error: null });
-    render(<DocumentAssessmentPanel documentId="doc-1" />);
+    render(<MemoryRouter><DocumentAssessmentPanel documentId="doc-1" /></MemoryRouter>);
     expect(await screen.findByText('מה יקרה באישור')).toBeInTheDocument();
 
     expect(screen.queryByRole('button', { name: 'אישור המסמך' })).toBeNull();

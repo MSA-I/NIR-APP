@@ -324,6 +324,63 @@ export interface ApprovalEffect {
 }
 
 /**
+ * The subtypes `apply_reviewed_document` accepts, copied from the command's own guard.
+ *
+ * `0110:326` admits `invoice`, `delivery_note` and `tax_receipt` and raises
+ * `document_review_subtype_unsupported` for everything else; `0172` widened it by one to
+ * `credit_note`. Anything outside this set has no approval route AT ALL — it is not blocked
+ * pending a fix, and no amount of correcting the document will make the button work.
+ */
+const APPROVAL_ROUTE_TYPES: ReadonlySet<string> = new Set([
+  'invoice', 'delivery_note', 'tax_receipt', 'credit_note',
+]);
+
+export function hasApprovalRoute(documentType: string | null): boolean {
+  return documentType !== null && APPROVAL_ROUTE_TYPES.has(documentType);
+}
+
+/**
+ * What to do with a document the approval command will never take — DOC-06.
+ *
+ * The screen already said, correctly, that this type has no approval route. It then stopped, and
+ * a payment confirmation read at full confidence became a permanent dead end: the sweep found a
+ * receipt whose only control was disabled and whose screen offered nothing else to press.
+ *
+ * Naming a state is not an instruction. Each sentence here names an action that exists in this
+ * product and that THIS reader can perform — never a route their role cannot open, which is why
+ * none of them points at `/payments` (owner and accountant only, and this screen is the office's).
+ */
+export interface NoApprovalRouteNextStep {
+  textKey: TKey;
+  /** An in-app destination the office role can actually reach, or null when the step is here. */
+  to: string | null;
+  linkLabelKey: TKey | null;
+}
+
+export function noApprovalRouteNextStep(documentType: string | null): NoApprovalRouteNextStep | null {
+  if (hasApprovalRoute(documentType)) return null;
+  if (documentType === 'payment_confirmation') {
+    return {
+      textKey: 'assessment.nextStepPaymentConfirmation',
+      to: '/documents',
+      linkLabelKey: 'assessment.nextStepDocumentsFolder',
+    };
+  }
+  if (documentType === 'price_list') {
+    return {
+      textKey: 'assessment.nextStepPriceList',
+      to: '/prices',
+      linkLabelKey: 'assessment.nextStepPriceScreen',
+    };
+  }
+  return {
+    textKey: 'assessment.nextStepUnroutedDocument',
+    to: '/documents',
+    linkLabelKey: 'assessment.nextStepDocumentsFolder',
+  };
+}
+
+/**
  * What pressing the button will do, and what it will not.
  *
  * Every line here is a statement about `public.apply_reviewed_document` (0110) and is written from
@@ -516,6 +573,13 @@ export function priceSeedRows(
 export function canSubmit(read: DocumentReviewRead, supplierId: string | null): boolean {
   if (!read.interpretation_id || !supplierId) return false;
   if (!read.document_type) return false;
+  // Not a guess about what the server might refuse — the command names this refusal, by a list of
+  // subtypes copied above from its own guard. Leaving it out did not err toward enabled in any
+  // useful direction: it made whether the button was live depend on something unrelated (whether
+  // the supplier resolved), so the same payment confirmation offered a dead control on one
+  // document and a live one whose only possible outcome is `document_review_subtype_unsupported`
+  // on the next. The screen now says what to do instead — `noApprovalRouteNextStep`.
+  if (!hasApprovalRoute(read.document_type)) return false;
   if (read.document_type === 'delivery_note' && !read.assessment?.order_id) return false;
   if (read.document_type === 'credit_note' && !read.credit_resolution?.resolved) return false;
   return true;
