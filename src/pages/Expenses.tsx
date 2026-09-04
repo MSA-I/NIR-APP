@@ -263,7 +263,12 @@ export default function Expenses() {
       const templated = await renderConfiguredReportTemplate({
         exportKey: 'owner_expense_summary', orgId: org.id, values,
       });
-      const fileName = `expenses-${todayISO()}.xlsx`;
+      // Named for the WINDOW, the way the PDF button beside it always was and the way every other
+      // workbook in the product is (`EXP-07`). `todayISO()` here meant two exports of different
+      // periods on the same day landed on one filename, and the second silently replaced the first
+      // in the reader's Downloads folder. The date the file was produced is still inside it, on
+      // row 2 of every sheet, where it says `הופק` and cannot be mistaken for the period.
+      const fileName = `expenses-${from}-${to}.xlsx`;
       if (templated) {
         downloadRenderedWorkbook(templated, fileName);
         toast(t('expenses.toast'));

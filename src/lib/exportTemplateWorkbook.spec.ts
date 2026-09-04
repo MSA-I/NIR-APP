@@ -126,12 +126,17 @@ describe('filling it in', () => {
     expect(read(filled, 'A1')?.v).toBe('{{never_mapped}}');
   });
 
-  it('neutralises a value that Excel would treat as a formula', async () => {
-    // A supplier name is not our text. `=HYPERLINK(...)` in a supplier field executes on open, in
-    // an accountant's Excel, on a file we sent them.
+  it('fills a formula-looking value verbatim, and as a formula nowhere', async () => {
+    // A supplier name is not our text, and it is also not ours to edit (`EXP-10`). An .xlsx string
+    // cell is evaluated only when it carries an `<f>` element, which assigning a string never
+    // produces — so the leading apostrophe this used to require protected nothing and was shown to
+    // the reader inside the template we promise to leave alone.
     const filled = await fillTemplateWorkbook(
       workbook({ A1: text('{{supplier_name}}') }), { supplier_name: '=HYPERLINK("http://x")' });
-    expect(String(read(filled, 'A1')?.v)).toBe("'=HYPERLINK(\"http://x\")");
+    const cell = read(filled, 'A1');
+    expect(String(cell?.v)).toBe('=HYPERLINK("http://x")');
+    expect(cell?.f).toBeUndefined();
+    expect(cell?.t).not.toBe('e');
   });
 
   it('leaves everything it was not asked to change', async () => {

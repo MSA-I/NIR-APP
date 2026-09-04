@@ -1,0 +1,44 @@
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a8a6bac8cbdd30611
+
+
+ Test Files  1 passed (1)
+      Tests  14 passed (14)
+   Start at  17:32:07
+   Duration  2.56s (transform 116ms, setup 519ms, import 109ms, tests 401ms, environment 1.27s)
+
+
+
+================================================================
+THE GENERATED WORKBOOKS, REOPENED AND READ
+================================================================
+
+file: public/templates/inplace-bank-import-v1.xlsx
+bytes: 20136
+sheets: Bank Transactions | הנחיות למילוי
+
+--- sheet: Bank Transactions ---
+R1: INPLACE_BANK_IMPORT  |  1
+R2: transaction_date  |  description  |  direction  |  amount  |  reference
+R3: 2026-01-15  |  שורת דוגמה — יש להחליף בנתוני התדפיס שלכם  |  debit  |  1250.5  |  REF-0001
+
+--- sheet: הנחיות למילוי ---
+R1: ייבוא תדפיס בנק — הנחיות למילוי
+R2: יש למלא את גיליון „Bank Transactions". אין לשנות בו את שתי השורות הראשונות.
+R3: שורה 3 בגיליון הנתונים היא שורת דוגמה. יש להחליף אותה בנתונים שלכם או למחוק אותה — קובץ שנשלח והדוגמה עדיין בתוכו נדחה.
+R4: 
+R5: עמודה בקובץ  |  מה למלא  |  ערכים מותרים ופורמט  |  דוגמה
+R6: transaction_date  |  תאריך התנועה  |  תא בפורמט תאריך — לא טקסט  |  15.01.2026
+R7: description  |  תיאור התנועה כפי שמופיע בתדפיס  |  טקסט חופשי, שדה חובה  |  שורת דוגמה — יש להחליף בנתוני התדפיס שלכם
+R8: direction  |  כיוון התנועה  |  debit לחיוב, credit לזיכוי — באנגלית ובאותיות קטנות  |  debit
+R9: amount  |  סכום התנועה  |  מספר חיובי, עד שתי ספרות אחרי הנקודה  |  1250.50
+R10: reference  |  אסמכתה  |  טקסט, אפשר להשאיר ריק  |  REF-0001
+R11: 
+R12: אין עמודת מטבע: כל תדפיס נקלט כמטבע אחד, ILS. אין לערבב מטבעות בקובץ אחד.
+
+xl/worksheets/sheet1.xml: rightToLeft=true
+xl/worksheets/sheet2.xml: rightToLeft=true
+
+formula cells: 0
+formula-error cells: 0
+

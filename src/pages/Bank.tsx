@@ -325,6 +325,10 @@ function BankImportModal({ onClose, onDone }: { onClose: () => void; onDone: () 
     bank_import_cell_type_invalid: t('bank.text_20'),
     bank_import_row_invalid: t('bank.text_21'),
     bank_import_row_limit: t('bank.text_22'),
+    // `EXP-09`: the template ships a worked example row so a person can see the format. Left in
+    // place it would be filed as a real transfer, so the parser refuses the file and this names
+    // the one row to change.
+    bank_import_example_row_present: t('bank.importExampleRowPresent'),
   };
 
   function downloadTemplate() {

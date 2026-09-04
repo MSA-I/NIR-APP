@@ -1,5 +1,3 @@
-import { neutralizeSpreadsheetString } from './documentExport';
-
 /**
  * The one styled .xlsx writer in the product.
  *
@@ -223,20 +221,37 @@ function toSpreadsheetDate(raw: unknown): Date | null {
   return new Date(local.getTime() - local.getTimezoneOffset() * 60_000);
 }
 
+/**
+ * WHY NO NEUTRALIZER RUNS HERE, AND WHY THAT IS THE SAFE DIRECTION (`EXP-10`, 04.09.2026).
+ *
+ * `neutralizeSpreadsheetString` prefixes an apostrophe to any string opening `= + - @ TAB CR`, and
+ * on the CSV path it is load-bearing: a CSV cell is TYPED into the grid by the application that
+ * opens it, the apostrophe is consumed as the spreadsheet's own "this is text" marker, and a
+ * supplier name like `=HYPERLINK(…)` does not execute.
+ *
+ * An .xlsx cell is not typed into anything. A string arrives as `<c t="s">` pointing at the shared
+ * string table, and a cell is a formula only when it carries an `<f>` element — which this writer
+ * produces for no value it is given. So on this path the apostrophe never protected anybody: it
+ * was displayed verbatim to the reader, and the sweep found it on a product whose name legitimately
+ * begins with a hyphen, in a file sent to an accountant. That is tenant data edited on the way out.
+ *
+ * The apostrophe-as-text-prefix an .xlsx CAN express is the `quotePrefix` style attribute, which
+ * lives in the cell's format and not in the string. ExcelJS 4.4.0 does not expose it — measured,
+ * not assumed — and there is nothing to express here anyway. `documentExport.ts` still owns the
+ * rule, unchanged, for the CSV path that needs it.
+ */
 // No `null` in the return type any more: there is no cell this writer leaves empty (`EXP-03`).
 function cellValue(raw: unknown, type: WorkbookCellType): string | number | Date {
   if (raw === null || raw === undefined || raw === '') return ABSENT_CELL;
   if (type === 'date') {
     const parsed = toSpreadsheetDate(raw);
-    return parsed ?? String(neutralizeSpreadsheetString(String(raw)));
+    return parsed ?? String(raw);
   }
   if (type === 'number' || type === 'money' || type === 'percent') {
     const parsed = typeof raw === 'number' ? raw : Number(raw);
     return Number.isFinite(parsed) ? parsed : ABSENT_CELL;
   }
-  // Tenant text on its way into a file somebody opens in Excel: a leading `=` or `@` is a formula
-  // there whatever we meant by it. Same neutralizer as documentExport.ts, which owns the rule.
-  return String(neutralizeSpreadsheetString(String(raw)));
+  return String(raw);
 }
 
 const NUMBER_FORMAT: Partial<Record<WorkbookCellType, string>> = {

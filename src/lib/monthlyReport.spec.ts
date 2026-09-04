@@ -140,12 +140,21 @@ const grid = (book: XLSX.WorkBook, name: string) =>
 /**
  * The accountant's workbook is the one artefact in this product that LEAVES the building, and
  * every text cell in it is tenant data: supplier names, exception titles, payment references and
- * methods, bank descriptions. Excel and Sheets treat a cell opening with `= + - @ TAB CR` as a
- * formula whatever the writer meant, so a supplier named `=HYPERLINK("http://x","click")` becomes
- * live content in the recipient's spreadsheet.
+ * methods, bank descriptions. The claim that has to hold is that none of it becomes live content
+ * in the recipient's spreadsheet.
  *
- * documentExport.ts has neutralized this since it was written; this workbook never did. The rule
- * now lives in one place and both callers use it.
+ * WHAT THIS FILE USED TO ASSERT, AND WHY IT CHANGED (`EXP-10`, 04.09.2026). It required a leading
+ * apostrophe on every value opening `= + - @ TAB CR`, borrowed from the CSV path where it really
+ * is load-bearing: a CSV cell is TYPED into the grid by whatever opens it, and the apostrophe is
+ * the spreadsheet's own "this is text" marker, consumed on the way in.
+ *
+ * An .xlsx cell is not typed into anything. The string arrives as a shared string, and a cell is a
+ * formula only when it carries an `<f>` element — which this writer produces for no value it is
+ * given. So the apostrophe never protected this file; it was displayed verbatim to the reader, and
+ * the sweep found it in front of a product name that legitimately begins with a hyphen.
+ *
+ * The claim is therefore asserted DIRECTLY here instead of through a proxy: the hostile strings
+ * arrive exactly as the tenant stored them, and no cell in the workbook is a formula or an error.
  */
 describe('accountant workbook — formula injection', () => {
   const bookOf = async () => read(buildMonthlyWorkbook({
@@ -172,18 +181,27 @@ describe('accountant workbook — formula injection', () => {
       labels,
     }));
 
-  it('escapes every leading formula character across all sheets', async () => {
+  it('writes every leading formula character verbatim, and no cell as a formula', async () => {
     const book = await bookOf();
     const [invoice] = records(book, 'חשבוניות');
-    expect(invoice['ספק']).toBe(`'=HYPERLINK("http://evil","דוח")`);
-    expect(invoice['מספר חשבונית']).toBe("'@SUM(A1:A9)");
+    expect(invoice['ספק']).toBe('=HYPERLINK("http://evil","דוח")');
+    expect(invoice['מספר חשבונית']).toBe('@SUM(A1:A9)');
 
     const [payment] = records(book, 'תשלומים');
-    expect(payment['אמצעי']).toBe("'+972");
-    expect(payment['אסמכתא']).toBe("'-1234");
+    expect(payment['אמצעי']).toBe('+972');
+    expect(payment['אסמכתא']).toBe('-1234');
 
     const [exception] = records(book, 'חריגים פתוחים כרגע');
-    expect(exception['תיאור']).toBe("'=1+1");
+    expect(exception['תיאור']).toBe('=1+1');
+
+    // The claim the apostrophe was standing in for, measured over the whole workbook.
+    for (const name of book.SheetNames) {
+      for (const [address, cell] of Object.entries(book.Sheets[name])) {
+        if (address.startsWith('!')) continue;
+        expect((cell as XLSX.CellObject).f, `${name}!${address}`).toBeUndefined();
+        expect((cell as XLSX.CellObject).t, `${name}!${address}`).not.toBe('e');
+      }
+    }
   });
 
   it('leaves ordinary text and every number untouched', async () => {
@@ -377,11 +395,12 @@ describe('accountant workbook — styled built-in default', () => {
     expect(netCell.z).toBe('#,##0.00');
   });
 
-  it('styles the invoice sheet money columns and keeps neutralization intact', async () => {
+  it('styles the invoice sheet money columns and writes a hostile name unedited', async () => {
     const book = await read(buildStyledMonthlyWorkbook({ ...input, summary, t }));
     const [invoiceRow] = records(book, 'חשבוניות');
     expect(invoiceRow['סה"כ']).toBe(118);
-    // The neutralization path is shared with the plain builder — a hostile name stays escaped.
+    // Both builders go through the same writer, so both state the tenant's name as the tenant's
+    // name and neither produces a formula cell (`EXP-10`).
     const hostile = await read(buildStyledMonthlyWorkbook({
       t,
       ...input,
@@ -389,7 +408,10 @@ describe('accountant workbook — styled built-in default', () => {
       summary,
     }));
     const [hostileRow] = records(hostile, 'חשבוניות');
-    expect(hostileRow['ספק']).toBe(`'=HYPERLINK("http://evil","x")`);
+    expect(hostileRow['ספק']).toBe('=HYPERLINK("http://evil","x")');
+    const supplierCell = hostile.Sheets['חשבוניות'].A5 as XLSX.CellObject;
+    expect(supplierCell.f).toBeUndefined();
+    expect(supplierCell.t).not.toBe('e');
   });
 
   /**

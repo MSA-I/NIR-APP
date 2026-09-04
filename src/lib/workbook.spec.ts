@@ -85,11 +85,21 @@ describe('styled workbook writer', () => {
     expect(naiveDate(book.Sheets['לפי ספק'].B5.v as number)).toBe('2026-08-12T00:00:00.000Z');
   });
 
-  it('neutralizes a tenant string that Excel would treat as a formula', async () => {
+  /**
+   * `EXP-10`, 04.09.2026. This used to allow an apostrophe in front of the value, and that
+   * permission was the defect: a shared string in an .xlsx is never evaluated — a cell is a
+   * formula only when it carries an `<f>` element — so the prefix protected nothing and was simply
+   * displayed, on a product name whose first character is legitimately a hyphen.
+   *
+   * The claim that matters is unchanged and is asserted directly: nothing this writer produces is
+   * a formula cell. What is new is that the tenant's string arrives as the tenant's string.
+   */
+  it('writes a formula-looking tenant string verbatim, and as a formula nowhere', async () => {
     const bytes = await buildWorkbook(SPEC);
     const book = XLSX.read(bytes, { type: 'array' });
-    expect(String(book.Sheets['לפי ספק'].A6.v)).toMatch(/^'?=HYPERLINK/);
+    expect(String(book.Sheets['לפי ספק'].A6.v)).toBe('=HYPERLINK("http://x","click")');
     expect(book.Sheets['לפי ספק'].A6.f).toBeUndefined();
+    expect(book.Sheets['לפי ספק'].A6.t).not.toBe('e');
   });
 
   /**

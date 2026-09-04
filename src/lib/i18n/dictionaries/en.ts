@@ -1230,6 +1230,7 @@ export const en: Dictionary = {
     importSucceeded: 'Imported {count} transactions in one operation.',
     importSucceeded_one: 'Imported 1 transaction.',
     canonicalTemplateOnly: 'Imports accept only the canonical XLSX template, version {version}. Columns cannot be mapped and the structure is never guessed.',
+    importExampleRowPresent: 'The example row is still in the file. Replace it with the statement\'s own data or delete it, then send the file again.',
     fileSummary: '{fileName} · {count} transactions · template v{version}',
     importAction: 'Import',
     paymentCandidate: 'Payment #{number} · {date}',
@@ -4527,6 +4528,10 @@ export const en: Dictionary = {
     text_32: 'Processing stopped. It can be handled in the document operations centre.',
     text_33: 'The extraction is partial. Compare every value against the source before giving feedback.',
     text_34: 'The document and the processing results are available to view. Review and update actions are not available in read-only mode.',
+    exportUnavailableNotInterpreted: 'An export is available only after processing produces an interpretation of the document. The processing state is shown above, and the document can be sent for processing again from there.',
+    exportUnavailablePriceList: 'This is a price list. A price list is taken in by confirming its lines on this screen and is not exported as a document; the approved prices appear on the price lists screen.',
+    exportUnavailableReadOnly: 'The document is shown in read-only mode, and no file can be produced from it in that mode. Write access in the organisation is required.',
+    exportUnavailableNoTemplate: 'No approved export template is configured for this document type. Define an export template and approve it in settings, then come back here.',
   },
 
   supplierLog: {
@@ -4903,6 +4908,8 @@ export const en: Dictionary = {
     unmappedLines: '{lines} invoice lines totalling {amount} were not matched to an order line, so they are not counted under any product. They are waiting to be mapped by hand.',
     countedOnceRule: '“Actually purchased” is counted once per delivery.',
     countedOnceDetail: 'A completed receipt takes precedence over the invoice, and the invoice is used only when there is no receipt evidence. “Ordered” is not counted as a purchase.',
+    provenanceColumn: 'Source of the quantity',
+    provenanceFullyEvidenced: 'All from completed receipts',
   },
 
   invoiceLineReview: {

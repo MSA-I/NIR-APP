@@ -1,0 +1,98 @@
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a8a6bac8cbdd30611
+
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+
+ Test Files  4 passed (4)
+      Tests  26 passed (26)
+   Start at  17:31:02
+   Duration  7.52s (transform 2.92s, setup 2.58s, import 5.43s, tests 7.43s, environment 6.76s)
+
+
+
+================================================================
+THE GENERATED WORKBOOKS, REOPENED AND READ
+================================================================
+
+=== product purchase summary — /reports/products ===
+file name: product-purchases-2025-01-01-2026-12-31.xlsx
+sheets: רכישות מוצרים
+
+--- sheet: רכישות מוצרים ---
+R1: "ריכוז רכישות מוצרים — ארגון הבדיקה"
+R2: "01.01.2025 – 31.12.2026 · הופק 04.09.2026"
+R3: 
+R4: "מוצר" | "יחידה" | "הוזמן" | "התקבל" | "חויב" | "נרכש בפועל" | "מקור הכמות" | "מספר ספקים" | "מספר הזמנות" | "מספר חשבוניות" | "עלות לפי ההזמנה" | "הוצאה ברוטו" | "מחיר יחידה ממוצע"
+R5: "קמח לבן" | "kg" | 10 | 10 | 10 | 10 | "הכל לפי קבלות שהושלמו" | 1 | 1 | 1 | "‏118.00 ‏₪" | "‏120.50 ‏₪" | "‏12.05 ‏₪"
+R6: "שמן זית" | "l" | 8 | "—" | 8 | 8 | "חלק מהכמות לפי החשבונית בלבד" | 1 | 1 | 1 | "‏195.00 ‏₪" | "‏200.00 ‏₪ · ‏50.00 ‏$" | "בכמה מטבעות"
+R7: "סוכר חום" | "kg" | 25 | "—" | "—" | "—" | "חלק מהשורות טרם אושרו בראיה" | 1 | 1 | 0 | "‏300.00 ‏₪" | "—" | "—"
+R8: "- ס 10מזלג ורסאי ניצוצות כסף -אר" | "unit" | 4 | 4 | 4 | 4 | "הכל לפי קבלות שהושלמו" | 1 | 1 | 1 | "‏40.00 ‏₪" | "‏40.00 ‏₪" | "‏10.00 ‏₪"
+
+formula cells: 0
+formula-error cells (#REF! #DIV/0! #VALUE! #NAME? #N/A #NULL! #NUM!): 0
+
+=== expense summary — /expenses ===
+file name: expenses-2025-01-01-2026-12-31.xlsx
+sheets: לפי ספק | קטגוריות בהזמנות | חשבוניות
+
+--- sheet: לפי ספק ---
+R1: "ריכוז הוצאות — ארגון הבדיקה"
+R2: "01.01.2025 – 31.12.2026 · הופק 04.09.2026"
+R3: 
+R4: "ספק" | "מטבע" | "חשבוניות" | "סה\"כ" | "% מהסך"
+R5: "תבליני הגליל" | "ILS" | 1 | 1234.5 | 1
+R6: "-Dash Supplier" | "USD" | 1 | 300 | 1
+
+--- sheet: קטגוריות בהזמנות ---
+R1: "ריכוז הוצאות — ארגון הבדיקה"
+R2: "01.01.2025 – 31.12.2026 · הופק 04.09.2026"
+R3: 
+R4: "קטגוריה" | "מטבע" | "ערך בהזמנות מקושרות"
+
+--- sheet: חשבוניות ---
+R1: "ריכוז הוצאות — ארגון הבדיקה"
+R2: "01.01.2025 – 31.12.2026 · הופק 04.09.2026"
+R3: 
+R4: "ספק" | "מספר חשבונית" | "תאריך" | "מטבע" | "סה\"כ" | "סטטוס תשלום"
+R5: "תבליני הגליל" | "A-1" | 2026-03-03 | "ILS" | 1234.5 | "לא שולמה"
+R6: "-Dash Supplier" | "U-1" | 2026-04-03 | "USD" | 300 | "לא שולמה"
+
+formula cells: 0
+formula-error cells (#REF! #DIV/0! #VALUE! #NAME? #N/A #NULL! #NUM!): 0
+
+
+================================================================
+THE GENERATED WORKBOOKS, REOPENED AND READ
+================================================================
+
+
+Note on the two invoice dates printed above as 2026-03-03 / 2026-04-03: the dump formats a JS Date
+with toISOString(), which re-applies UTC to a value the writer deliberately stored as the LOCAL
+wall clock. Read as the file actually holds it — the raw serial — the days are correct:
+
+  C5 raw serial = 46085 | naive day = 2026-03-04T00:00:00.000Z | numFmt = dd/mm/yyyy
+  C6 raw serial = 46116 | naive day = 2026-04-04T00:00:00.000Z | numFmt = dd/mm/yyyy
+
+which is the same arithmetic workbook.spec.ts pins in "keeps the calendar day a date-only value
+named".
+

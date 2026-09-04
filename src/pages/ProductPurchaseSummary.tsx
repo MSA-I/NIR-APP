@@ -16,6 +16,7 @@ import {
   renderConfiguredReportTemplate,
 } from '../lib/reportTemplateExport';
 import { downloadWorkbook } from '../lib/workbook';
+import { buildProductPurchaseWorkbook, canonicalQuantityIsUnmeasured } from '../lib/productPurchaseWorkbook';
 
 /**
  * Per-product purchase rollup — the screen for `get_product_purchase_summary` (0114).
@@ -144,7 +145,16 @@ export default function ProductPurchaseSummary() {
     {
       key: 'canonical', header: t('productPurchase.text_4'), priority: 1,
       sortValue: (r) => r.canonical_qty ?? -1,
-      render: (r) => <span className="num font-semibold">{fmtNum(r.canonical_qty)}</span>,
+      /* A product with no completed receipt and no approved invoice line has a canonical figure
+         of 0 by construction (`0221`) — a sum of zeros, not a count. The screen printed it in
+         bold beside two em dashes, and the export repeated it on 74 of 115 rows (`EXP-04`). One
+         predicate now answers for both surfaces, because two readings of "unmeasured" is how the
+         file and the screen came to disagree in the first place. */
+      render: (r) => (
+        <span className="num font-semibold">
+          {fmtNum(canonicalQuantityIsUnmeasured(r) ? null : r.canonical_qty)}
+        </span>
+      ),
     },
     // Ordered, received and invoiced stay side by side. The rows worth opening are the ones where
     // they disagree, and one merged figure hides exactly that.
@@ -203,55 +213,25 @@ export default function ProductPurchaseSummary() {
       if (templated) {
         downloadRenderedWorkbook(templated, fileName);
       } else {
-        // No custom template configured → the styled built-in. Until 28.08.2026 this branch wrote
-        // a bare SheetJS workbook: no RTL view, so an eleven-column Hebrew grid opened
-        // left-to-right, with every column at default width and money as raw numbers.
+        // No custom template configured → the styled built-in, which now lives in
+        // `productPurchaseWorkbook.ts` so the FILE can be reopened and read in a test rather than
+        // asserted from the arguments handed to the writer (`EXP-04`). Until 28.08.2026 this
+        // branch wrote a bare SheetJS workbook: no RTL view, so an eleven-column Hebrew grid
+        // opened left-to-right, with every column at default width and money as raw numbers.
         //
-        // The two money columns stay TEXT, and that is #287 rather than an oversight: a product
-        // bought in two currencies has two gross figures, and one numeric cell cannot hold them.
-        // One column per currency would change shape with the data; one text column states every
-        // figure with its own symbol and never adds two.
-        await downloadWorkbook({
-          title: t('productPurchase.pdfTitle', { org: org.name }),
-          subtitle: t('productPurchase.pdfSubtitle', { from: fmtDate(from), to: fmtDate(to), generated: fmtDate(todayISO()) }),
-          sheets: [{
-            name: t('productPurchase.book_append_sheet'),
-            columns: [
-              { header: t('productPurchase.text_11'), key: 'product', width: 32 },
-              { header: t('productPurchase.formatUnit'), key: 'unit', width: 10 },
-              { header: t('productPurchase.text_12'), key: 'ordered', width: 10, type: 'number' },
-              { header: t('productPurchase.text_13'), key: 'received', width: 10, type: 'number' },
-              { header: t('productPurchase.text_14'), key: 'invoiced', width: 10, type: 'number' },
-              { header: t('productPurchase.text_15'), key: 'canonical', width: 13, type: 'number' },
-              { header: t('productPurchase.text_16'), key: 'suppliers', width: 12, type: 'number' },
-              { header: t('productPurchase.text_17'), key: 'orders', width: 12, type: 'number' },
-              { header: t('productPurchase.text_18'), key: 'invoices', width: 13, type: 'number' },
-              // Text, for the same reason the two columns beside it are: a product ordered in two
-              // currencies has two committed figures and one numeric cell cannot hold them.
-              { header: t('productPurchase.committedCost'), key: 'orderedCost', width: 20 },
-              { header: t('productPurchase.text_19'), key: 'gross', width: 20 },
-              { header: t('productPurchase.text_20'), key: 'average', width: 20 },
-            ],
-            rows: data.products.map((row) => ({
-              product: row.product_name,
-              unit: formatUnit(row.unit, locale),
-              ordered: row.ordered_qty,
-              received: row.received_qty,
-              invoiced: row.invoiced_qty,
-              canonical: row.canonical_qty,
-              suppliers: row.supplier_count,
-              orders: row.order_count,
-              invoices: row.invoice_count,
-              orderedCost: (row.ordered_amount_by_currency ?? [])
-                .map((entry) => fmtMoneyExact(entry.amount, entry.currency)).join(' · '),
-              gross: (row.gross_amount_by_currency ?? [])
-                .map((entry) => fmtMoneyExact(entry.amount, entry.currency)).join(' · '),
-              average: row.spans_currencies
-                ? t('productPurchase.inSeveralCurrencies')
-                : fmtMoneyExact(row.average_unit_price, row.average_unit_price_currency),
-            })),
-          }],
-        }, fileName);
+        // The two money columns stay TEXT, and that is the per-currency rule rather than an
+        // oversight: a product bought in two currencies has two gross figures, and one numeric
+        // cell cannot hold them. One column per currency would change shape with the data; one
+        // text column states every figure with its own symbol and never adds two.
+        await downloadWorkbook(buildProductPurchaseWorkbook({
+          t,
+          locale,
+          orgName: org.name,
+          from,
+          to,
+          generatedAt: todayISO(),
+          products: data.products,
+        }), fileName);
       }
       toast(t('productPurchase.toast'));
     } catch (exportError) {
