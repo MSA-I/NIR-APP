@@ -501,8 +501,13 @@ async function roleAndViewportMatrix(browser) {
 
 async function quickActionsContract(browser) {
   const roleLabels = {
-    owner: ['הזמנה חדשה', 'מרכז הבקרה', 'צילום מסמך', 'קבלת סחורה', 'בקרת מסמכים'],
-    office: ['הזמנה חדשה', 'מרכז הבקרה', 'צילום מסמך', 'קבלת סחורה', 'מסמכים'],
+    // Both procurement roles get the SAME five doors from 04.09.2026 (owner report: a first-day
+    // user understood nothing on this bar but the camera). `בקרת מסמכים` is the operator's queue
+    // and `קבלת סחורה` can do nothing before an order exists; both kept their place in the drawer.
+    // What took their slots is where the camera's output lands and the list without which no other
+    // action on this bar produces anything.
+    owner: ['מרכז הבקרה', 'הזמנה חדשה', 'צילום מסמך', 'מסמכים', 'ספקים'],
+    office: ['מרכז הבקרה', 'הזמנה חדשה', 'צילום מסמך', 'מסמכים', 'ספקים'],
     // 'תשלומים לביצוע', not 'תשלומים'. The bar used to hand-write the second, which is
     // `/payments`'s canonical name, while its own target is `/pay` — so for the ONE role that
     // holds both screens, the bar's "תשלומים" opened the execution queue and the drawer's
@@ -512,8 +517,8 @@ async function quickActionsContract(browser) {
     accountant: ['מרכז הבקרה', 'חשבוניות', 'תשלומים לביצוע'],
   };
   const roleTargets = {
-    owner: ['/orders/new?fresh=1', '/dashboard', null, '/receiving', '/documents/operations'],
-    office: ['/orders/new?fresh=1', '/dashboard', null, '/receiving', '/documents'],
+    owner: ['/dashboard', '/orders/new?fresh=1', null, '/documents', '/suppliers'],
+    office: ['/dashboard', '/orders/new?fresh=1', null, '/documents', '/suppliers'],
     accountant: ['/dashboard', '/invoices', '/pay'],
   };
 
@@ -606,13 +611,13 @@ async function quickActionsContract(browser) {
           await page.goto(`${baseURL}${route}`);
           await settle(page);
           await assertFullMobileActions(page, route,
-            ['order', 'dashboard', 'capture', 'receive', 'document-operations']);
+            ['dashboard', 'order', 'capture', 'documents', 'suppliers']);
         }
 
         await page.goto(`${baseURL}/receiving/f0000000-0000-4000-8000-000000000011`);
         await settle(page);
         await assertFullMobileActions(page, 'receiving detail',
-          ['order', 'dashboard', 'capture', 'receive', 'document-operations']);
+          ['dashboard', 'order', 'capture', 'documents', 'suppliers']);
         assert.equal(await page.locator('.phone-taskbar').count(), 1, 'receiving detail lost its contextual phone taskbar');
       }
     } finally {
@@ -930,7 +935,7 @@ async function receivingAccessibility(browser) {
     await page.getByRole('button', { name: 'הגדלת הכמות שהתקבלה עבור מוצר בדיקת נגישות' }).waitFor();
     // The office receiver keeps the complete role-aware bar on the exact screen under audit.
     await assertFullMobileActions(page, 'receiving detail accessibility',
-      ['order', 'dashboard', 'capture', 'receive', 'documents']);
+      ['dashboard', 'order', 'capture', 'documents', 'suppliers']);
     assert.equal(await page.locator('.phone-taskbar').count(), 1, 'receiving detail lost its contextual phone taskbar');
     // Same repair as the order-approval claim below: the phrase this looked for exists nowhere,
     // so the assertion could not fail. The reason box a routine receipt would grow is
