@@ -1,0 +1,402 @@
+# PR25 · DASH-10 · RED
+# oracle: npx vitest run src/pages/dashboardGlanceHonesty.spec.tsx -t DASH-10
+# exit code: 1
+
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-ab86901d055337c47
+
+ ❯ src/pages/dashboardGlanceHonesty.spec.tsx (6 tests | 1 failed | 5 skipped) 3372ms
+     × שורת הזיכויים אינה קוראת לזיכוי שהמוצר צובע כ"התקבל" פתוח 3366ms
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 5 skipped (6)
+   Start at  15:11:30
+   Duration  6.88s (transform 850ms, setup 405ms, import 1.74s, tests 3.37s, environment 1.09s)
+
+
+stderr | src/pages/dashboardGlanceHonesty.spec.tsx > DASH-10 — התווית מנקבת את הקבוצה שהיא סופרת > שורת הזיכויים אינה קוראת לזיכוי שהמוצר צובע כ"התקבל" פתוח
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • POST http://127.0.0.1:55431/rest/v1/rpc/resolve_feature_flags
+
+  • Request body: {}
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • POST http://127.0.0.1:55431/rest/v1/rpc/scheduled_payments_outlook
+
+  • Request body: {"p_horizon_days":30}
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | src/pages/dashboardGlanceHonesty.spec.tsx > DASH-10 — התווית מנקבת את הקבוצה שהיא סופרת > שורת הזיכויים אינה קוראת לזיכוי שהמוצר צובע כ"התקבל" פתוח
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • POST http://127.0.0.1:55431/rest/v1/rpc/my_subscription
+
+  • Request body: {}
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | src/pages/dashboardGlanceHonesty.spec.tsx > DASH-10 — התווית מנקבת את הקבוצה שהיא סופרת > שורת הזיכויים אינה קוראת לזיכוי שהמוצר צובע כ"התקבל" פתוח
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • POST http://127.0.0.1:55431/rest/v1/rpc/resolve_feature_flags
+
+  • Request body: {}
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | src/pages/dashboardGlanceHonesty.spec.tsx > DASH-10 — התווית מנקבת את הקבוצה שהיא סופרת > שורת הזיכויים אינה קוראת לזיכוי שהמוצר צובע כ"התקבל" פתוח
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • POST http://127.0.0.1:55431/rest/v1/rpc/resolve_feature_flags
+
+  • Request body: {}
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | src/pages/dashboardGlanceHonesty.spec.tsx > DASH-10 — התווית מנקבת את הקבוצה שהיא סופרת > שורת הזיכויים אינה קוראת לזיכוי שהמוצר צובע כ"התקבל" פתוח
+[supplyflow] InternalError: [MSW] Cannot bypass a request when using the "error" strategy for the "onUnhandledRequest" option.
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/dashboardGlanceHonesty.spec.tsx > DASH-10 — התווית מנקבת את הקבוצה שהיא סופרת > שורת הזיכויים אינה קוראת לזיכוי שהמוצר צובע כ"התקבל" פתוח
+TestingLibraryElementError: Unable to find an element with the text: /זיכויים שטרם קוזזו/. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<span[39m
+      [33mdata-testid[39m=[32m"where"[39m
+    [36m>[39m
+      [0m/dashboard[0m
+    [36m</span>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"dashboard-depth space-y-5"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mdata-tour-anchor[39m=[32m"dashboard-heading"[39m
+      [36m>[39m
+        [36m<header[39m
+          [33mclass[39m=[32m"flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between "[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"min-w-0 space-y-1"[39m
+          [36m>[39m
+            [36m<h1[39m
+              [33mclass[39m=[32m"page-title break-words"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"font-normal"[39m
+              [36m>[39m
+                [0mצהריים טובים, בודק[0m
+              [36m</span>[39m
+            [36m</h1>[39m
+            [36m<span[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"section-mark"[39m
+            [36m/>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"text-sm text-ink-muted"[39m
+            [36m>[39m
+              [0mפותחים כאן את היום: מה דורש טיפול עכשיו, מה עלול לעלות כסף ומה מצב העסק ברגע זה.[0m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"text-sm text-ink-soft"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"flex flex-wrap items-center gap-2"[39m
+              [36m>[39m
+                [0mמרכז הבקרה[0m
+                [36m<span[39m
+                  [33mclass[39m=[32m"hidden lg:inline-flex"[39m
+                [36m/>[39m
+              [36m</span>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex shrink-0 flex-wrap items-center gap-2"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex items-center gap-2 text-xs text-ink-muted"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33maria-atomic[39m=[32m"true"[39m
+                [33maria-live[39m=[32m"polite"[39m
+              [36m>[39m
+                [36m<span[39m
+                  [33mclass[39m=[32m"freshness-settle"[39m
+                [36m>[39m
+                  [0mעודכן ב-[0m
+                  [0m [0m
+                  [36m<span[39m
+                    [33mclass[39m=[32m"num"[39m
+                  [36m>[39m
+                    [0m15:11[0m
+                  [36m</span>[39m
+                [36m</span>[39m
+              [36m</span>[39m
+              [36m<button[39m
+                [33maria-label[39m=[32m"רענון נתוני מרכז הבקרה"[39m
+                [33mclass[39m=[32m"btn-ghost btn-icon"[39m
+                [33mtitle[39m=[32m"רענון"[39m
+              [36m>[39m
+                [36m<svg[39m
+                  [33maria-hidden[39m=[32m"true"[39m
+                  [33mclass[39m=[32m"lucide lucide-refresh-cw"[39m
+                  [33mfill[39m=[32m"none"[39m
+                  [33mheight[39m=[32m"15"[39m
+                  [33mstroke[39m=[32m"currentColor"[39m
+                  [33mstroke-linecap[39m=[32m"round"[39m
+                  [33mstroke-linejoin[39m=[32m"round"[39m
+                  [33mstroke-width[39m=[32m"2"[39m
+                  [33mviewBox[39m=[32m"0 0 24 24"[39m
+                  [33mwidth[39m=[32m"15"[39m
+                  [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+                [36m>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"[39m
+                  [36m/>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"M21 3v5h-5"[39m
+                  [36m/>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"[39m
+                  [36m/>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"M8 16H3v5"[39m
+                  [36m/>[39m
+                [36m</svg>[39m
+              [36m</button>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+        [36m</header>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"dash-enter flex flex-col gap-5 lg:grid lg:grid-cols-12 lg:gap-6"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"order-1 lg:order-2 lg:col-span-6 [--dash-step-mobile:1] [--dash-step:1]"[39m
+          [33mdata-tour-anchor[39m=[32m"dashboard-attention"[39m
+        [36m>[39m
+          [36m<section[39m
+            [33mclass[39m=[32m"card card-pad "[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"mb-2 flex flex-wrap items-center justify-between gap-2"[39m
+            [36m>[39m
+              [36m<h2[39m
+                [33mclass[39m=[32m"section-title flex items-center gap-2"[39m
+              [36m>[39m
+                [36m<svg[39m
+                  [33maria-hidden[39m=[32m"true"[39m
+                  [33mclass[39m=[32m"lucide lucide-bell text-ink-ghost"[39m
+                  [33mfill[39m=[32m"none"[39m
+                  [33mheight[39m=[32m"17"[39m
+                  [33mstroke[39m=[32m"currentColor"[39m
+                  [33mstroke-linecap[39m=[32m"round"[39m
+                  [33mstroke-linejoin[39m=[32m"round"[39m
+                  [33mstroke-width[39m=[32m"2"[39m
+                  [33mviewBox[39m=[32m"0 0 24 24"[39m
+                  [33mwidth[39m=[32m"17"[39m
+                  [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+                [36m>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"M10.268 21a2 2 0 0 0 3.464 0"[39m
+                  [36m/>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"[39m
+                  [36m/>[39m
+                [36m</svg>[39m
+                [0mדורש טיפול היום[0m
+              [36m</h2>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"text-sm text-ink-soft py-1"[39m
+            [36m>[39m
+              [0mאין משימות דחופות מבין המדדים שנמדדו — מדדים שאין להם נתונים מרוכזים תחת „מידע נוסף”.[0m
+            [36m</div>[39m
+            [36m<details[39m
+              [33mclass[39m=[32m"group mt-2 border-t border-line-soft"[39m
+            [36m>[39m
+              [36m<summary[39m
+                [33mclass[39m=[32m"flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg px-2 text-sm text-ink-muted hover:bg-surface-hover active:bg-surface-selected focus-vi...
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<span[39m
+      [33mdata-testid[39m=[32m"where"[39m
+    [36m>[39m
+      [0m/dashboard[0m
+    [36m</span>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"dashboard-depth space-y-5"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mdata-tour-anchor[39m=[32m"dashboard-heading"[39m
+      [36m>[39m
+        [36m<header[39m
+          [33mclass[39m=[32m"flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between "[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"min-w-0 space-y-1"[39m
+          [36m>[39m
+            [36m<h1[39m
+              [33mclass[39m=[32m"page-title break-words"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"font-normal"[39m
+              [36m>[39m
+                [0mצהריים טובים, בודק[0m
+              [36m</span>[39m
+            [36m</h1>[39m
+            [36m<span[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"section-mark"[39m
+            [36m/>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"text-sm text-ink-muted"[39m
+            [36m>[39m
+              [0mפותחים כאן את היום: מה דורש טיפול עכשיו, מה עלול לעלות כסף ומה מצב העסק ברגע זה.[0m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"text-sm text-ink-soft"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"flex flex-wrap items-center gap-2"[39m
+              [36m>[39m
+                [0mמרכז הבקרה[0m
+                [36m<span[39m
+                  [33mclass[39m=[32m"hidden lg:inline-flex"[39m
+                [36m/>[39m
+              [36m</span>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex shrink-0 flex-wrap items-center gap-2"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex items-center gap-2 text-xs text-ink-muted"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33maria-atomic[39m=[32m"true"[39m
+                [33maria-live[39m=[32m"polite"[39m
+              [36m>[39m
+                [36m<span[39m
+                  [33mclass[39m=[32m"freshness-settle"[39m
+                [36m>[39m
+                  [0mעודכן ב-[0m
+                  [0m [0m
+                  [36m<span[39m
+                    [33mclass[39m=[32m"num"[39m
+                  [36m>[39m
+                    [0m15:11[0m
+                  [36m</span>[39m
+                [36m</span>[39m
+              [36m</span>[39m
+              [36m<button[39m
+                [33maria-label[39m=[32m"רענון נתוני מרכז הבקרה"[39m
+                [33mclass[39m=[32m"btn-ghost btn-icon"[39m
+                [33mtitle[39m=[32m"רענון"[39m
+              [36m>[39m
+                [36m<svg[39m
+                  [33maria-hidden[39m=[32m"true"[39m
+                  [33mclass[39m=[32m"lucide lucide-refresh-cw"[39m
+                  [33mfill[39m=[32m"none"[39m
+                  [33mheight[39m=[32m"15"[39m
+                  [33mstroke[39m=[32m"currentColor"[39m
+                  [33mstroke-linecap[39m=[32m"round"[39m
+                  [33mstroke-linejoin[39m=[32m"round"[39m
+                  [33mstroke-width[39m=[32m"2"[39m
+                  [33mviewBox[39m=[32m"0 0 24 24"[39m
+                  [33mwidth[39m=[32m"15"[39m
+                  [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+                [36m>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"[39m
+                  [36m/>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"M21 3v5h-5"[39m
+                  [36m/>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"[39m
+                  [36m/>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"M8 16H3v5"[39m
+                  [36m/>[39m
+                [36m</svg>[39m
+              [36m</button>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+        [36m</header>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"dash-enter flex flex-col gap-5 lg:grid lg:grid-cols-12 lg:gap-6"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"order-1 lg:order-2 lg:col-span-6 [--dash-step-mobile:1] [--dash-step:1]"[39m
+          [33mdata-tour-anchor[39m=[32m"dashboard-attention"[39m
+        [36m>[39m
+          [36m<section[39m
+            [33mclass[39m=[32m"card card-pad "[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"mb-2 flex flex-wrap items-center justify-between gap-2"[39m
+            [36m>[39m
+              [36m<h2[39m
+                [33mclass[39m=[32m"section-title flex items-center gap-2"[39m
+              [36m>[39m
+                [36m<svg[39m
+                  [33maria-hidden[39m=[32m"true"[39m
+                  [33mclass[39m=[32m"lucide lucide-bell text-ink-ghost"[39m
+                  [33mfill[39m=[32m"none"[39m
+                  [33mheight[39m=[32m"17"[39m
+                  [33mstroke[39m=[32m"currentColor"[39m
+                  [33mstroke-linecap[39m=[32m"round"[39m
+                  [33mstroke-linejoin[39m=[32m"round"[39m
+                  [33mstroke-width[39m=[32m"2"[39m
+                  [33mviewBox[39m=[32m"0 0 24 24"[39m
+                  [33mwidth[39m=[32m"17"[39m
+                  [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+                [36m>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"M10.268 21a2 2 0 0 0 3.464 0"[39m
+                  [36m/>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"[39m
+                  [36m/>[39m
+                [36m</svg>[39m
+                [0mדורש טיפול היום[0m
+              [36m</h2>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"text-sm text-ink-soft py-1"[39m
+            [36m>[39m
+              [0mאין משימות דחופות מבין המדדים שנמדדו — מדדים שאין להם נתונים מרוכזים תחת „מידע נוסף”.[0m
+            [36m</div>[39m
+            [36m<details[39m
+              [33mclass[39m=[32m"group mt-2 border-t border-line-soft"[39m
+            [36m>[39m
+              [36m<summary[39m
+                [33mclass[39m=[32m"flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg px-2 text-sm text-ink-muted hover:bg-surface-hover active:bg-surface-selected focus-vi...
+ ❯ waitForWrapper ../../../node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ src/pages/dashboardGlanceHonesty.spec.tsx:227:30
+    225|     // is painted `done` by status.ts, badge text התקבל. The populatio…
+    226|     // over it is. What all three states share is that nothing has bee…
+    227|     const row = await screen.findByText(/זיכויים שטרם קוזזו/);
+       |                              ^
+    228|     expect(row).toBeInTheDocument();
+    229|     expect(screen.queryByText('זיכויים פתוחים')).toBeNull();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+

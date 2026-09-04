@@ -1,0 +1,358 @@
+# PR25 · ASSIST-12 · RED
+# oracle: npx vitest run src/pages/dashboards/accountantCreditVisibility.spec.tsx -t ASSIST-12
+# exit code: 1
+
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-ab86901d055337c47
+
+ ❯ src/pages/dashboards/accountantCreditVisibility.spec.tsx (3 tests | 2 failed) 3342ms
+     × קריאה שחזרה ריקה אינה נכתבת כ-0 אלא כ"לא נמדד" 230ms
+     × הריק אומר גם למה — היקף הקריאה, לא תקלה 3057ms
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 1 passed (3)
+   Start at  15:24:35
+   Duration  6.87s (transform 674ms, setup 483ms, import 1.43s, tests 3.34s, environment 1.34s)
+
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/dashboards/accountantCreditVisibility.spec.tsx > ASSIST-12 — אפס שקרי בזיכויים של רואה החשבון > קריאה שחזרה ריקה אינה נכתבת כ-0 אלא כ"לא נמדד"
+AssertionError: expected '0' to contain '—'
+
+Expected: "—"
+Received: "0"
+
+ ❯ src/pages/dashboards/accountantCreditVisibility.spec.tsx:112:32
+    110|     // The whole point: nothing came back, so nothing is known. `0` he…
+    111|     // "this organisation has no open credits", which the accountant's…
+    112|     expect(creditsTileValue()).toContain('—');
+       |                                ^
+    113|     expect(creditsTileValue()).not.toMatch(/(^|\s)0(\s|$)/);
+    114|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/pages/dashboards/accountantCreditVisibility.spec.tsx > ASSIST-12 — אפס שקרי בזיכויים של רואה החשבון > הריק אומר גם למה — היקף הקריאה, לא תקלה
+TestingLibraryElementError: Unable to find an element with the text: /היקף הקריאה של רואה החשבון/. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"dashboard-depth space-y-5"[39m
+    [36m>[39m
+      [36m<header[39m
+        [33mclass[39m=[32m"flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between "[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"min-w-0 space-y-1"[39m
+        [36m>[39m
+          [36m<h1[39m
+            [33mclass[39m=[32m"page-title break-words"[39m
+          [36m>[39m
+            [0mמרכז הבקרה — הנהלת חשבונות[0m
+          [36m</h1>[39m
+          [36m<span[39m
+            [33maria-hidden[39m=[32m"true"[39m
+            [33mclass[39m=[32m"section-mark"[39m
+          [36m/>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex shrink-0 flex-wrap items-center gap-2"[39m
+        [36m>[39m
+          [36m<a[39m
+            [33mclass[39m=[32m"btn-primary"[39m
+            [33mdata-discover[39m=[32m"true"[39m
+            [33mhref[39m=[32m"/pay"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"lucide lucide-banknote"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"15"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"15"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<rect[39m
+                [33mheight[39m=[32m"12"[39m
+                [33mrx[39m=[32m"2"[39m
+                [33mwidth[39m=[32m"20"[39m
+                [33mx[39m=[32m"2"[39m
+                [33my[39m=[32m"6"[39m
+              [36m/>[39m
+              [36m<circle[39m
+                [33mcx[39m=[32m"12"[39m
+                [33mcy[39m=[32m"12"[39m
+                [33mr[39m=[32m"2"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M6 12h.01M18 12h.01"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [0m [0m
+            [0mתשלומים[0m
+          [36m</a>[39m
+          [36m<a[39m
+            [33mclass[39m=[32m"btn-secondary"[39m
+            [33mdata-discover[39m=[32m"true"[39m
+            [33mhref[39m=[32m"/invoices"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"lucide lucide-receipt-text"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"15"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"15"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M13 16H8"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M14 8H8"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M16 12H8"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M4 3a1 1 0 0 1 1-1 1.3 1.3 0 0 1 .7.2l.933.6a1.3 1.3 0 0 0 1.4 0l.934-.6a1.3 1.3 0 0 1 1.4 0l.933.6a1.3 1.3 0 0 0 1.4 0l.933-.6a1.3 1.3 0 0 1 1.4 0l.934.6a1.3 1.3 0 0 0 1.4 0l.933-.6A1.3 1.3 0 0 1 19 2a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1 1.3 1.3 0 0 1-.7-.2l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.934.6a1.3 1.3 0 0 1-1.4 0l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-1.4 0l-.934-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-.7.2 1 1 0 0 1-1-1z"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [0m [0m
+            [0mחשבוניות[0m
+          [36m</a>[39m
+        [36m</div>[39m
+      [36m</header>[39m
+      [36m<section[39m
+        [33mclass[39m=[32m"card card-pad "[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"mb-2 flex flex-wrap items-center justify-between gap-2"[39m
+        [36m>[39m
+          [36m<h2[39m
+            [33mclass[39m=[32m"section-title flex items-center gap-2"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"lucide lucide-bell text-ink-ghost"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"17"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"17"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M10.268 21a2 2 0 0 0 3.464 0"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [0mדורש טיפול היום[0m
+          [36m</h2>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"text-sm text-done-fg py-1"[39m
+        [36m>[39m
+          [0mאין משימות דחופות כרגע[0m
+        [36m</div>[39m
+        [36m<details[39m
+          [33mclass[39m=[32m"group mt-2 border-t border-line-soft"[39m
+        [36m>[39m
+          [36m<summary[39m
+            [33mclass[39m=[32m"flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg px-2 text-sm text-ink-muted hover:bg-surface-hover active:bg-surface-selected focus-visible:outline-2 focus-visible:outline-focus [&::-webkit-details-marker]:hidden"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"lucide lucide-chevron-left shrink-0 transition-transform group-open:-rotate-90"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"15"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"15"[39m
+              [33mxmlns[39m=...
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"dashboard-depth space-y-5"[39m
+    [36m>[39m
+      [36m<header[39m
+        [33mclass[39m=[32m"flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between "[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"min-w-0 space-y-1"[39m
+        [36m>[39m
+          [36m<h1[39m
+            [33mclass[39m=[32m"page-title break-words"[39m
+          [36m>[39m
+            [0mמרכז הבקרה — הנהלת חשבונות[0m
+          [36m</h1>[39m
+          [36m<span[39m
+            [33maria-hidden[39m=[32m"true"[39m
+            [33mclass[39m=[32m"section-mark"[39m
+          [36m/>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex shrink-0 flex-wrap items-center gap-2"[39m
+        [36m>[39m
+          [36m<a[39m
+            [33mclass[39m=[32m"btn-primary"[39m
+            [33mdata-discover[39m=[32m"true"[39m
+            [33mhref[39m=[32m"/pay"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"lucide lucide-banknote"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"15"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"15"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<rect[39m
+                [33mheight[39m=[32m"12"[39m
+                [33mrx[39m=[32m"2"[39m
+                [33mwidth[39m=[32m"20"[39m
+                [33mx[39m=[32m"2"[39m
+                [33my[39m=[32m"6"[39m
+              [36m/>[39m
+              [36m<circle[39m
+                [33mcx[39m=[32m"12"[39m
+                [33mcy[39m=[32m"12"[39m
+                [33mr[39m=[32m"2"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M6 12h.01M18 12h.01"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [0m [0m
+            [0mתשלומים[0m
+          [36m</a>[39m
+          [36m<a[39m
+            [33mclass[39m=[32m"btn-secondary"[39m
+            [33mdata-discover[39m=[32m"true"[39m
+            [33mhref[39m=[32m"/invoices"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"lucide lucide-receipt-text"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"15"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"15"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M13 16H8"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M14 8H8"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M16 12H8"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M4 3a1 1 0 0 1 1-1 1.3 1.3 0 0 1 .7.2l.933.6a1.3 1.3 0 0 0 1.4 0l.934-.6a1.3 1.3 0 0 1 1.4 0l.933.6a1.3 1.3 0 0 0 1.4 0l.933-.6a1.3 1.3 0 0 1 1.4 0l.934.6a1.3 1.3 0 0 0 1.4 0l.933-.6A1.3 1.3 0 0 1 19 2a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1 1.3 1.3 0 0 1-.7-.2l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.934.6a1.3 1.3 0 0 1-1.4 0l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-1.4 0l-.934-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-.7.2 1 1 0 0 1-1-1z"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [0m [0m
+            [0mחשבוניות[0m
+          [36m</a>[39m
+        [36m</div>[39m
+      [36m</header>[39m
+      [36m<section[39m
+        [33mclass[39m=[32m"card card-pad "[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"mb-2 flex flex-wrap items-center justify-between gap-2"[39m
+        [36m>[39m
+          [36m<h2[39m
+            [33mclass[39m=[32m"section-title flex items-center gap-2"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"lucide lucide-bell text-ink-ghost"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"17"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"17"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M10.268 21a2 2 0 0 0 3.464 0"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [0mדורש טיפול היום[0m
+          [36m</h2>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"text-sm text-done-fg py-1"[39m
+        [36m>[39m
+          [0mאין משימות דחופות כרגע[0m
+        [36m</div>[39m
+        [36m<details[39m
+          [33mclass[39m=[32m"group mt-2 border-t border-line-soft"[39m
+        [36m>[39m
+          [36m<summary[39m
+            [33mclass[39m=[32m"flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg px-2 text-sm text-ink-muted hover:bg-surface-hover active:bg-surface-selected focus-visible:outline-2 focus-visible:outline-focus [&::-webkit-details-marker]:hidden"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"lucide lucide-chevron-left shrink-0 transition-transform group-open:-rotate-90"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"15"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"15"[39m
+              [33mxmlns[39m=...
+ ❯ waitForWrapper ../../../node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ src/pages/dashboards/accountantCreditVisibility.spec.tsx:133:25
+    131|     // have printed the zero carry it — the KPI tile and the attention…
+    132|     // `findAllByText`: one of them saying it and the other going quie…
+    133|     expect(await screen.findAllByText(/היקף הקריאה של רואה החשבון/)).t…
+       |                         ^
+    134|   });
+    135| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+

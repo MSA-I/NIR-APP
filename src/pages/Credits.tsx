@@ -94,6 +94,11 @@ export default function Credits() {
         toolbar={
           <>
             <select className="input w-auto!" aria-label={t('credits.aria_label')} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+              {/* `DASH-10`: the value stays `active` — it is in links, in the dashboard tile and in
+                  bookmarks — but the WORD names the set. `open|requested|received` are the three
+                  states in which nothing has been offset yet, and one of them, `received`, wears a
+                  `done` badge reading התקבל. Calling that row "open" contradicted the badge two
+                  columns away; calling the set "not yet offset" is true of all three. */}
               <option value="active">{t('credits.text_6')}</option>
               <option value="all">{t('credits.text_7')}</option>
             </select>

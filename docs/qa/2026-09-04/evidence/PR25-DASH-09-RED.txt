@@ -1,0 +1,121 @@
+# PR25 · DASH-09 · RED
+# oracle: npx vitest run src/pages/dashboardGlanceHonesty.spec.tsx -t DASH-09
+# exit code: 1
+
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-ab86901d055337c47
+
+ ❯ src/pages/dashboardGlanceHonesty.spec.tsx (6 tests | 2 failed | 4 skipped) 514ms
+     × כל סכום על מסך המבט נמצא באותו הקשר דו-כיווני 358ms
+     × אין סכום שנושא dir="ltr" — זה שמור למזהים אטומיים בלבד (DESIGN.md) 148ms
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 4 skipped (6)
+   Start at  15:11:24
+   Duration  4.37s (transform 920ms, setup 523ms, import 1.84s, tests 514ms, environment 1.25s)
+
+
+stderr | src/pages/dashboardGlanceHonesty.spec.tsx > DASH-09 — סימן המטבע יושב בצד אחד בכל המסך > כל סכום על מסך המבט נמצא באותו הקשר דו-כיווני
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • POST http://127.0.0.1:55431/rest/v1/rpc/resolve_feature_flags
+
+  • Request body: {}
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • POST http://127.0.0.1:55431/rest/v1/rpc/scheduled_payments_outlook
+
+  • Request body: {"p_horizon_days":30}
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | src/pages/dashboardGlanceHonesty.spec.tsx > DASH-09 — סימן המטבע יושב בצד אחד בכל המסך > כל סכום על מסך המבט נמצא באותו הקשר דו-כיווני
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • POST http://127.0.0.1:55431/rest/v1/rpc/my_subscription
+
+  • Request body: {}
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | src/pages/dashboardGlanceHonesty.spec.tsx > DASH-09 — סימן המטבע יושב בצד אחד בכל המסך > אין סכום שנושא dir="ltr" — זה שמור למזהים אטומיים בלבד (DESIGN.md)
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • POST http://127.0.0.1:55431/rest/v1/rpc/resolve_feature_flags
+
+  • Request body: {}
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • POST http://127.0.0.1:55431/rest/v1/rpc/scheduled_payments_outlook
+
+  • Request body: {"p_horizon_days":30}
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | src/pages/dashboardGlanceHonesty.spec.tsx > DASH-09 — סימן המטבע יושב בצד אחד בכל המסך > אין סכום שנושא dir="ltr" — זה שמור למזהים אטומיים בלבד (DESIGN.md)
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • POST http://127.0.0.1:55431/rest/v1/rpc/my_subscription
+
+  • Request body: {}
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/dashboardGlanceHonesty.spec.tsx > DASH-09 — סימן המטבע יושב בצד אחד בכל המסך > כל סכום על מסך המבט נמצא באותו הקשר דו-כיווני
+AssertionError: expected [ 'inherited-rtl', 'ltr' ] to have a length of 1 but got 2
+
+- Expected
++ Received
+
+- 1
++ 2
+
+ ❯ src/pages/dashboardGlanceHonesty.spec.tsx:196:22
+    194|     expect(figures.length).toBeGreaterThan(1);
+    195|     const contexts = [...new Set(figures.map(bidiContextOf))];
+    196|     expect(contexts).toHaveLength(1);
+       |                      ^
+    197|   });
+    198|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/pages/dashboardGlanceHonesty.spec.tsx > DASH-09 — סימן המטבע יושב בצד אחד בכל המסך > אין סכום שנושא dir="ltr" — זה שמור למזהים אטומיים בלבד (DESIGN.md)
+AssertionError: expected [ <div …(2)></div> ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   <div
++     class="mt-2 kpi-hero num text-await-fg"
++     dir="ltr"
++   >
++     ‏11,582 ‏₪
++   </div>,
++ ]
+
+ ❯ src/pages/dashboardGlanceHonesty.spec.tsx:204:72
+    202|     // DESIGN.md, "מספרים": `.tech-id` is the only exception — "מזהים …
+    203|     // סכומים, כמויות, אחוזים, תאריכים... נשארים". A sum is not an ide…
+    204|     expect(moneyFigures().filter((el) => bidiContextOf(el) === 'ltr'))…
+       |                                                                        ^
+    205|   });
+    206| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+

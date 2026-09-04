@@ -1,0 +1,122 @@
+# PR25 · role=accountant · Edge 1440x900 · 2026-09-04T12:44:23.714Z
+landed on http://localhost:5217/dashboard
+
+===== /dashboard =====
+Skip to content
+Control room
+Consolidated invoices
+Finance
+Control and reports
+רל
+Control centre — bookkeeping
+Start the day here: what needs handling now, what could cost money, and how the business stands at this moment.
+Payments
+Invoices
+Needs attention today
+3
+kinds of work
+2
+Approved invoices not sent to the accountant
+2
+Unmatched bank transactions
+1
+Matches waiting for approval
+More information
+2
+Paid this month
+‏746 ‏₪
+Balance of open invoices
+‏4,184 ‏₪
+Unmatched bank transactions
+2
+Matches waiting for approval
+1
+Credits not yet offset
+0
+Waiting to go to the accountant
+2
+Payments by month
+
+Total payments to suppliers over the last four months
+
+June 2026
+July 2026
+August 2026
+September 2026
+Open balances by supplier
+
+The four suppliers with the highest balance, and all the rest
+
+‏4.2K‏ ‏₪
+Total
+משקאות אור בע"מ
+68%
+תבליני הגליל
+15%
+נקי וזוהר
+13%
+אריזות הדרום
+4%
+משקאות אור בע"מ
+‏2,832 ‏₪
+תבליני הגליל
+‏640 ‏₪
+נקי וזוהר
+‏562 ‏₪
+אריזות הדרום
+‏150 ‏₪
+Payments against bank charges
+
+The last eight weeks
+
+12/07
+19/07
+26/07
+02/08
+09/08
+16/08
+23/08
+30/08
+Payments
+Bank charges
+12/07
+screenshot: D:\משה פרוייקטים\פיתוח אתרים\NIR-APP\.claude\worktrees\agent-ab86901d055337c47\docs\qa\2026-09-04\evidence\PR25-accountant-dashboard-1440x900.png
+
+===== /credits =====
+Skip to content
+Control room
+Consolidated invoices
+Finance
+Control and reports
+רל
+Credits
+Follow credit requests against suppliers, from the moment one is opened until it actually comes through.
+Total not yet offset: —
+Credits not yet offset
+All
+Any month
+January
+February
+March
+April
+May
+June
+July
+August
+September
+October
+November
+December
+Any year
+2027
+2026
+2025
+2024
+2023
+2022
+2021
+2020
+No credits
+A credit for a short quantity, a damaged item or a return is opened automatically when the goods are received (when the credit box is ticked). In any other case — a wrong price, for instance — the credit request is opened from the supplier's invoice.
+0 records
+screenshot: D:\משה פרוייקטים\פיתוח אתרים\NIR-APP\.claude\worktrees\agent-ab86901d055337c47\docs\qa\2026-09-04\evidence\PR25-accountant-credits-1440x900.png

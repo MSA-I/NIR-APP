@@ -73,6 +73,35 @@ export const fmtMoneyRounded = (v: number | null | undefined, currency: string |
 export const fmtMoneyCompact = (v: number | null | undefined, currency: string | null | undefined) =>
   fmtMoney(v, currency, 'compact');
 
+/**
+ * The DIGITS of a percentage, at a precision that can express the figure — or `null` when no
+ * admissible precision can, so the caller drops the percentage instead of printing a zero.
+ *
+ * `DASH-11`. The dashboard printed `חיסכון משוער ₪9 · 0%`, and the two halves of that one
+ * sentence contradict each other: the amount is exact and says ₪9 was saved, the percentage is
+ * `toFixed(0)` and says nothing was. ₪9 out of a ₪2,353 worst-case basket is 0.38%, which is a
+ * real number that whole units simply cannot hold. Rounding a measurement to a scale coarser than
+ * the measurement is how a fact becomes a false claim — the same mistake as printing `0` where
+ * the constitution requires `—`, one decimal place further down.
+ *
+ * The rule is the first significant digit, not a fixed precision: 12.7 reads `13`, because a
+ * headline that says 12.7% is pretending to a precision the basket does not have; 0.38 reads
+ * `0.4`; 0.04 reads `0.04`. Below the two-decimal floor the honest answer is that there is no
+ * percentage worth printing beside the amount, and `null` says so — the caller then renders the
+ * ₪ figure alone rather than a `0%` that argues with it.
+ *
+ * The `%` itself stays in the dictionary string, so the sign sits where each language puts it.
+ */
+export function glancePercentDigits(v: number | null | undefined): string | null {
+  if (v == null || !Number.isFinite(v)) return null;
+  const magnitude = Math.abs(v);
+  const decimals = magnitude >= 1 ? 0 : magnitude >= 0.1 ? 1 : 2;
+  const text = v.toFixed(decimals);
+  // `-0`, `0`, `0.0` and `0.00` all read as nothing. A measured zero is a different call site:
+  // this one only ever describes a figure the caller has already decided is worth showing.
+  return Number(text) === 0 && v !== 0 ? null : text;
+}
+
 /** ISO currency scale from the same platform formatter that renders it. Null means unsupported. */
 export function currencyMinorUnits(currency: string): number | null {
   if (!/^[A-Z]{3}$/.test(currency)) return null;

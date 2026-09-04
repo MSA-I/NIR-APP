@@ -1,0 +1,16 @@
+# PR25 · DASH-09 · physical measurement, RED
+#
+# Microsoft Edge (system, via playwright-core), RTL document, 04.09.2026. Per-character
+# client rects out of the live layout engine — not a screenshot read. The two rows are the
+# two markup shapes /dashboard ships at once: the money band figure, which carries dir="ltr",
+# and every MoneyByCurrency figure, which does not. Both currencies flip TOGETHER, so the
+# sweep's attribution to ILS-vs-USD was wrong; the variable is the bidi context of the markup.
+#
+# script: measure-contexts.cjs (scratchpad) — exit 1 while two positions exist.
+kpi-hero num dir=ltr   (money band) | ILS | marker TRAILS | digits [791.33,855.41] symbol [855.41,867]
+kpi-hero num dir=ltr   (money band) | USD | marker TRAILS | digits [819.56,855.14] symbol [855.14,867]
+num  (MoneyByCurrency)  | ILS | marker LEADS | digits [802.92,867.01] symbol [785.3,796.89]
+num  (MoneyByCurrency)  | USD | marker LEADS | digits [831.42,867] symbol [813.53,825.39]
+
+DISTINCT MARKER POSITIONS ON ONE GLANCE SURFACE: 2  -> TRAILS, LEADS
+ORACLE FAILS — the marker sits on opposite sides of the figure

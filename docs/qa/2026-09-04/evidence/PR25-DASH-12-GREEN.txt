@@ -1,0 +1,14 @@
+# PR25 · DASH-12 · GREEN
+# oracle: npx vitest run src/pages/alertsRowLinks.spec.tsx -t DASH-12
+# exit code: 0
+
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-ab86901d055337c47
+
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Start at  15:25:27
+   Duration  2.92s (transform 721ms, setup 410ms, import 1.07s, tests 232ms, environment 978ms)
+
+
