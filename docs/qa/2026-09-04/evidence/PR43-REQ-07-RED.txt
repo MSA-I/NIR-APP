@@ -1,0 +1,56 @@
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a0180200f5f0dfffc
+
+ ❯ src/lib/invoiceApprovalRefusals.spec.ts (5 tests | 3 failed) 30ms
+     × maps each refusal to its own key, whichever shape the message arrives in 14ms
+     × does not collapse either refusal into the generic fallback 6ms
+     × resolves to its own sentence in both dictionaries, not to the fallback 2ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/lib/invoiceApprovalRefusals.spec.ts > the invoice approval guard names what it refused > maps each refusal to its own key, whichever shape the message arrives in
+AssertionError: expected 'fallback' to be 'invoice_approval_blocked_three_way_re…' // Object.is equality
+
+Expected: "invoice_approval_blocked_three_way_review"
+Received: "fallback"
+
+ ❯ src/lib/invoiceApprovalRefusals.spec.ts:37:44
+     35|     for (const code of REFUSALS) {
+     36|       for (const raw of [code, `Error: ${code}`, `${code} (55000)`]) {
+     37|         expect(toErrorKey(new Error(raw))).toBe(code);
+       |                                            ^
+     38|         expect(toErrorKey(raw)).toBe(code);
+     39|       }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  src/lib/invoiceApprovalRefusals.spec.ts > the invoice approval guard names what it refused > does not collapse either refusal into the generic fallback
+AssertionError: expected 'fallback' not to be 'fallback' // Object.is equality
+ ❯ src/lib/invoiceApprovalRefusals.spec.ts:45:47
+     43|   it('does not collapse either refusal into the generic fallback', () …
+     44|     for (const code of REFUSALS) {
+     45|       expect(toErrorKey(new Error(code))).not.toBe('fallback');
+       |                                               ^
+     46|     }
+     47|     // The two are different states with different next actions — "the…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  src/lib/invoiceApprovalRefusals.spec.ts > the invoice approval guard names what it refused > resolves to its own sentence in both dictionaries, not to the fallback
+AssertionError: expected 'הפעולה נכשלה. אם הבעיה חוזרת — פנה לת…' not to be 'הפעולה נכשלה. אם הבעיה חוזרת — פנה לת…' // Object.is equality
+ ❯ src/lib/invoiceApprovalRefusals.spec.ts:59:33
+     57|         const errors = dictionary.errors as unknown as Record<string, …
+     58|         expect(errors[key]).toBeTypeOf('string');
+     59|         expect(errors[key]).not.toBe(errors.fallback);
+       |                                 ^
+     60|       }
+     61|     }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 2 passed (5)
+   Start at  14:04:53
+   Duration  2.24s (transform 437ms, setup 446ms, import 442ms, tests 30ms, environment 1.11s)
+

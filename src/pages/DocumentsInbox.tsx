@@ -545,6 +545,24 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
   // Asking for it here is what makes the queue drain to "דורש בדיקה" by itself. The handler is
   // idempotent and short-circuits before the paid call, so a repeat costs one round trip.
   const interpretInFlight = useRef(new Set<string>());
+  /**
+   * DOC-11. The jobs this screen has ALREADY been answered for, successfully.
+   *
+   * `interpretInFlight` answers "is a request out right now", and it is released the instant the
+   * response lands. Nothing remembered that the answer had arrived. So the window between a
+   * successful call and the refetched status reaching this component was open to any effect pass
+   * — and the pass reads the OLD snapshot, where the job is still 'extracted'. It asked again.
+   * `interpret-document` refuses the second caller for one job with HTTP 409
+   * `interpretation_in_progress` (index.ts, `egressLease.idempotent`), correctly: the burst of
+   * three uploads the sweep measured kept the snapshot changing, so the window never closed and
+   * one 409 reached the log. Measured on the unfixed tree: nine.
+   *
+   * Success only. A FAILED interpretation is still retried three times and still raises the
+   * banner below — `documentsInboxInterpretAlert.spec.tsx` pins that, and it is unchanged. And a
+   * document sent round again gets a NEW job row with a new id (`reprocess_document`, 0045), so
+   * this set never blocks a genuine second reading.
+   */
+  const interpretSettled = useRef(new Set<string>());
   const interpretAttempts = useRef(new Map<string, number>());
   const interpretMounted = useRef(false);
   const [interpretRetryTick, setInterpretRetryTick] = useState(0);
@@ -564,6 +582,7 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
       .map((snapshot) => snapshot.job)
       .filter((job) => job?.status === 'extracted'
         && !interpretInFlight.current.has(job.id)
+        && !interpretSettled.current.has(job.id)
         && (interpretAttempts.current.get(job.id) ?? 0) < 3);
     if (!pending.length) return;
     let cancelled = false;
@@ -594,6 +613,9 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
           }
           continue;
         }
+        // Answered. Recorded BEFORE the refetch below, because the refetch is exactly the gap the
+        // second request used to slip through.
+        interpretSettled.current.add(job.id);
         interpretAttempts.current.delete(job.id);
         if (interpretFailure?.jobId === job.id) setInterpretFailure(null);
       }

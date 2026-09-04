@@ -325,6 +325,23 @@ const PATTERNS: [RegExp, string][] = [
     'invoice_order_invalid'],
   [/invoice_review_transition_invalid/i,
     'invoice_review_transition_invalid'],
+  /* REQ-07. The two refusals behind "אישור לתשלום", raised by the TRIGGER
+     `invoice_three_way_approval_guard` (0099) rather than by an RPC — which is why they were
+     missed: the button calls no function whose name a reader would grep for. Neither string
+     appeared anywhere under `src/`, so both collapsed into FALLBACK, "the action failed — contact
+     support", for a rule the product enforces on purpose and the person can act on. Support is
+     the wrong destination for "the goods have not been receipted against this invoice yet".
+
+     Two lines, not one: the next action is different. One says go and receive the goods (or
+     record an override); the other says this invoice is already in the system and entering it
+     again would pay twice. Collapsing them would restore the defect in a quieter form.
+
+     The 500 they arrive as is NOT fixed here — `using errcode = '55000'` is a migration against
+     that trigger. `docs/GATES.md` carries REQ-07 as blocked on exactly that half. */
+  [/invoice_approval_blocked_three_way_review/i,
+    'invoice_approval_blocked_three_way_review'],
+  [/invoice_approval_blocked_definite_duplicate/i,
+    'invoice_approval_blocked_definite_duplicate'],
   [/invoice_has_financial_references/i,
     'invoice_has_financial_references'],
   [/invoice_not_found/i,

@@ -151,6 +151,10 @@ export const en: Dictionary = {
     invoice_amounts_invalid: 'The invoice amounts are invalid, or the subtotal and VAT do not add up to the total.',
     invoice_order_invalid: 'The linked supplier, order or receipt does not match this invoice.',
     invoice_review_transition_invalid: 'The invoice cannot move to the chosen status from where it is now.',
+    // REQ-07. Both name the rule and the next step, because both are states the business can
+    // resolve itself — the reason neither may read "contact support".
+    invoice_approval_blocked_three_way_review: 'This invoice has not passed three-way matching between the order, the goods receipt and the invoice, so it cannot be approved for payment yet. Open the matching screen, complete the goods receipt, or record a reasoned override.',
+    invoice_approval_blocked_definite_duplicate: 'This invoice was identified as a definite duplicate of one already in the system, so approval was blocked to prevent paying twice. Open the existing invoice and check what was recorded.',
     invoice_has_financial_references: 'An invoice linked to a payment request, a payment, a credit, a bank match or a report that was already sent cannot be deleted. Deal with the financial link on the screen that owns it.',
     invoice_not_found: 'That invoice is no longer available.',
     supplier_has_open_balance: 'A supplier with an open balance cannot be deleted. Close the balance first.',
@@ -1055,6 +1059,9 @@ export const en: Dictionary = {
     toast_5: 'Order cancelled',
     toast_6: 'The order was marked as sent to the supplier',
     text_14: 'Order not found',
+    // PROC-06. Two ordinary reasons, and neither of them is a fault the person should report.
+    orderNotFoundBody: 'The order may have been cancelled, the link may have been copied in part, or it may belong to another business. Go back to the orders list and look for it there.',
+    orderNotFoundAction: 'To the orders list',
     text_15: 'Mark the order as ready to send',
     text_16: 'Mark the order as sent to the supplier',
     text_17: 'Open the order in WhatsApp and confirm it was sent',
@@ -3730,6 +3737,10 @@ export const en: Dictionary = {
     text_4: 'Saved',
     text_5: 'The save failed',
     text_6: 'Saved automatically when a product is added',
+    // PROC-08. Said only when the screen picked the draft itself: it names WHICH draft and
+    // HOW OLD, because those are the two facts that tell a person whether it is theirs.
+    resumedDraftNotice: 'This screen reopened draft #{number}, saved on {date}, where it was left. You can carry on with it, or start a new empty order.',
+    startFreshAction: 'Start a new order',
     setStep: 'Products and quantities',
     setStep_2: 'Suppliers and split',
     goToSummary: 'Summary and confirmation',

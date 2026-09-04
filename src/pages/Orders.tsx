@@ -1,7 +1,7 @@
 import { useT } from '../lib/i18n/LocaleProvider';
 import type { TKey } from '../lib/i18n/t';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { useParamState } from '../lib/useParamState';
 import { FileDown, Loader2, Printer, Send, CheckCircle2, XCircle, PackageCheck, MessageCircle, Pencil, Copy, Plus, FileText, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -423,10 +423,23 @@ export function OrderDetail() {
     ? `${supabase.storage.from('organization-branding').getPublicUrl(org.logo_path).data.publicUrl}?v=${encodeURIComponent(org.logo_updated_at ?? '')}`
     : null;
 
+  /**
+   * PROC-06. `maybeSingle()`, not `single()`, and the difference is the whole finding.
+   *
+   * `single()` demands one row of PostgREST, which answers HTTP 406 over zero — so an id with no
+   * record behind it (a stale WhatsApp link, a cancelled order, a half-copied address) threw, and
+   * a thrown read is an ERROR. The screen then showed the generic failure sentence, "הפעולה
+   * נכשלה. אם הבעיה חוזרת — פנה לתמיכה.", over an empty page: it named the wrong cause and sent
+   * the person to open a support ticket for a URL that simply has no order.
+   *
+   * `maybeSingle()` fetches as a list and enforces cardinality client-side, so zero rows is
+   * `data: null` with NO error — an answer, not a fault. The absent record and the failed read
+   * are then two different states below, which is what they always were.
+   */
   const { data: order, loading, error, refetch } = useQuery(async () =>
     unwrap(await supabase.from('purchase_orders')
       .select('*, supplier:suppliers(id, name, phone, whatsapp, email, min_order_amount, default_currency), items:purchase_order_items(*, product:products(name, display_name, unit, sku))')
-      .eq('id', id!).single()) as Promise<FullOrder>, [id]);
+      .eq('id', id!).maybeSingle()) as Promise<FullOrder | null>, [id]);
 
   // ?print=1 (Orders list "הדפסה" action): print once when the data is on screen, then strip
   // the param so refresh/back does not re-open the dialog.
@@ -524,7 +537,19 @@ export function OrderDetail() {
   }
 
   if (loading) return <RecordSkeleton />;
-  if (error || !order) return <ErrorNote message={error ?? t('orders.text_14')} />;
+  // A read that failed is still a failure and still says so. What changed is that "there is no
+  // such order" no longer travels through that branch: it gets its own screen, which names the
+  // state and offers the one thing a person on a dead link actually wants — the list.
+  if (error) return <ErrorNote message={error} />;
+  if (!order) {
+    return (
+      <EmptyState
+        title={t('orders.text_14')}
+        subtitle={t('orders.orderNotFoundBody')}
+        icon={<FileText size={ICON.hero} />}
+        action={<Link to="/orders" className="btn-secondary">{t('orders.orderNotFoundAction')}</Link>} />
+    );
+  }
 
   // Every price on this sheet is a snapshot taken in the ORDER's currency, so the total is that
   // currency and nothing here needs a second one.

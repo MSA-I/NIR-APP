@@ -1,0 +1,64 @@
+PR43 / DOC-09 — measurement, not a test. The row is BLOCKED; this file is why.
+Tree: worktree-qa-sweep-20260904, HEAD 182eef90 (unfixed).
+
+WHAT THE SWEEP MEASURED
+  POST rest/v1/rpc/apply_reviewed_document -> 500
+  {"code":"55000","details":null,"hint":null,
+   "message":"document_review_blocked: header_total_differs_from_lines, product_unidentified"}
+  (docs/qa/2026-09-04/documents.json, DOC-09; raw out/documents/approve.json)
+
+ORACLE ASKED FOR
+  "A refused review is a 4xx condition; 5xx belongs to faults."
+  There is no second clause. DOC-09 is entirely about the wire status.
+
+WHERE THE STATUS IS DECIDED — one line, inside a SECURITY DEFINER body
+
+  supabase/migrations/0110_apply_reviewed_document.sql:228-237
+    create or replace function public.apply_reviewed_document(
+      p_document_id uuid, p_interpretation_id uuid, p_reviewed jsonb,
+      p_idempotency_key uuid, p_reason text
+    ) returns jsonb
+    language plpgsql
+    security definer
+    set search_path = public, private, extensions, pg_temp
+
+  supabase/migrations/0110_apply_reviewed_document.sql:382-388
+    raise exception 'document_review_blocked: %',
+      coalesce((select string_agg(distinct f ->> 'code', ', ') ...), 'unknown')
+      using errcode = '55000';
+
+  PostgREST maps SQLSTATE 55000 (raise_exception, class 55) to HTTP 500 by default. Nothing on
+  the client can turn that into a 4xx. The only fix is the `using errcode` on that line — either
+  a SQLSTATE PostgREST maps to 4xx, or PostgREST's own `PT4xx` response-status form.
+
+WHY THIS AGENT DID NOT WRITE IT
+  1. It is a SECURITY DEFINER body. PR 43's brief says to STOP and report before writing SQL for
+     one: definer bodies are patched by ANCHORED REPLACEMENT against the LIVE body, not by
+     re-declaring from the creating migration, which silently reverts security properties.
+  2. It needs a migration number, and PR 43 is forbidden from drawing one (numbers are taken
+     under the coordinator's lock).
+  3. The body is PINNED by prosrc hash in four places, and all four move with any edit:
+       supabase/migrations/0172_approved_credit_note_intake.sql:157, :337, :383
+       supabase/migrations/0182_qualified_product_creation_guards.sql:217
+       supabase/migrations/0227_document_intake_carries_the_evidence_currency.sql:414, :586, :629
+       supabase/migrations/0230_repin_document_automation_after_currency_intake.sql:9-18
+     `npm run check:anchored-replacements` and `check:exemptions` guard this; the prosrc hash has
+     a known CRLF trap between Windows and CI, so the LF value has to be computed statically and
+     the extractor verified against a known-good hash first.
+  4. PRs 7/14/15 of this campaign may hold this function.
+
+NOT A CLIENT DEFECT
+  The screen already renders the refusal as findings (documents.json: "The UI renders it correctly
+  as findings, so the user sees no error page"), and `DocumentReview.tsx:16-36` carries a code map
+  for every named interpret refusal. The person is not misinformed. The damage is that every
+  blocked approval is counted as a server fault in monitoring, which hides real 500s — an
+  operator-facing cost, and the reason DOC-09 is `low`.
+
+RELATED, AND ALSO BLOCKED FOR THE SAME REASON
+  REQ-07's second clause ("... and a 4xx") is the identical mechanism one layer over:
+  supabase/migrations/0099_invoice_line_three_way_match.sql:2089
+    raise exception 'invoice_approval_blocked_three_way_review' using errcode = '55000';
+  That one is a TRIGGER (`public.invoice_three_way_approval_guard()`, security INVOKER, 0099:2050),
+  so it is not a definer — but it still needs a migration number this agent may not draw.
+  REQ-07's FIRST clause ("a sentence naming it") is a client mapping and IS closed in this PR;
+  see PR43-REQ-07-RED.txt / -GREEN.txt.

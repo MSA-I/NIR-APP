@@ -1,0 +1,747 @@
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a0180200f5f0dfffc
+
+ ❯ src/pages/neworder/draftResumption.spec.tsx (4 tests | 3 failed) 417ms
+     × lands on step 01 when the draft was adopted, not chosen 121ms
+     × does not put the irreversible button on screen 143ms
+     × offers the explicit way to start a new order instead 116ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/neworder/draftResumption.spec.tsx > PROC-08 — a draft nobody named must not open on its confirm step > lands on step 01 when the draft was adopted, not chosen
+AssertionError: expected '03סיכום ואישור' to contain '01'
+
+Expected: "01"
+Received: "03סיכום ואישור"
+
+ ❯ src/pages/neworder/draftResumption.spec.tsx:125:48
+    123|     const current = currentSteps();
+    124|     expect(current.length).toBeGreaterThan(0);
+    125|     for (const label of current) expect(label).toContain('01');
+       |                                                ^
+    126|   });
+    127|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  src/pages/neworder/draftResumption.spec.tsx > PROC-08 — a draft nobody named must not open on its confirm step > does not put the irreversible button on screen
+AssertionError: expected <button type="button" …(2)>…(1)</button> to be null
+
+- Expected:
+null
+
++ Received:
+<button
+  class="btn-primary"
+  disabled=""
+  type="button"
+>
+  <svg
+    aria-hidden="true"
+    class="lucide lucide-circle-check"
+    fill="none"
+    height="15"
+    stroke="currentColor"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    stroke-width="2"
+    viewBox="0 0 24 24"
+    width="15"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <circle
+      cx="12"
+      cy="12"
+      r="10"
+    />
+    <path
+      d="m9 12 2 2 4-4"
+    />
+  </svg>
+   
+  אשר ושלח הזמנות
+</button>
+
+ ❯ src/pages/neworder/draftResumption.spec.tsx:131:94
+    129|     renderNewOrder('/orders/new');
+    130|     await screen.findByText('#75');
+    131|     expect(screen.queryByRole('button', { name: new RegExp(he.summaryS…
+       |                                                                                              ^
+    132|   });
+    133|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  src/pages/neworder/draftResumption.spec.tsx > PROC-08 — a draft nobody named must not open on its confirm step > offers the explicit way to start a new order instead
+TestingLibraryElementError: Unable to find an accessible element with the role "link"
+
+Here are the accessible roles:
+
+  banner:
+
+  Name "":
+  [36m<header[39m
+    [33mclass[39m=[32m"flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between "[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  heading:
+
+  Name "הזמנה חדשה":
+  [36m<h1[39m
+    [33mclass[39m=[32m"page-title break-words"[39m
+  [36m/>[39m
+
+  Name "סיכום ההזמנה":
+  [36m<h2[39m
+    [33mclass[39m=[32m"section-title"[39m
+    [33mid[39m=[32m"summary-title"[39m
+  [36m/>[39m
+
+  Name "הזמנות שייווצרו":
+  [36m<h2[39m
+    [33mclass[39m=[32m"section-title"[39m
+    [33mid[39m=[32m"summary-suppliers-title"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  status:
+
+  Name "":
+  [36m<div[39m
+    [33maria-live[39m=[32m"polite"[39m
+    [33mclass[39m=[32m"flex min-h-6 items-center gap-1.5 text-xs text-ink-muted"[39m
+    [33mrole[39m=[32m"status"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  button:
+
+  Name "ביטול טיוטה":
+  [36m<button[39m
+    [33mclass[39m=[32m"btn-danger"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "סקירה ואישור":
+  [36m<button[39m
+    [33mclass[39m=[32m"btn-primary"[39m
+    [33mdisabled[39m=[32m""[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "01מוצרים וכמויות":
+  [36m<button[39m
+    [33mclass[39m=[32m"grid size-11 shrink-0 place-items-center rounded-full text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 bg-action-wash text-ink-mid"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "02ספקים וחלוקה":
+  [36m<button[39m
+    [33mclass[39m=[32m"grid size-11 shrink-0 place-items-center rounded-full text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 bg-action-wash text-ink-mid"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "03סיכום ואישור":
+  [36m<button[39m
+    [33maria-current[39m=[32m"step"[39m
+    [33mclass[39m=[32m"grid size-11 shrink-0 place-items-center rounded-full text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 bg-action text-on-solid"[39m
+    [33mdisabled[39m=[32m""[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "01מוצרים וכמויות":
+  [36m<button[39m
+    [33mclass[39m=[32m"chip-filter gap-2 disabled:cursor-not-allowed disabled:opacity-50 "[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "02ספקים וחלוקה":
+  [36m<button[39m
+    [33mclass[39m=[32m"chip-filter gap-2 disabled:cursor-not-allowed disabled:opacity-50 "[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "03סיכום ואישור":
+  [36m<button[39m
+    [33maria-current[39m=[32m"step"[39m
+    [33mclass[39m=[32m"chip-filter gap-2 disabled:cursor-not-allowed disabled:opacity-50 chip-filter-active"[39m
+    [33mdisabled[39m=[32m""[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "חזרה לעריכת ספקים":
+  [36m<button[39m
+    [33mclass[39m=[32m"btn-secondary"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "אשר ושלח הזמנות":
+  [36m<button[39m
+    [33mclass[39m=[32m"btn-primary"[39m
+    [33mdisabled[39m=[32m""[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  paragraph:
+
+  Name "":
+  [36m<p[39m
+    [33mclass[39m=[32m"text-xs text-alert-fg sm:text-end"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<p[39m
+    [33mclass[39m=[32m"border-t border-line-soft px-3 py-3 text-sm text-ink-muted sm:px-4"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  navigation:
+
+  Name "שלבי הזמנה":
+  [36m<nav[39m
+    [33maria-label[39m=[32m"שלבי הזמנה"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  region:
+
+  Name "סיכום ההזמנה":
+  [36m<section[39m
+    [33maria-labelledby[39m=[32m"summary-title"[39m
+    [33mclass[39m=[32m"border-y border-line-strong bg-surface"[39m
+  [36m/>[39m
+
+  Name "הזמנות שייווצרו":
+  [36m<section[39m
+    [33maria-labelledby[39m=[32m"summary-suppliers-title"[39m
+    [33mclass[39m=[32m"border-y border-line-strong bg-surface"[39m
+  [36m/>[39m
+
+  Name "פרטי הזמנה":
+  [36m<section[39m
+    [33maria-label[39m=[32m"פרטי הזמנה"[39m
+    [33mclass[39m=[32m"border-y border-line-strong bg-surface px-3 py-3 text-sm sm:px-4"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  strong:
+
+  Name "":
+  [36m<strong[39m
+    [33mclass[39m=[32m"num mt-1 block text-base text-ink"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<strong[39m
+    [33mclass[39m=[32m"num mt-1 block text-base text-ink"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<strong[39m
+    [33mclass[39m=[32m"num mt-1 block text-base text-ink"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<strong[39m
+    [33mclass[39m=[32m"num mt-1 block text-base text-await-fg"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  term:
+
+  Name "":
+  [36m<dt[39m
+    [33mclass[39m=[32m"text-xs text-ink-muted"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<dt[39m
+    [33mclass[39m=[32m"text-xs text-ink-muted"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  definition:
+
+  Name "":
+  [36m<dd[39m
+    [33mclass[39m=[32m"mt-0.5 font-medium"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<dd[39m
+    [33mclass[39m=[32m"mt-0.5 whitespace-pre-wrap text-ink-body"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"mx-auto max-w-5xl space-y-4"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mdata-tour-anchor[39m=[32m"new-order-flow"[39m
+      [36m>[39m
+        [36m<header[39m
+          [33mclass[39m=[32m"flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between "[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"min-w-0 space-y-1"[39m
+          [36m>[39m
+            [36m<h1[39m
+              [33mclass[39m=[32m"page-title break-words"[39m
+            [36m>[39m
+              [0mהזמנה חדשה[0m
+            [36m</h1>[39m
+            [36m<span[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"section-mark"[39m
+            [36m/>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"text-sm text-ink-muted"[39m
+            [36m>[39m
+              [0mבחירת מוצרים תחילה, אישור ספקים ומחירים לאחר מכן[0m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"text-sm text-ink-soft"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33maria-live[39m=[32m"polite"[39m
+                [33mclass[39m=[32m"flex min-h-6 items-center gap-1.5 text-xs text-ink-muted"[39m
+                [33mrole[39m=[32m"status"[39m
+              [36m>[39m
+                [36m<svg[39m
+                  [33maria-hidden[39m=[32m"true"[39m
+                  [33mclass[39m=[32m"lucide lucide-check"[39m
+                  [33mfill[39m=[32m"none"[39m
+                  [33mheight[39m=[32m"13"[39m
+                  [33mstroke[39m=[32m"currentColor"[39m
+                  [33mstroke-linecap[39m=[32m"round"[39m
+                  [33mstroke-linejoin[39m=[32m"round"[39m
+                  [33mstroke-width[39m=[32m"2"[39m
+                  [33mviewBox[39m=[32m"0 0 24 24"[39m
+                  [33mwidth[39m=[32m"13"[39m
+                  [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+                [36m>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"M20 6 9 17l-5-5"[39m
+                  [36m/>[39m
+                [36m</svg>[39m
+                [36m<span>[39m
+                  [0mטיוטה[0m
+                  [0m [0m
+                  [36m<span[39m
+                    [33mclass[39m=[32m"num"[39m
+                  [36m>[39m
+                    [0m#[0m
+                    [0m75[0m
+                  [36m</span>[39m
+                  [0m · [0m
+                  [0mנשמר[0m
+                [36m</span>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex shrink-0 flex-wrap items-center gap-2"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex flex-col items-stretch gap-1 sm:items-end"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"flex flex-wrap gap-2"[39m
+              [36m>[39m
+                [36m<button[39m
+                  [33mclass[39m=[32m"btn-danger"[39m
+                  [33mtype[39m=[32m"button"[39m
+                [36m>[39m
+                  [36m<svg[39m
+                    [33maria-hidden[39m=[32m"true"[39m
+                    [33mclass[39m=[32m"lucide lucide-circle-x"[39m
+                    [33mfill[39m=[32m"none"[39m
+                    [33mheight[39m=[32m"15"[39m
+                    [33mstroke[39m=[32m"currentColor"[39m
+                    [33mstroke-linecap[39m=[32m"round"[39m
+                    [33mstroke-linejoin[39m=[32m"round"[39m
+                    [33mstroke-width[39m=[32m"2"[39m
+                    [33mviewBox[39m=[32m"0 0 24 24"[39m
+                    [33mwidth[39m=[32m"15"[39m
+                    [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+                  [36m>[39m
+                    [36m<circle[39m
+                      [33mcx[39m=[32m"12"[39m
+                      [33mcy[39m=[32m"12"[39m
+                      [33mr[39m=[32m"10"[39m
+                    [36m/>[39m
+                    [36m<path[39m
+                      [33md[39m=[32m"m15 9-6 6"[39m
+                    [36m/>[39m
+                    [36m<path[39m
+                      [33md[39m=[32m"m9 9 6 6"[39m
+                    [36m/>[39m
+                  [36m</svg>[39m
+                  [0m [0m
+                  [0mביטול טיוטה[0m
+                [36m</button>[39m
+                [36m<button[39m
+                  [33mclass[39m=[32m"btn-primary"[39m
+                  [33mdisabled[39m=[32m""[39m
+                  [33mtype[39m=[32m"button"[39m
+                [36m>[39m
+                  [36m<svg[39m
+                    [33maria-hidden[39m=[32m"true"[39m
+                    [33mclass[39m=[32m"lucide lucide-circle-check"[39m
+                    [33mfill[39m=[32m"none"[39m
+                    [33mheight[39m=[32m"15"[39m
+                    [33mstroke[39m=[32m"currentColor"[39m
+                    [33mstroke-linecap[39m=[32m"round"[39m
+                    [33mstroke-linejoin[39m=[32m"round"[39m
+                    [33mstroke-width[39m=[32m"2"[39m
+                    [33mviewBox[39m=[32m"0 0 24 24"[39m
+                    [33mwidth[39m=[32m"15"[39m
+                    [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+                  [36m>[39m
+                    [36m<circle[39m
+                      [33mcx[39m=[32m"12"[39m
+                      [33mcy[39m=[32m"12"[39m
+                      [33mr[39m=[32m"10"[39m
+                    [36m/>[39m
+                    [36m<path[39m
+                      [33md[39m=[32m"m9 12 2 2 4-4"[39m
+                    [36m/>[39m
+                  [36m</svg>[39m
+                  [0m [0m
+                  [0mסקירה ואישור[0m
+                [36m</button>[39m
+              [36m</div>[39m
+              [36m<p[39m
+                [33mclass[39m=[32m"text-xs text-alert-fg sm:text-end"[39m
+              [36m>[39m
+                [0mיש[0m
+                [0m [0m
+                [36m<span[39m
+                  [33mclass[39m=[32m"num"[39m
+                [36m>[39m
+                  [0m1[0m
+                [36m</span>[39m
+                [0m [0m
+                [0mפריטים ללא הקצאת ספק תקפה — יש לתקן אותם כדי להמשיך[0m
+              [36m</p>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+        [36m</header>[39m
+      [36m</div>[39m
+      [36m<nav[39m
+        [33maria-label[39m=[32m"שלבי הזמנה"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex items-center gap-2 sm:hidden"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"grid size-11 shrink-0 place-items-center rounded-full text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 bg-action-wash text-ink-mid"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"num"[39m
+            [36m>[39m
+              [0m01[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"sr-only"[39m
+            [36m>[39m
+              [0mמוצרים וכמויות[0m
+            [36m</span>[39m
+          [36m</button>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"grid size-11 shrink-0 place-items-center rounded-full text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 bg-action-wash text-ink-mid"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"num"[39m
+            [36m>[39m
+              [0m02[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"sr-only"[39m
+            [36m>[39m
+              [0mספקים וחלוקה[0m
+            [36m</span>[39m
+          [36m</button>[39m
+          [36m<button[39m
+            [33maria-current[39m=[32m"step"[39m
+            [33mclass[39m=[32m"grid size-11 shrink-0 place-items-center rounded-full text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 bg-action text-on-solid"[39m
+            [33mdisabled[39m=[32m""[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"num"[39m
+            [36m>[39m
+              [0m03[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"sr-only"[39m
+            [36m>[39m
+              [0mסיכום ואישור[0m
+            [36m</span>[39m
+          [36m</button>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"min-w-0 truncate text-sm font-semibold text-ink-body"[39m
+          [36m>[39m
+            [0mסיכום ואישור[0m
+          [36m</span>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"hidden w-fit max-w-full flex-wrap items-center gap-1 rounded-full bg-surface/90 p-1.5 shadow-card sm:flex"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"chip-filter gap-2 disabled:cursor-not-allowed disabled:opacity-50 "[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"num text-xs"[39m
+            [36m>[39m
+              [0m01[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"font-semibold"[39m
+            [36m>[39m
+              [0mמוצרים וכמויות[0m
+            [36m</span>[39m
+          [36m</button>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"chip-filter gap-2 disabled:cursor-not-allowed disabled:opacity-50 "[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"num text-xs"[39m
+            [36m>[39m
+              [0m02[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"font-semibold"[39m
+            [36m>[39m
+              [0mספקים וחלוקה[0m
+            [36m</span>[39m
+          [36m</button>[39m
+          [36m<button[39m
+            [33maria-current[39m=[32m"step"[39m
+            [33mclass[39m=[32m"chip-filter gap-2 disabled:cursor-not-allowed disabled:opacity-50 chip-filter-active"[39m
+            [33mdisabled[39m=[32m""[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"num text-xs"[39m
+            [36m>[39m
+              [0m03[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"font-semibold"[39m
+            [36m>[39m
+              [0mסיכום ואישור[0m
+            [36m</span>[39m
+          [36m</button>[39m
+        [36m</div>[39m
+      [36m</nav>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"space-y-4"[39m
+      [36m>[39m
+        [36m<section[39m
+          [33maria-labelledby[39m=[32m"summary-title"[39m
+          [33mclass[39m=[32m"border-y border-line-strong bg-surface"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"border-b border-line-soft px-3 py-3 sm:px-4"[39m
+          [36m>[39m
+            [36m<h2[39m
+              [33mclass[39m=[32m"section-title"[39m
+              [33mid[39m=[32m"summary-title"[39m
+            [36m>[39m
+              [0mסיכום ההזמנה[0m
+            [36m</h2>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"grid grid-cols-2 gap-px bg-line-soft sm:grid-cols-4"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"bg-surface px-3 py-3"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"text-xs text-ink-muted"[39m
+              [36m>[39m
+                [0mמספר ספקים[0m
+              [36m</div>[39m
+              [36m<strong[39m
+                [33mclass[39m=[32m"num mt-1 block text-base text-ink"[39m
+              [36m>[39m
+                [0m0[0m
+              [36m</strong>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"bg-surface px-3 py-3"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"text-xs text-ink-muted"[39m
+              [36m>[39m
+                [0mמספר מוצרים[0m
+              [36m</div>[39m
+              [36m<strong[39m
+                [33mclass[39m=[32m"num mt-1 block text-base text-ink"[39m
+              [36m>[39m
+                [0m1[0m
+              [36m</strong>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"bg-surface px-3 py-3"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"text-xs text-ink-muted"[39m
+              [36m>[39m
+                [0mעלות לאחר חלוקה[0m
+              [36m</div>[39m
+              [36m<strong[39m
+                [33mclass[39m=[32m"num mt-1 block text-base text-ink"[39m
+              [36m>[39m
+                [0m—[0m
+              [36m</strong>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"bg-surface px-3 py-3"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"text-xs text-ink-muted"[39m
+              [36m>[39m
+                [0mחיסכון לעומת ספק יחיד[0m
+              [36m</div>[39m
+              [36m<strong[39m
+                [33mclass[39m=[32m"num mt-1 block text-base text-await-fg"[39m
+              [36m>[39m
+                [0m—[0m
+              [36m</strong>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<p[39m
+            [33mclass[39m=[32m"border-t border-line-soft px-3 py-3 text-sm text-ink-muted sm:px-4"[39m
+          [36m>[39m
+            [0mאין ספק יחיד שמציע את כל מוצרי הסל, ולכן לא מוצגת טענת חיסכון.[0m
+          [36m</p>[39m
+        [36m</section>[39m
+        [36m<section[39m
+          [33maria-labelledby[39m=[32m"summary-suppliers-title"[39m
+          [33mclass[39m=[32m"border-y border-line-strong bg-surface"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"border-b border-line-soft px-3 py-3 sm:px-4"[39m
+          [36m>[39m
+            [36m<h2[39m
+              [33mclass[39m=[32m"section-title"[39m
+              [33mid[39m=[32m"summary-suppliers-title"[39m
+            [36m>[39m
+              [0mהזמנות שייווצרו[0m
+            [36m</h2>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"divide-y divide-line-strong"[39m
+          [36m/>[39m
+        [36m</section>[39m
+        [36m<section[39m
+          [33maria-label[39m=[32m"פרטי הזמנה"[39m
+          [33mclass[39m=[32m"border-y border-line-strong bg-surface px-3 py-3 text-sm sm:px-4"[39m
+        [36m>[39m
+          [36m<dl[39m
+            [33mclass[39m=[32m"grid gap-3 sm:grid-cols-2"[39m
+          [36m>[39m
+            [36m<div>[39m
+              [36m<dt[39m
+                [33mclass[39m=[32m"text-xs text-ink-muted"[39m
+              [36m>[39m
+                [0mאספקה מבוקשת[0m
+              [36m</dt>[39m
+              [36m<dd[39m
+                [33mclass[39m=[32m"mt-0.5 font-medium"[39m
+              [36m>[39m
+                [0mלא נקבעה[0m
+              [36m</dd>[39m
+            [36m</div>[39m
+            [36m<div>[39m
+              [36m<dt[39m
+                [33mclass[39m=[32m"text-xs text-ink-muted"[39m
+              [36m>[39m
+                [0mהערות[0m
+              [36m</dt>[39m
+              [36m<dd[39m
+                [33mclass[39m=[32m"mt-0.5 whitespace-pre-wrap text-ink-body"[39m
+              [36m>[39m
+                [0mאין הערות[0m
+              [36m</dd>[39m
+            [36m</div>[39m
+          [36m</dl>[39m
+        [36m</section>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex flex-wrap justify-end gap-2 border-t border-line-strong bg-surface px-3 py-3 sm:px-4"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"btn-secondary"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [0mחזרה לעריכת ספקים[0m
+          [36m</button>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"btn-primary"[39m
+            [33mdisabled[39m=[32m""[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"lucide lucide-circle-check"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"15"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"15"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<circle[39m
+                [33mcx[39m=[32m"12"[39m
+                [33mcy[39m=[32m"12"[39m
+                [33mr[39m=[32m"10"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m9 12 2 2 4-4"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [0m [0m
+            [0mאשר ושלח הזמנות[0m
+          [36m</button>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"mobile-overlay-stack fixed z-[60] start-4 end-4 flex flex-col items-center gap-2 pointer-events-none no-print sm:start-6 sm:end-6"[39m
+    [36m/>[39m
+  [36m</div>[39m
+[36m</body>[39m
+ ❯ Object.getElementError ../../../node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:109:15
+ ❯ src/pages/neworder/draftResumption.spec.tsx:137:26
+    135|     renderNewOrder('/orders/new');
+    136|     await screen.findByText('#75');
+    137|     const fresh = screen.getAllByRole('link').find((link) => link.getA…
+       |                          ^
+    138|     expect(fresh, 'a link that starts a fresh order').toBeDefined();
+    139|     expect(fresh?.textContent?.trim()).toBeTruthy();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 1 passed (4)
+   Start at  14:05:21
+   Duration  5.07s (transform 1.28s, setup 565ms, import 2.31s, tests 417ms, environment 1.44s)
+

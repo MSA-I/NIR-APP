@@ -155,6 +155,10 @@ export const he = {
     invoice_amounts_invalid: 'סכומי החשבונית אינם תקינים או שסכום הביניים והמע״מ אינם שווים לסכום הכולל.',
     invoice_order_invalid: 'הספק, ההזמנה או הקבלה המקושרים אינם תואמים לחשבונית.',
     invoice_review_transition_invalid: 'לא ניתן להעביר את החשבונית לסטטוס שנבחר מהמצב הנוכחי.',
+    // REQ-07. Both name the rule and the next step, because both are states the business can
+    // resolve itself — the reason neither may read "פנה לתמיכה".
+    invoice_approval_blocked_three_way_review: 'החשבונית עדיין לא עברה התאמה בין ההזמנה, קבלת הסחורה והחשבונית, ולכן לא ניתן לאשר אותה לתשלום. אפשר לפתוח את מסך ההתאמה, להשלים את קבלת הסחורה או לרשום חריגה מנומקת.',
+    invoice_approval_blocked_definite_duplicate: 'החשבונית זוהתה ככפילות ודאית של חשבונית שכבר קיימת במערכת, ולכן אישורה נחסם כדי למנוע תשלום כפול. כדאי לפתוח את החשבונית הקיימת ולוודא מה נרשם.',
     invoice_has_financial_references: 'לא ניתן למחוק חשבונית שמקושרת לדרישת תשלום, תשלום, זיכוי, התאמת בנק או דוח שנשלח. יש לטפל בקשר הכספי במסך המתאים.',
     invoice_not_found: 'החשבונית אינה זמינה עוד.',
     supplier_has_open_balance: 'לא ניתן למחוק ספק שיש לו יתרה פתוחה. יש לסגור את היתרה לפני המחיקה.',
@@ -1065,6 +1069,9 @@ export const he = {
     toast_5: 'ההזמנה בוטלה',
     toast_6: 'ההזמנה סומנה כנשלחה לספק',
     text_14: 'הזמנה לא נמצאה',
+    // PROC-06. Two ordinary reasons, and neither of them is a fault the person should report.
+    orderNotFoundBody: 'ייתכן שההזמנה בוטלה, שהקישור הועתק חלקית, או שהיא שייכת לעסק אחר. אפשר לחזור לרשימת ההזמנות ולחפש אותה שם.',
+    orderNotFoundAction: 'לרשימת ההזמנות',
     text_15: 'סימון ההזמנה כמוכנה לשליחה',
     text_16: 'סימון ההזמנה כנשלחה לספק',
     text_17: 'פתיחת ההזמנה ב-WhatsApp ואישור השליחה',
@@ -3751,6 +3758,10 @@ export const he = {
     text_4: 'נשמר',
     text_5: 'השמירה נכשלה',
     text_6: 'יישמר אוטומטית עם הוספת מוצר',
+    // PROC-08. Said only when the screen picked the draft itself: it names WHICH draft and
+    // HOW OLD, because those are the two facts that tell a person whether it is theirs.
+    resumedDraftNotice: 'המסך פתח את טיוטה #{number} שנשמרה ב-{date}, מהמקום שבו היא נעצרה. אפשר להמשיך אותה, או להתחיל הזמנה חדשה וריקה.',
+    startFreshAction: 'התחלת הזמנה חדשה',
     setStep: 'מוצרים וכמויות',
     setStep_2: 'ספקים וחלוקה',
     goToSummary: 'סיכום ואישור',

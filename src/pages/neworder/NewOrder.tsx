@@ -1,11 +1,11 @@
 import { useT } from '../../lib/i18n/LocaleProvider';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import { Check, CheckCircle2, Clock3, Loader2, MessageCircle, XCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useQuery, unwrap } from '../../lib/useQuery';
 import { useAuth } from '../../auth/AuthContext';
-import { ConfirmDialog, ErrorNote, Modal, RecordSkeleton, PageHeader, ICON, useToast } from '../../components/ui';
+import { ConfirmDialog, ErrorNote, Modal, Note, RecordSkeleton, PageHeader, ICON, useToast } from '../../components/ui';
 import { useCategories } from '../Suppliers';
 import {
   cancelOrderDraft,
@@ -25,7 +25,7 @@ import {
 } from '../../lib/orderSplit';
 import { centsFromUnits, hundredths, lineUnits, moneyFromCents } from '../../lib/orderSavings';
 import { deferProduct, dismissNextOrderItem, listNextOrderItems, type NextOrderItem } from '../../lib/nextOrderItems';
-import { fmtMoneyExact, productLabel } from '../../lib/format';
+import { fmtDate, fmtMoneyExact, productLabel } from '../../lib/format';
 import { NEW_COMMERCE_SUPPLIER_STATUSES } from '../../lib/status';
 import { markOrderSentToSupplier } from '../../lib/share';
 import { WhatsAppSendDialog } from '../../components/WhatsAppSendDialog';
@@ -50,6 +50,12 @@ interface DraftRow {
   editor_step: number;
   updated_at: string;
   items: { product_id: string; qty: number; chosen_supplier_id: string | null; pinned_supplier_id: string | null; product: Product | null }[];
+}
+
+/** PROC-08: the draft this screen picked up on its own, and when it was last touched. */
+interface ResumedDraft {
+  number: number;
+  updatedAt: string;
 }
 
 interface SourceOrder {
@@ -152,6 +158,8 @@ export default function NewOrder() {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [draftId, setDraftId] = useState<string | null>(null);
   const [draftNumber, setDraftNumber] = useState<number | null>(null);
+  /** PROC-08: set only when the screen ADOPTED a draft nobody asked for. See the hydration below. */
+  const [resumedUnasked, setResumedUnasked] = useState<ResumedDraft | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'dirty' | 'saving' | 'saved' | 'error'>('idle');
   const [saveError, setSaveError] = useState('');
@@ -215,6 +223,7 @@ export default function NewOrder() {
     priceSnapshotLinesRef.current = [];
     pendingPriceDiffRef.current = null;
     setPriceDiff(null);
+    setResumedUnasked(null);
     setHydrated(false);
   }, [loadKey]);
 
@@ -277,6 +286,7 @@ export default function NewOrder() {
     let nextStep: 1 | 2 | 3 = 1;
     let nextDraftId: string | null = null;
     let nextDraftNumber: number | null = null;
+    let nextResumed: ResumedDraft | null = null;
     let draftNeedsRepair = false;
 
     if (data.source) {
@@ -310,9 +320,26 @@ export default function NewOrder() {
       });
       nextNotes = data.draft.notes ?? '';
       nextExpectedDate = data.draft.expected_date ?? '';
-      nextStep = nextCart.length && (data.draft.editor_step === 2 || data.draft.editor_step === 3)
+      /**
+       * PROC-08. The stored step is resumed only for a draft the person NAMED.
+       *
+       * `?draft=<id>` comes from the draft list on /orders: they picked that row, and putting them
+       * back exactly where they left it is the point of the feature. The bare `/orders/new` — the
+       * navigation link literally called "הזמנה חדשה" — named nothing. Adopting the newest draft
+       * there is a guess, and the guess used to land on step 03 "סיכום ואישור" with a live "אשר
+       * ושלח הזמנות": a two-day-old basket one click from becoming real supplier orders, on a
+       * screen whose only clue was a small "טיוטה #75 · נשמר". A guess starts at the beginning.
+       */
+      const draftWasNamed = Boolean(explicitDraftId);
+      nextStep = draftWasNamed && nextCart.length
+        && (data.draft.editor_step === 2 || data.draft.editor_step === 3)
         ? data.draft.editor_step
         : 1;
+      // ...and it says that it guessed, with the other answer beside it. Only when it guessed:
+      // a named draft asked no question and needs no notice.
+      if (!draftWasNamed && nextCart.length) {
+        nextResumed = { number: data.draft.number, updatedAt: data.draft.updated_at };
+      }
       nextDraftId = data.draft.id;
       nextDraftNumber = data.draft.number;
       if (draftNeedsRepair) toast(t('newOrder.toast_2'));
@@ -355,6 +382,7 @@ export default function NewOrder() {
     setStep(nextStep);
     setDraftId(nextDraftId);
     setDraftNumber(nextDraftNumber);
+    setResumedUnasked(nextResumed);
     setSaveError('');
     setSaveStatus(nextDraftId ? 'saved' : 'idle');
     setHydrated(true);
@@ -783,6 +811,23 @@ export default function NewOrder() {
           </div>
         )} />
       </div>
+
+      {/* PROC-08. The screen adopted a draft nobody named, so it says so, and the other answer is
+          one control away. It stands only on step 01 — moving forward IS the person choosing to
+          continue this basket, and a notice that outlives its question is noise. */}
+      {resumedUnasked && step === 1 && (
+        <Note tone="info" role="status">
+          <span className="min-w-0 flex-1">
+            {t('newOrder.resumedDraftNotice', {
+              number: String(resumedUnasked.number),
+              date: fmtDate(resumedUnasked.updatedAt),
+            })}
+          </span>
+          <Link to="/orders/new?fresh=1" className="btn-secondary shrink-0">
+            {t('newOrder.startFreshAction')}
+          </Link>
+        </Note>
+      )}
 
       {/* T7.3: the wizard steps speak the floating-pill language — a white pill strip with the
           active step as a solid oceanic pill, replacing the ruled underline tabs.
