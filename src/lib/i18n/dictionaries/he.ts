@@ -656,6 +656,8 @@ export const he = {
     requestClosure: 'בקשת סיום שירות',
     createDownloadLink: 'יצירת קישור הורדה',
     cancelClosure: 'ביטול בקשת הסיום',
+    offboardingRequestDetails: 'בקשת סיום השירות מעבירה את הארגון מיד למצב קריאה בלבד, וניתן לבטל אותה עד 30 יום מרגע הבקשה.',
+    offboardingCancelDetails: 'ביטול הבקשה מחזיר את הארגון ממצב קריאה בלבד לפעילות מלאה, ואפשרי רק בתוך 30 יום מרגע הבקשה.',
     newPasswordLabel: 'סיסמה חדשה ({min} תווים לפחות)',
     usersHeading: 'משתמשים והרשאות',
     userActionsLabel: 'פעולות עבור {name}',
@@ -6083,6 +6085,7 @@ export const he = {
     passwordLabel: 'סיסמה לאימות זהות טרי *',
     cancel: 'ביטול',
     confirm: 'אישור זהות',
+    noPasswordIdentity: 'החשבון הזה מחובר דרך ספק חיצוני ואין לו סיסמה, ולכן אי אפשר לאמת אותו כאן. כדי לבצע את הפעולה יש לקבוע סיסמה בהגדרות, בקטע ״החלפת הסיסמה שלך״, ואז לחזור לכאן.',
   },
 
   layoutTail: {

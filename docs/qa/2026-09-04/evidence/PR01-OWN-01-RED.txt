@@ -1,0 +1,124 @@
+PR 1 — OWN-01 / RTL-A11Y-01 — RED (the oracle failing on the UNFIXED tree)
+
+Oracle:  npx vitest run src/pages/offboardingStepUp.spec.tsx --reporter=verbose
+Tree:    worktree-agent-aa3115ba91138036f at 983edb7b, with ONLY the new spec file added —
+         no change yet to Settings.tsx, ReauthModal.tsx or the dictionaries.
+Run:     2026-09-04, local vitest; node_modules junctioned from the shared checkout.
+
+What the numbers mean. `sensitive.request` / `sensitive.cancel` count the PostgREST calls MSW
+actually saw. "expected 1 to be +0" therefore says: the RPC went out on the wire from ONE click,
+with no dialog ever painted. Settings.tsx:883 passes no `skipWhenFresh`; ReauthModal defaults it to
+`true` (:134), computes `fresh` during render (:151), fires `onConfirm` from an effect before paint
+(:165-167) and returns `null` (:195). A `password` AMR under 240s turns the click into the RPC.
+
+Four reds, and they are the four the fix owns:
+  1. asks for the password before requesting closure  -> expected 1 to be +0
+  2. sends the request only once the password has been verified -> no dialog to type into
+  3. asks again before cancelling an open request     -> expected 1 to be +0
+  4. #355: no password identity -> the sentence       -> expected 1 to be +0
+
+Three greens, and they are pins, not achievements — they already hold today and must survive:
+  - the export-link branch still skips the prompt (a download is not the read-only switch)
+  - a stale session already prompts
+  - an absent identity list keeps the password box (unknown is not "no password")
+
+Long testing-library DOM dumps are elided as "[rendered DOM omitted]"; nothing else is edited.
+--------------------------------------------------------------------------------
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-aa3115ba91138036f
+
+ × src/pages/offboardingStepUp.spec.tsx > /settings — the closure step-up survives a fresh sign-in (OWN-01) > asks for the password before requesting closure, even seconds after signing in 349ms
+   → expected 1 to be +0 // Object.is equality
+ × src/pages/offboardingStepUp.spec.tsx > /settings — the closure step-up survives a fresh sign-in (OWN-01) > sends the request only once the password has actually been verified 3133ms
+   → Unable to find role="dialog" and name "אימות זהות לפני בקשת סיום שירות"
+
+  [rendered DOM omitted]
+ × src/pages/offboardingStepUp.spec.tsx > /settings — the closure step-up survives a fresh sign-in (OWN-01) > asks again before cancelling an open request 113ms
+   → expected 1 to be +0 // Object.is equality
+ ✓ src/pages/offboardingStepUp.spec.tsx > /settings — the closure step-up survives a fresh sign-in (OWN-01) > still skips the prompt for the export link — a download is not the read-only switch 102ms
+ ✓ src/pages/offboardingStepUp.spec.tsx > /settings — the closure step-up survives a fresh sign-in (OWN-01) > prompts a stale session too — the fix must not depend on the JWT being fresh 105ms
+ × src/pages/offboardingStepUp.spec.tsx > /settings — an owner with no password identity is told so (#355) > replaces the password box with the sentence that names where a password is set 105ms
+   → expected 1 to be +0 // Object.is equality
+ ✓ src/pages/offboardingStepUp.spec.tsx > /settings — an owner with no password identity is told so (#355) > keeps the password box when the identity list is absent — unknown is not "no password" 123ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/offboardingStepUp.spec.tsx > /settings — the closure step-up survives a fresh sign-in (OWN-01) > asks for the password before requesting closure, even seconds after signing in
+AssertionError: expected 1 to be +0 // Object.is equality
+
+- Expected
++ Received
+
+- 0
++ 1
+
+ ❯ src/pages/offboardingStepUp.spec.tsx:210:31
+    208|
+    209|     // The whole finding, in one number: one click, and the organisati…
+    210|     expect(sensitive.request).toBe(0);
+       |                               ^
+    211|     const dialog = await screen.findByRole('dialog', { name: 'אימות זה…
+    212|     // And the dialog must say what is about to change — not only that…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  src/pages/offboardingStepUp.spec.tsx > /settings — the closure step-up survives a fresh sign-in (OWN-01) > sends the request only once the password has actually been verified
+TestingLibraryElementError: Unable to find role="dialog" and name "אימות זהות לפני בקשת סיום שירות"
+
+  [rendered DOM omitted]
+ ❯ waitForWrapper ../../../node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ src/pages/offboardingStepUp.spec.tsx:222:18
+    220|
+    221|     await click('בקשת סיום שירות');
+    222|     await screen.findByRole('dialog', { name: 'אימות זהות לפני בקשת סי…
+       |                  ^
+    223|
+    224|     await user.type(screen.getByLabelText('סיסמה לאימות זהות טרי *'), …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  src/pages/offboardingStepUp.spec.tsx > /settings — the closure step-up survives a fresh sign-in (OWN-01) > asks again before cancelling an open request
+AssertionError: expected 1 to be +0 // Object.is equality
+
+- Expected
++ Received
+
+- 0
++ 1
+
+ ❯ src/pages/offboardingStepUp.spec.tsx:238:30
+    236|     await settle();
+    237|
+    238|     expect(sensitive.cancel).toBe(0);
+       |                              ^
+    239|     const dialog = await screen.findByRole('dialog', { name: 'אימות זה…
+    240|     expect(dialog).toHaveTextContent('קריאה בלבד');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  src/pages/offboardingStepUp.spec.tsx > /settings — an owner with no password identity is told so (#355) > replaces the password box with the sentence that names where a password is set
+AssertionError: expected 1 to be +0 // Object.is equality
+
+- Expected
++ Received
+
+- 0
++ 1
+
+ ❯ src/pages/offboardingStepUp.spec.tsx:274:31
+    272|     await settle();
+    273|
+    274|     expect(sensitive.request).toBe(0);
+       |                               ^
+    275|     const dialog = await screen.findByRole('dialog', { name: 'אימות זה…
+    276|     // No box they cannot fill…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 3 passed (7)
+   Start at  13:40:09
+   Duration  6.87s (transform 722ms, setup 508ms, import 1.16s, tests 4.04s, environment 955ms)
+

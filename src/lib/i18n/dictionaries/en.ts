@@ -648,6 +648,8 @@ export const en: Dictionary = {
     requestClosure: 'Request service closure',
     createDownloadLink: 'Create a download link',
     cancelClosure: 'Cancel the closure request',
+    offboardingRequestDetails: 'Requesting service closure moves the organisation to read-only immediately, and the request can be cancelled for 30 days from the moment it is made.',
+    offboardingCancelDetails: 'Cancelling the request returns the organisation from read-only to full activity, and is possible only within 30 days of the request.',
     newPasswordLabel: 'New password (at least {min} characters)',
     usersHeading: 'Users and permissions',
     userActionsLabel: 'Actions for {name}',
@@ -6058,6 +6060,7 @@ export const en: Dictionary = {
     passwordLabel: 'Password for fresh identity verification *',
     cancel: 'Cancel',
     confirm: 'Verify identity',
+    noPasswordIdentity: 'This account signs in through an external provider and has no password, so it cannot be verified here. To perform this action, set a password in Settings under "Change your password", then come back.',
   },
 
   layoutTail: {

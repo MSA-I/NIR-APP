@@ -880,13 +880,32 @@ export default function Settings() {
         onConfirm={() => { const pending = pendingSensitive; setPendingSensitive(null); pending?.run(); }}
         onCancel={() => setPendingSensitive(null)}
       />
+      {/* ONE dialog for three actions, so the step-up is a conditional prop rather than a constant.
+          The owner's offboarding ruling (`OPEN-DECISIONS.md` → "הכרעת בעלים ל־Offboarding וייצוא
+          דייר" — a prose section, not a numbered table row) requires the closure request and its
+          cancellation to happen "לאחר אימות מחדש", and `skipWhenFresh` defaults to `true` — which
+          meant that gate was skipped exactly when someone had just signed in and walked to
+          settings: one click, no dialog, the whole organisation read-only for thirty days
+          (`OWN-01`, `RTL-A11Y-01`, sweep 04.09.2026).
+          The export link keeps the skip. Fetching a file the owner is already entitled to is not
+          the org-wide switch, and re-prompting for it is ceremony the ruling never asked for. */}
       <ReauthModal
         open={offboardingAction !== null}
+        skipWhenFresh={offboardingAction === 'download'}
         title={offboardingAction === 'request'
           ? t('settings.text_53')
           : offboardingAction === 'cancel'
             ? t('settings.text_54')
             : t('settings.text_55')}
+        /* What is about to change, before the shared "why a password" sentence. The step-up is the
+           only confirmation these two actions get — the ruling gives them no reason field and no
+           second dialog — so this sentence is where the read-only switch and the 30-day
+           cancellation window (`0103:89`) are actually stated. */
+        details={offboardingAction === 'request'
+          ? t('settings.offboardingRequestDetails')
+          : offboardingAction === 'cancel'
+            ? t('settings.offboardingCancelDetails')
+            : undefined}
         onConfirm={() => {
           const action = offboardingAction;
           setOffboardingAction(null);

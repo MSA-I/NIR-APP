@@ -1,0 +1,204 @@
+PR 1 — OWN-01 / RTL-A11Y-01 — GREEN (the same oracle, on the fixed tree)
+
+Oracle:  npx vitest run src/pages/offboardingStepUp.spec.tsx src/pages/offboardingContract.spec.ts
+                        src/components/ReauthModal.spec.tsx src/pages/settingsUserArchive.spec.tsx
+                        src/pages/supplierBankDetails.spec.tsx --reporter=verbose
+Tree:    worktree-agent-aa3115ba91138036f, base 983edb7b, with the fix applied.
+Run:     2026-09-04, local vitest; node_modules junctioned from the shared checkout.
+
+The oracle file is byte-identical to the one that produced PR01-OWN-01-RED.txt. The four reds are
+now green and the three pins are still green.
+
+What changed:
+  src/pages/Settings.tsx      — `skipWhenFresh={offboardingAction === 'download'}` on the ONE
+                                ReauthModal that serves all three actions, plus a `details`
+                                sentence for the request and the cancel branch naming the
+                                read-only switch and the 30-day window (`0103:89`).
+  src/components/ReauthModal.tsx — `lacksPasswordIdentity()` and the branch that renders the #355
+                                sentence in place of a password box the account cannot fill.
+                                Fail-OPEN: an absent identity list keeps the box.
+  he.ts / en.ts               — settings.offboardingRequestDetails, settings.offboardingCancelDetails,
+                                reauthModal.noPasswordIdentity.
+
+The other four spec files are in the same run on purpose: ReauthModal is shared (the accountant
+payment queue and the supplier bank-details flow are its other callers), so "the gate got stricter
+for offboarding and nothing else moved" is a claim that has to be measured, not assumed.
+
+Neighbouring targeted checks, run separately and all passing on this tree:
+  npx tsc --noEmit                 (no output)
+  npm run check:i18n               63 file(s), 908 Hebrew line(s), all at their pinned counts
+  npm run check:orphan-keys        5981 leaf key(s), 106 with no call site, pinned
+  npm run check:plurals            75 counted phrase(s), 27 with a sibling, 48 pinned
+  npm run check:key-manifest       5511 keys, 107 without a production call site, same as baseline
+  npm run check:debt-numbers       98 debt section number(s), none duplicated
+--------------------------------------------------------------------------------
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-aa3115ba91138036f
+
+ ✓ src/pages/offboardingContract.spec.ts > tenant offboarding UI contract > renders offboarding as its own server-authoritative read-only state 2ms
+ ✓ src/pages/offboardingContract.spec.ts > tenant offboarding UI contract > lets an owner request, cancel and download without inventing a reason 1ms
+ ✓ src/pages/offboardingContract.spec.ts > tenant offboarding UI contract > gates the closure request and its cancellation on a step-up the fresh-JWT skip cannot bypass 1ms
+ ✓ src/pages/offboardingContract.spec.ts > tenant offboarding UI contract > requires platform step-up for approve/build/reactivate and keeps export asynchronous in the UI 1ms
+ ✓ src/pages/offboardingContract.spec.ts > tenant offboarding UI contract > revalidates a revocable bearer after Storage signed-URL minting 0ms
+ ✓ src/components/ReauthModal.spec.tsx > hasFreshPasswordAuthentication — the client mirror of the 0031 assertion > accepts a password entry inside the window 2ms
+ ✓ src/components/ReauthModal.spec.tsx > hasFreshPasswordAuthentication — the client mirror of the 0031 assertion > rejects a password entry older than the window 0ms
+ ✓ src/components/ReauthModal.spec.tsx > hasFreshPasswordAuthentication — the client mirror of the 0031 assertion > tolerates clock skew up to +30s but rejects a further-future timestamp 0ms
+ ✓ src/components/ReauthModal.spec.tsx > hasFreshPasswordAuthentication — the client mirror of the 0031 assertion > fails closed when amr is not an array 0ms
+ ✓ src/components/ReauthModal.spec.tsx > hasFreshPasswordAuthentication — the client mirror of the 0031 assertion > counts only password entries — an SSO or refresh entry is not a fresh password 0ms
+ ✓ src/components/ReauthModal.spec.tsx > hasFreshPasswordAuthentication — the client mirror of the 0031 assertion > takes the freshest password entry, like max(timestamp) on the server 0ms
+ ✓ src/components/ReauthModal.spec.tsx > hasFreshPasswordAuthentication — the client mirror of the 0031 assertion > fails closed on a malformed token 0ms
+ ✓ src/components/ReauthModal.spec.tsx > lacksPasswordIdentity — the #355 dead end, and only when it is really one > is true only for a present list with no email provider in it 0ms
+ ✓ src/components/ReauthModal.spec.tsx > lacksPasswordIdentity — the #355 dead end, and only when it is really one > is false whenever an email identity is present, alone or beside a federated one 0ms
+ ✓ src/components/ReauthModal.spec.tsx > lacksPasswordIdentity — the #355 dead end, and only when it is really one > fails OPEN on anything it cannot read — unknown is never "no password" 0ms
+ ✓ src/components/ReauthModal.spec.tsx > ReauthModal > renders the stale-session prompt in English 204ms
+ ✓ src/components/ReauthModal.spec.tsx > ReauthModal > skips the prompt entirely when the JWT is fresh 21ms
+stderr | src/pages/settingsUserArchive.spec.tsx > /settings — users, attention strip and archive > lists only the assignable roles in the roster
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • POST http://127.0.0.1:55431/rest/v1/rpc/currencies_in_use
+
+  • Request body: {}
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | src/pages/settingsUserArchive.spec.tsx > /settings — users, attention strip and archive > lists only the assignable roles in the roster
+[supplyflow] InternalError: [MSW] Cannot bypass a request when using the "error" strategy for the "onUnhandledRequest" option.
+
+ ✓ src/components/ReauthModal.spec.tsx > ReauthModal > prompts when the JWT is stale and confirms with the fresh session 344ms
+ ✓ src/components/ReauthModal.spec.tsx > ReauthModal > keeps prompting a fresh session when skipWhenFresh is false (the emergency path) 10ms
+ ✓ src/pages/offboardingStepUp.spec.tsx > /settings — the closure step-up survives a fresh sign-in (OWN-01) > asks for the password before requesting closure, even seconds after signing in 354ms
+stderr | src/pages/settingsUserArchive.spec.tsx > /settings — users, attention strip and archive > names every region on the screen distinctly
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • POST http://127.0.0.1:55431/rest/v1/rpc/currencies_in_use
+
+  • Request body: {}
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | src/pages/settingsUserArchive.spec.tsx > /settings — users, attention strip and archive > names every region on the screen distinctly
+[supplyflow] InternalError: [MSW] Cannot bypass a request when using the "error" strategy for the "onUnhandledRequest" option.
+
+ ✓ src/pages/settingsUserArchive.spec.tsx > /settings — users, attention strip and archive > lists only the assignable roles in the roster 403ms
+ ✓ src/pages/settingsUserArchive.spec.tsx > /settings — users, attention strip and archive > names every region on the screen distinctly 95ms
+stderr | src/pages/settingsUserArchive.spec.tsx > /settings — users, attention strip and archive > archives the deactivated historical account, read-only and folded
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • POST http://127.0.0.1:55431/rest/v1/rpc/currencies_in_use
+
+  • Request body: {}
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | src/pages/settingsUserArchive.spec.tsx > /settings — users, attention strip and archive > archives the deactivated historical account, read-only and folded
+[supplyflow] InternalError: [MSW] Cannot bypass a request when using the "error" strategy for the "onUnhandledRequest" option.
+
+stderr | src/pages/settingsUserArchive.spec.tsx > /settings — users, attention strip and archive > raises the historical-but-active account as work, with both row actions
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • POST http://127.0.0.1:55431/rest/v1/rpc/currencies_in_use
+
+  • Request body: {}
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | src/pages/settingsUserArchive.spec.tsx > /settings — users, attention strip and archive > raises the historical-but-active account as work, with both row actions
+[supplyflow] InternalError: [MSW] Cannot bypass a request when using the "error" strategy for the "onUnhandledRequest" option.
+
+ ✓ src/components/ReauthModal.spec.tsx > ReauthModal > signs the whole session out when a different user answers the password 390ms
+ ✓ src/pages/settingsUserArchive.spec.tsx > /settings — users, attention strip and archive > archives the deactivated historical account, read-only and folded 133ms
+stderr | src/pages/settingsUserArchive.spec.tsx > /settings — users, attention strip and archive > opens the reassignment dialog on an active role, which is the way out of the strip
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • POST http://127.0.0.1:55431/rest/v1/rpc/currencies_in_use
+
+  • Request body: {}
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | src/pages/settingsUserArchive.spec.tsx > /settings — users, attention strip and archive > opens the reassignment dialog on an active role, which is the way out of the strip
+[supplyflow] InternalError: [MSW] Cannot bypass a request when using the "error" strategy for the "onUnhandledRequest" option.
+
+ ✓ src/pages/settingsUserArchive.spec.tsx > /settings — users, attention strip and archive > raises the historical-but-active account as work, with both row actions 115ms
+stderr | src/components/ReauthModal.spec.tsx > ReauthModal > maps a wrong password to Hebrew and clears the field
+[supplyflow] Invalid login credentials
+
+ ✓ src/pages/offboardingStepUp.spec.tsx > /settings — the closure step-up survives a fresh sign-in (OWN-01) > sends the request only once the password has actually been verified 482ms
+stderr | src/pages/settingsUserArchive.spec.tsx > /settings — users, attention strip and archive > no longer carries the subscription — it moved to a screen and a menu group of its own
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • POST http://127.0.0.1:55431/rest/v1/rpc/currencies_in_use
+
+  • Request body: {}
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | src/pages/settingsUserArchive.spec.tsx > /settings — users, attention strip and archive > no longer carries the subscription — it moved to a screen and a menu group of its own
+[supplyflow] InternalError: [MSW] Cannot bypass a request when using the "error" strategy for the "onUnhandledRequest" option.
+
+ ✓ src/pages/settingsUserArchive.spec.tsx > /settings — users, attention strip and archive > opens the reassignment dialog on an active role, which is the way out of the strip 198ms
+ ✓ src/components/ReauthModal.spec.tsx > ReauthModal > maps a wrong password to Hebrew and clears the field 318ms
+stderr | src/pages/settingsUserArchive.spec.tsx > /settings — users, attention strip and archive > shows neither extra surface when every profile holds an assignable role
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • POST http://127.0.0.1:55431/rest/v1/rpc/currencies_in_use
+
+  • Request body: {}
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | src/pages/settingsUserArchive.spec.tsx > /settings — users, attention strip and archive > shows neither extra surface when every profile holds an assignable role
+[supplyflow] InternalError: [MSW] Cannot bypass a request when using the "error" strategy for the "onUnhandledRequest" option.
+
+Not implemented: navigation to another Document
+ ✓ src/pages/settingsUserArchive.spec.tsx > /settings — users, attention strip and archive > no longer carries the subscription — it moved to a screen and a menu group of its own 63ms
+ ✓ src/pages/settingsUserArchive.spec.tsx > /settings — users, attention strip and archive > shows neither extra surface when every profile holds an assignable role 59ms
+ ✓ src/pages/offboardingStepUp.spec.tsx > /settings — the closure step-up survives a fresh sign-in (OWN-01) > asks again before cancelling an open request 120ms
+ ✓ src/components/ReauthModal.spec.tsx > ReauthModal > cancels without touching auth 144ms
+ ✓ src/components/ReauthModal.spec.tsx > ReauthModal — the optional reason field > has no reason box at all unless a label is given 6ms
+ ✓ src/pages/offboardingStepUp.spec.tsx > /settings — the closure step-up survives a fresh sign-in (OWN-01) > still skips the prompt for the export link — a download is not the read-only switch 136ms
+ ✓ src/pages/offboardingStepUp.spec.tsx > /settings — the closure step-up survives a fresh sign-in (OWN-01) > prompts a stale session too — the fix must not depend on the JWT being fresh 105ms
+ ✓ src/pages/offboardingStepUp.spec.tsx > /settings — an owner with no password identity is told so (#355) > replaces the password box with the sentence that names where a password is set 127ms
+ ✓ src/pages/offboardingStepUp.spec.tsx > /settings — an owner with no password identity is told so (#355) > keeps the password box when the identity list is absent — unknown is not "no password" 124ms
+ ✓ src/pages/supplierBankDetails.spec.tsx > SupplierForm — structured bank-details flow (migration 0171) > routes a bank change through the step-up to the RPC, never the direct update 1162ms
+ ✓ src/components/ReauthModal.spec.tsx > ReauthModal — the optional reason field > hands back what was typed, and never blocks the button when nothing was 733ms
+ ✓ src/components/ReauthModal.spec.tsx > ReauthModal — the optional reason field > confirms with an empty reason when the box is left alone 359ms
+stderr | src/components/ReauthModal.spec.tsx > ReauthModal — the optional reason field > does not let the reason field open a door around the password
+[supplyflow] Invalid login credentials
+
+ ✓ src/components/ReauthModal.spec.tsx > ReauthModal — the optional reason field > does not let the reason field open a door around the password 629ms
+stderr | src/components/ReauthModal.spec.tsx > fresh_authentication_required — the Hebrew mapping (migration 0061) > maps the server error to the sentence a business user can act on
+[supplyflow] fresh_authentication_required
+
+ ✓ src/components/ReauthModal.spec.tsx > ReauthModal — the optional reason field > forgets the typed reason once the dialog closes 328ms
+ ✓ src/components/ReauthModal.spec.tsx > ReauthModal — the optional reason field > says what is about to change when the caller supplies the sentence 5ms
+ ✓ src/components/ReauthModal.spec.tsx > fresh_authentication_required — the Hebrew mapping (migration 0061) > maps the server error to the sentence a business user can act on 1ms
+ ✓ src/pages/supplierBankDetails.spec.tsx > SupplierForm — structured bank-details flow (migration 0171) > collapses the old two dialogs into the password step, and carries the typed reason through it 1441ms
+ ✓ src/pages/supplierBankDetails.spec.tsx > SupplierForm — structured bank-details flow (migration 0171) > an empty reason box still succeeds — the ledger sentence is written for the user 970ms
+ ✓ src/pages/supplierBankDetails.spec.tsx > SupplierForm — structured bank-details flow (migration 0171) > creation routes non-empty bank details through the reasoned RPC, never the INSERT (#106) 1245ms
+ ✓ src/pages/supplierBankDetails.spec.tsx > SupplierForm — structured bank-details flow (migration 0171) > creating with the bank select left on "ללא פרטי בנק" saves nothing and demands no step-up 498ms
+ ✓ src/pages/supplierBankDetails.spec.tsx > SupplierForm — structured bank-details flow (migration 0171) > clearing an EXISTING supplier's bank details is still an audited, stepped-up change 411ms
+stderr | src/pages/supplierBankDetails.spec.tsx > SupplierForm — structured bank-details flow (migration 0171) > a stale session cannot reach the RPC without a correct password
+[supplyflow] Invalid login credentials
+
+ ✓ src/pages/supplierBankDetails.spec.tsx > SupplierForm — structured bank-details flow (migration 0171) > a stale session cannot reach the RPC without a correct password 1383ms
+ ✓ src/pages/supplierBankDetails.spec.tsx > SupplierForm — structured bank-details flow (migration 0171) > leaves the other-fields path untouched: no RPC, no step-up dialog 343ms
+stderr | src/pages/supplierBankDetails.spec.tsx > SupplierForm — structured bank-details flow (migration 0171) > surfaces a step-up rejection through toHebrewError and keeps the dialog for a retry
+[supplyflow] fresh_authentication_required
+
+ ✓ src/pages/supplierBankDetails.spec.tsx > SupplierForm — structured bank-details flow (migration 0171) > surfaces a step-up rejection through toHebrewError and keeps the dialog for a retry 951ms
+ ✓ src/pages/supplierBankDetails.spec.tsx > SupplierForm — structured bank-details flow (migration 0171) > renders international fields and sends IBAN/BIC without Israel-only columns 1512ms
+ ✓ src/pages/supplierBankDetails.spec.tsx > SupplierForm — structured bank-details flow (migration 0171) > shows legacy free text only as migration evidence and never pre-fills structured fields 51ms
+
+ Test Files  5 passed (5)
+      Tests  54 passed (54)
+   Start at  13:40:43
+   Duration  13.63s (transform 2.24s, setup 2.57s, import 5.07s, tests 16.01s, environment 5.95s)
+

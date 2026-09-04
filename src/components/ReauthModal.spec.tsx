@@ -22,6 +22,7 @@ vi.mock('../auth/AuthContext', () => ({ useAuth: () => ({ session: authState.ses
 import {
   ReauthModal,
   hasFreshPasswordAuthentication,
+  lacksPasswordIdentity,
   FRESH_PASSWORD_WINDOW_SECONDS,
   FRESH_PASSWORD_CLOCK_SKEW_SECONDS,
 } from './ReauthModal';
@@ -90,6 +91,38 @@ describe('hasFreshPasswordAuthentication — the client mirror of the 0031 asser
     expect(hasFreshPasswordAuthentication('not-a-jwt')).toBe(false);
     expect(hasFreshPasswordAuthentication(`${b64url({})}.%%%%.sig`)).toBe(false);
     expect(hasFreshPasswordAuthentication('')).toBe(false);
+  });
+});
+
+/**
+ * Ruling #355. This helper decides whether to WITHHOLD the password box, so its unknown case must
+ * fail in the opposite direction from `hasFreshPasswordAuthentication` above: that one skips a
+ * gate and so fails closed; this one removes the only control that can satisfy the gate, and a
+ * session shape without an identity list must therefore still get the box.
+ */
+describe('lacksPasswordIdentity — the #355 dead end, and only when it is really one', () => {
+  const withIdentities = (identities: unknown) =>
+    ({ access_token: passwordToken(10), user: { id: 'user-1', email: 'owner@example.com', identities } }) as unknown as Session;
+
+  it('is true only for a present list with no email provider in it', () => {
+    expect(lacksPasswordIdentity(withIdentities([{ provider: 'google' }]))).toBe(true);
+    expect(lacksPasswordIdentity(withIdentities([{ provider: 'google' }, { provider: 'azure' }]))).toBe(true);
+    // A present list is trusted; an entry that is not an object is simply not an email identity,
+    // and must never be read as one because it happens to be unrecognisable.
+    expect(lacksPasswordIdentity(withIdentities([null, { provider: 'google' }]))).toBe(true);
+  });
+
+  it('is false whenever an email identity is present, alone or beside a federated one', () => {
+    expect(lacksPasswordIdentity(withIdentities([{ provider: 'email' }]))).toBe(false);
+    expect(lacksPasswordIdentity(withIdentities([{ provider: 'google' }, { provider: 'email' }]))).toBe(false);
+  });
+
+  it('fails OPEN on anything it cannot read — unknown is never "no password"', () => {
+    expect(lacksPasswordIdentity(withIdentities(undefined))).toBe(false);
+    expect(lacksPasswordIdentity(withIdentities([]))).toBe(false);
+    expect(lacksPasswordIdentity(withIdentities('google'))).toBe(false);
+    expect(lacksPasswordIdentity(null)).toBe(false);
+    expect(lacksPasswordIdentity(undefined)).toBe(false);
   });
 });
 
