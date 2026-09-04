@@ -1,0 +1,117 @@
+PR41 — /supplier-log, read from the running product
+
+Three screenshots at 1440x900, taken headed through system Edge driven by playwright-core (the
+bundled chromium fails on this machine with `spawn UNKNOWN`), against a Vite dev server on port
+5237 with a cacheDir of its own — node_modules in this worktree is a junction to the main checkout,
+so the default node_modules/.vite is shared with every other worktree on the machine.
+
+The session is the local demo owner, reached through the entrance screen's own dev-only disclosure.
+NOTHING WAS WRITTEN: the run recorded 11 non-GET /rest/v1 requests and every one of them is a read
+— `organization_access_state`, `resolve_feature_flags` and `my_entitlements` (RPCs the shell calls
+on every navigation) and HEAD counts on `notifications`/`documents`. No control that saves was
+pressed. The only console errors are the realtime WebSocket's 503 handshakes, four of them, which
+belong to the shared local stack and not to this screen.
+
+WHERE THE LEDGER ROWS COME FROM, and why it is a fixture. The shared local Supabase stack is at
+migration head 0245 against a 0314 tree and is shared with the other agents of this campaign, and
+the 405-row ledger `OWN-11` needs is not in it — a fixture UNDER the 400-row cap would prove
+nothing about a defect that only exists above it. So four GET reads were served from a fixture by a
+Playwright route: `audit_log_read_model` (405 rows, paged by the `offset`/`limit` the client sends
+and counted through `content-range`), and the three narrow lookups the screen makes afterwards —
+`supplier_products`, `suppliers` and the `id=in.(…)` shape of `profiles`. The signed-in profile's
+own bootstrap read was deliberately NOT intercepted; it reaches the real stack, or there would be
+no session to render the shell with. Everything else on the page — sign-in, the shell, the
+navigation, DataTable, the CSS — is the real application.
+
+The fixture's ten newest rows are the shapes the sweep met: one `supplier_prices_imported` command
+with `entity_id = null` and the operator's reason, the six row-level trigger rows the same
+statement wrote with `reason = null`, one `supplier_product_price_set` with its single trigger
+twin, and one row that really does name a price line that no longer resolves. All of them carry
+the `correlation_id` that migration `0062`'s column DEFAULT puts on every audit write of one
+request.
+
+The client asked for exactly two pages in the whole run, and this is the second half of `OWN-11`:
+
+  offset=0 limit=400 order=created_at.desc,id.desc
+  offset=0 limit=800 order=created_at.desc,id.desc     <- after pressing the control
+
+`id.desc` is in that order clause on purpose. Every audit row a single transaction writes shares
+`created_at` to the microsecond, so `created_at` alone is not a total order and an offset read
+could drop a row between two pages or repeat one.
+
+
+PR41-supplier-log-1440x900.png — the ledger as it opens
+-------------------------------------------------------
+Under the title יומן עדכון ספקים the meta line now reads
+
+  399 עדכונים בתצוגה · מתוך 405 ביומן
+
+— not «400 האחרונים». 399 and not 400 because one of the 400 fetched rows was folded into another
+(`OWN-05`, below). The first fifteen desktop rows, read from the live table:
+
+  | 04.09.2026, 15:00 | 6 שורות מחירון      | מחירון | קליטת מחירון | אין נתוני מחיר    | בעל העסק | בדיקת QA — סריקת רגרסיה 04.09.2026
+  | 04.09.2026, 14:59 | מוצר 1 · ספק הבדיקה | מחירון | עדכון        | לפני 11.00 ₪ אחרי 13.00 ₪ | בעל העסק | בדיקת QA — סריקת רגרסיה 04.09.2026 / מהפקודה שביצעה את השינוי
+  | 04.09.2026, 14:58 | מוצר 2 · ספק הבדיקה | מחירון | עדכון        | לפני 12.00 ₪ אחרי 14.00 ₪ | בעל העסק | בדיקת QA — סריקת רגרסיה 04.09.2026 / מהפקודה שביצעה את השינוי
+  | 04.09.2026, 14:57 | מוצר 3 · ספק הבדיקה | מחירון | עדכון        | לפני 13.00 ₪ אחרי 15.00 ₪ | בעל העסק | בדיקת QA — סריקת רגרסיה 04.09.2026 / מהפקודה שביצעה את השינוי
+  | 04.09.2026, 14:56 | מוצר 4 · ספק הבדיקה | מחירון | עדכון        | לפני 14.00 ₪ אחרי 16.00 ₪ | בעל העסק | בדיקת QA — סריקת רגרסיה 04.09.2026 / מהפקודה שביצעה את השינוי
+  | 04.09.2026, 14:55 | מוצר 5 · ספק הבדיקה | מחירון | עדכון        | לפני 15.00 ₪ אחרי 17.00 ₪ | בעל העסק | בדיקת QA — סריקת רגרסיה 04.09.2026 / מהפקודה שביצעה את השינוי
+  | 04.09.2026, 14:54 | מוצר 6 · ספק הבדיקה | מחירון | עדכון        | לפני 16.00 ₪ אחרי 18.00 ₪ | בעל העסק | בדיקת QA — סריקת רגרסיה 04.09.2026 / מהפקודה שביצעה את השינוי
+  | 04.09.2026, 14:52 | מוצר 7 · ספק הבדיקה | מחירון | עדכון מחיר   | לפני 30.00 ₪ אחרי 31.00 ₪ | בעל העסק | בדיקת QA — החזרת מחיר מקורי
+  | 04.09.2026, 14:51 | שורת מחירון שנמחקה  | מחירון | מחיקה        | ללא שינוי —       | בעל העסק | לא נרשמה סיבה
+  | 04.09.2026, 14:50 | ספק הבדיקה          | פרטי ספק | עדכון      | אין נתוני מחיר    | בעל העסק | לא נרשמה סיבה
+  | ... five more supplier rows of the same shape
+
+Reading that block against the four findings, in the order they appear:
+
+`OWN-04` — the first row. Its subject is «6 שורות מחירון», the count the import itself recorded
+in `new_values.row_count`. It used to read «שורת מחירון שנמחקה»: a deletion the database never
+performed, on the one row of the whole import that carried the operator's reason.
+
+`PERM-06` — rows two to seven. Six price lines one import statement wrote, each carrying the
+import's reason and, under it in a smaller muted line, «מהפקודה שביצעה את השינוי». Every one of
+them used to read «לא נרשמה סיבה». The note is there because an inherited reason is a different
+claim from a recorded one, and the screen says which it is.
+
+`OWN-05` — row eight. ONE row for מוצר 7, not two: action «עדכון מחיר» (the reasoned command's
+name), the reason «בדיקת QA — החזרת מחיר מקורי» (the command's), and «לפני 30.00 ₪ אחרי 31.00 ₪»
+(the trigger row's before/after, which the command row does not hold — its `new_values` uses
+`price`, not `current_price`). The screen used to print the command and its shadow side by side,
+the second of them reading «לא נרשמה סיבה» about a write that had one.
+
+The control — row nine is the one the fold does NOT touch. A `delete` on a price line whose
+`entity_id` resolves to nothing still reads «שורת מחירון שנמחקה», and still reads «לא נרשמה סיבה»,
+because nothing in its request recorded one. That row is genuinely what the old label claimed, and
+it is the only row on the screen that still wears it.
+
+
+PR41-supplier-log-load-older-1440x900.png — the floor of the ledger
+--------------------------------------------------------------------
+Scrolled to the foot of the table. The table's own pager reads «1 / 27» over «399 רשומות» — that
+is DataTable walking the rows already in hand, and it is exactly what the sweep found when it
+scanned this screen for a way past the cap: a pager that never leaves the 400. Below the card,
+outside it, sits the new control:
+
+  טעינת עדכונים ישנים יותר
+
+Pressing it asks for `offset=0 limit=800` and the meta line becomes «404 עדכונים בתצוגה · מתוך 405
+ביומן»; the control is then replaced by «היומן טעון במלואו», so the screen states both what it is
+showing and that there is nothing further to show.
+
+
+PR41-supplier-log-oldest-row-1440x900.png — the 401st row
+-----------------------------------------------------------
+The screen's own search box, filled with «ספק היסטורי 401» — a supplier that exists on no other
+row of the fixture — after the older page was loaded. One row comes back:
+
+  | 04.09.2026, 08:16 | ספק היסטורי 401 | פרטי ספק | עדכון | אין נתוני מחיר | בעל העסק | לא נרשמה סיבה
+
+That row is the 405th of 405, which is to say past the 400 the screen could ever reach before.
+Under the empty card the page still says «היומן טעון במלואו».
+
+
+What could not be rendered
+--------------------------
+The ledger against real `audit_logs` rows. The shared local stack is at 0245 against a 0314 tree,
+it is shared with the other agents of this campaign, and it holds no organisation with 400+ audit
+rows — so a real-data run would have been a fixture-free screenshot of a defect that does not
+reproduce below the cap. Nothing was written to that stack and nothing about it was changed.

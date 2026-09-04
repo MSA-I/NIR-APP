@@ -28,6 +28,14 @@
  *
  * Note for whoever adds a link from /prices: that screen is owner + office, so the link belongs
  * behind the same owner check, not next to every row.
+ *
+ * ── The read stays owner-shaped, and the page grew a floor ────────────────────────────────────
+ *
+ * Nothing here widens the query to fill the screen. The scope is still the same two entity types
+ * under the same RLS, and the reader still asks only for what an owner may already read; what
+ * changed on 04.09.2026 is that it no longer stops at 400 rows and calls that the history
+ * (`OWN-11`), and that it no longer says a reason was never recorded when the sibling row of the
+ * same request records one (`OWN-05`, `PERM-06`, folded in `src/lib/supplierLogLedger.ts`).
  */
 
 import { useT } from '../lib/i18n/LocaleProvider';
@@ -36,10 +44,12 @@ import { useMemo, useState } from 'react';
 import { ScrollText, Tags, Truck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
+import { DOMAIN } from '../lib/query/keys';
 import { useParamState } from '../lib/useParamState';
 import { DataTable, ErrorNote, Modal, PageHeader, SkeletonTable, ICON, type Column } from '../components/ui';
 import { fmtDateTime } from '../lib/format';
 import { fieldChanges, renderValue } from '../lib/supplierLogChanges';
+import { foldLedger, type LedgerEntry } from '../lib/supplierLogLedger';
 import type { AuditLog } from '../lib/types';
 
 /** The two entity types this log covers. Everything else stays out of the customer-facing app. */
@@ -68,10 +78,25 @@ const ACTION_KEY: Record<string, TKey> = {
   price_list_auto_action_reverted: 'supplierLog.actionAutoReverted',
 };
 
-type Row = AuditLog & {
+/**
+ * One fetched page. The first is the same 400 rows this screen has always shown; pressing the
+ * control under the table asks for another, and the meta line states the ledger's real size, so a
+ * row older than the cap is reachable instead of silently absent (`OWN-11`).
+ */
+const PAGE_SIZE = 400;
+
+/**
+ * A ledger row with the three lookups already resolved, and NO translated text: this is what the
+ * cached query returns, and a cached result must not be a result in a language — the words are
+ * chosen at render, below.
+ */
+interface LogRow extends AuditLog {
   entity_type: EntityType;
+  correlation_id: string | null;
   actor: string | null;
   supplierId: string | null;
+  supplierName: string | null;
+  productName: string | null;
   /**
    * The currency the supplier trades in (0217) — every money field on their row, and every price
    * on their price list, is a figure in it. `null` when the supplier row is gone: the log
@@ -79,7 +104,15 @@ type Row = AuditLog & {
    * than shekels by default.
    */
   currency: string | null;
+}
+
+type Row = LogRow & {
   subject: string;
+  /** The action to display: the reasoned command's, wherever one owns this write. */
+  displayAction: string;
+  /** The reason recorded for this write — on this row, or on the command that caused it. */
+  displayReason: string | null;
+  reasonFromCommand: boolean;
 };
 
 /** A price row's own identity, resolved from `supplier_products` so the log is not a wall of UUIDs. */
@@ -109,13 +142,20 @@ export default function SupplierLog() {
   const [selected, setSelected] = useState<Row | null>(null);
   const [entityFilter, setEntityFilter] = useParamState('entity');
   const [supplierFilter, setSupplierFilter] = useParamState('supplier');
+  const [loaded, setLoaded] = useState(PAGE_SIZE);
 
-  const { data, loading, error } = useQuery(async () => {
-    const logs = unwrap(await supabase.from('audit_log_read_model')
-      .select('*')
+  const { data, loading, error, fetching } = useQuery(async () => {
+    // `id` as the second sort key, not decoration: every audit row a single transaction writes
+    // carries the SAME `created_at` (`now()` is the transaction's clock), so `created_at` alone is
+    // not a total order and two pages of an offset read could drop a row between them or repeat
+    // one. The count is asked for so the screen can say how much it is NOT showing.
+    const response = await supabase.from('audit_log_read_model')
+      .select('*', { count: 'exact' })
       .in('entity_type', ENTITY_TYPES)
       .order('created_at', { ascending: false })
-      .limit(400)) as AuditLog[];
+      .order('id', { ascending: false })
+      .range(0, loaded - 1);
+    const logs = unwrap(response) as AuditLog[];
 
     const priceRowIds = [...new Set(logs
       .filter((log) => log.entity_type === 'supplier_products' && log.entity_id)
@@ -148,7 +188,7 @@ export default function SupplierLog() {
     const actorById = new Map((unwrap(profiles) as { id: string; full_name: string }[])
       .map((row) => [row.id, row.full_name]));
 
-    return logs.map<Row>((log) => {
+    const rows = logs.map<LogRow>((log) => {
       const entityType = log.entity_type as EntityType;
       const identity = entityType === 'supplier_products' && log.entity_id
         ? priceById.get(log.entity_id)
@@ -156,38 +196,63 @@ export default function SupplierLog() {
       const supplierRow = entityType === 'suppliers'
         ? (log.entity_id ? supplierById.get(log.entity_id) : undefined)
         : undefined;
-      const supplierName = entityType === 'suppliers'
-        ? supplierRow?.name
-        : identity?.supplier?.name;
-      // The deleted-row case is not a gap to hide: old_values still holds what the row was, and a
-      // name read from there is more honest than an em dash that implies nothing was recorded.
-      const fallbackName = typeof log.old_values?.name === 'string' ? log.old_values.name : null;
       return {
         ...log,
         entity_type: entityType,
+        correlation_id: log.correlation_id ?? null,
         actor: log.user_id ? (actorById.get(log.user_id) ?? null) : null,
         supplierId: entityType === 'suppliers' ? log.entity_id : (identity?.supplier_id ?? null),
+        supplierName: (entityType === 'suppliers' ? supplierRow?.name : identity?.supplier?.name) ?? null,
+        productName: identity?.product?.name ?? null,
         currency: (entityType === 'suppliers' ? supplierRow?.default_currency : identity?.supplier?.default_currency) ?? null,
-        subject: entityType === 'supplier_products'
-          ? [identity?.product?.name, supplierName].filter(Boolean).join(' · ') || t('supplierLog.filter')
-          : supplierName ?? fallbackName ?? t('supplierLog.text'),
       };
     });
-  });
+    return { rows, total: response.count ?? rows.length };
+    // Cached mode with `keepPreviousData` is the paging contract of ADR-0007: growing `loaded` is a
+    // new key, and the rows the reader is looking at stay on screen while the larger page arrives
+    // instead of collapsing to a skeleton.
+  }, [], [DOMAIN.suppliers, 'audit-log', loaded], { keepPreviousData: true, structuralSharing: false });
+
+  const entries: LedgerEntry<LogRow>[] = useMemo(() => foldLedger(data?.rows ?? []), [data]);
+
+  const all = useMemo<Row[]>(() => entries.map((entry) => {
+    const log = entry.row;
+    // The deleted-row case is not a gap to hide: old_values still holds what the row was, and a
+    // name read from there is more honest than an em dash that implies nothing was recorded.
+    const fallbackName = typeof log.old_values?.name === 'string' ? log.old_values.name : null;
+    const rowCount = log.new_values?.row_count;
+    return {
+      ...log,
+      subject: log.entity_type === 'supplier_products'
+        ? [log.productName, log.supplierName].filter(Boolean).join(' · ') || (log.entity_id
+          // The row names a price line, and the lookup found none: that line really is gone.
+          ? t('supplierLog.filter')
+          // `entity_id` is NULL, so the row names no price line at all — it is the import command
+          // itself (`0032:375`). Calling it a deleted row asserted a deletion the database never
+          // performed, on the ledger whose job is to be the record (`OWN-04`).
+          : (typeof rowCount === 'number'
+            ? t('supplierLog.subjectImportedRows', { count: rowCount })
+            : t('supplierLog.entityPriceList')))
+        : log.supplierName ?? fallbackName ?? t('supplierLog.text'),
+      displayAction: entry.action,
+      displayReason: entry.reason,
+      reasonFromCommand: entry.reasonFromCommand,
+    };
+  }), [entries, t]);
 
   const suppliers = useMemo(() => {
     const map = new Map<string, string>();
-    data?.forEach((row) => {
+    all.forEach((row) => {
       if (!row.supplierId) return;
-      const name = row.entity_type === 'suppliers' ? row.subject : row.subject.split(' · ').at(-1);
+      const name = row.entity_type === 'suppliers' ? row.subject : row.supplierName;
       if (name) map.set(row.supplierId, name);
     });
     return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1], 'he'));
-  }, [data]);
+  }, [all]);
 
-  const rows = useMemo(() => (data ?? []).filter((row) =>
+  const rows = useMemo(() => all.filter((row) =>
     (!entityFilter || row.entity_type === entityFilter)
-    && (!supplierFilter || row.supplierId === supplierFilter)), [data, entityFilter, supplierFilter]);
+    && (!supplierFilter || row.supplierId === supplierFilter)), [all, entityFilter, supplierFilter]);
 
   const columns: Column<Row>[] = [
     {
@@ -211,7 +276,7 @@ export default function SupplierLog() {
     },
     {
       key: 'action', header: t('supplierLog.text_5'), priority: 2,
-      render: (r) => actionLabel(r.action),
+      render: (r) => actionLabel(r.displayAction),
     },
     {
       key: 'change', header: t('supplierLog.text_6'), className: 'num',
@@ -255,7 +320,21 @@ export default function SupplierLog() {
     },
     {
       key: 'reason', header: t('supplierLog.text_13'), priority: 3,
-      render: (r) => <span className="text-ink-muted">{r.reason ?? t('supplierLog.text_14')}</span>,
+      // An inherited reason says so. It was recorded on the command row of the same request, not
+      // on this row, and presenting the two as identical would trade one wrong claim for another.
+      render: (r) => (r.displayReason === null
+        ? <span className="text-ink-muted">{t('supplierLog.text_14')}</span>
+        : (
+          <span className="text-ink-muted">
+            {r.displayReason}
+            {/* `text-ink-muted`, deliberately not `text-ink-faint`: the note states WHERE the
+                reason was recorded, which is part of the claim, and DESIGN.md reserves the faint
+                token for decoration. */}
+            {r.reasonFromCommand && (
+              <span className="block text-xs text-ink-muted">{t('supplierLog.reasonFromCommand')}</span>
+            )}
+          </span>
+        )),
     },
   ];
 
@@ -266,7 +345,7 @@ export default function SupplierLog() {
     <div className="space-y-4">
       <PageHeader
         title={<span className="flex items-center gap-2"><ScrollText size={ICON.xl} aria-hidden="true" /> {t('supplierLog.text_15')}</span>}
-        meta={t('supplierLog.meta', { count: rows.length })} />
+        meta={t('supplierLog.meta', { count: rows.length, total: data?.total ?? rows.length })} />
 
       {/* 0175: financial rows are legal-entity scoped; organization/identity/platform rows remain
           cross-scope. Ambiguous financial history is visible only to a root-scoped reader. */}
@@ -274,13 +353,13 @@ export default function SupplierLog() {
         rows={rows}
         columns={columns}
         onRowClick={(r) => setSelected(r)}
-        rowLabel={(r) => `${actionLabel(r.action)} · ${r.subject}`}
+        rowLabel={(r) => `${actionLabel(r.displayAction)} · ${r.subject}`}
         mobileTitle={(r) => <bdi>{r.subject}</bdi>}
         searchable
         searchLabel={t('supplierLog.searchLabel')}
         searchFn={(r, q) => r.subject.toLowerCase().includes(q)
           || (r.actor ?? '').toLowerCase().includes(q)
-          || (r.reason ?? '').toLowerCase().includes(q)}
+          || (r.displayReason ?? '').toLowerCase().includes(q)}
         activeFilters={[entityFilter, supplierFilter].filter(Boolean).length}
         onClearFilters={() => { setEntityFilter(''); setSupplierFilter(''); }}
         toolbar={
@@ -300,9 +379,25 @@ export default function SupplierLog() {
         emptyTitle={t('supplierLog.emptyTitle')}
         emptySubtitle={t('supplierLog.emptySubtitle')} />
 
+      {/* The floor of the ledger, stated rather than implied. The old screen stopped at 400 rows
+          and said "400 האחרונים" under an empty state promising the history is kept; row 401 was
+          not filtered out, it was unreachable (`OWN-11`). */}
+      {data && data.total > 0 && (
+        <div className="flex justify-center">
+          {data.rows.length < data.total ? (
+            <button type="button" className="btn-secondary" disabled={fetching}
+              onClick={() => setLoaded((n) => n + PAGE_SIZE)}>
+              {t('supplierLog.loadOlder')}
+            </button>
+          ) : (
+            <p className="text-sm text-ink-muted">{t('supplierLog.allLoaded')}</p>
+          )}
+        </div>
+      )}
+
       {selected && (
         <Modal open onClose={() => setSelected(null)} wide
-          title={`${actionLabel(selected.action)} · ${selected.subject}`}>
+          title={`${actionLabel(selected.displayAction)} · ${selected.subject}`}>
           <dl className="space-y-2 text-sm">
             <div className="flex justify-between gap-3">
               <dt className="text-ink-muted">{t('supplierLog.fmtDateTime')}</dt><dd>{fmtDateTime(selected.created_at)}</dd>
@@ -313,8 +408,13 @@ export default function SupplierLog() {
             <div className="flex justify-between gap-3">
               <dt className="text-ink-muted">{t('supplierLog.text_20')}</dt><dd>{t(ENTITY_KEY[selected.entity_type])}</dd>
             </div>
-            {selected.reason && (
-              <div className="bg-surface-sunken rounded-lg px-3 py-2 text-ink-soft">{selected.reason}</div>
+            {selected.displayReason && (
+              <div className="bg-surface-sunken rounded-lg px-3 py-2 text-ink-soft">
+                {selected.displayReason}
+                {selected.reasonFromCommand && (
+                  <span className="block text-xs text-ink-muted">{t('supplierLog.reasonFromCommand')}</span>
+                )}
+              </div>
             )}
           </dl>
 

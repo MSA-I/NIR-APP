@@ -1,0 +1,16 @@
+PR41 — PERM-06 — GREEN
+with the fix applied — src/pages/SupplierLog.tsx, src/lib/supplierLogLedger.ts, src/lib/types.ts and both dictionaries
+
+command: npx vitest run src/pages/supplierLogLedger.spec.tsx -t "PERM-06"
+exit code: 0
+
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a3c9bf3ef67ad3992
+
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 3 skipped (4)
+   Start at  16:36:54
+   Duration  3.38s (transform 736ms, setup 456ms, import 1.19s, tests 346ms, environment 1.13s)
+
+

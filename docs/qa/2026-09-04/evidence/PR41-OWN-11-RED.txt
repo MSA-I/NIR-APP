@@ -1,0 +1,1278 @@
+PR41 — OWN-11 — RED
+against the UNFIXED tree — the four product files restored to HEAD 50188f6e with git checkout, and the FINAL spec file. src/lib/supplierLogLedger.ts exists on disk but nothing imports it in this state.
+
+command: npx vitest run src/pages/supplierLogLedger.spec.tsx -t "OWN-11"
+exit code: 1
+
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a3c9bf3ef67ad3992
+
+ ❯ src/pages/supplierLogLedger.spec.tsx (4 tests | 1 failed | 3 skipped) 2842ms
+     × a row older than the 400th is reachable, and the screen states the real total 2834ms
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 3 skipped (4)
+   Start at  16:11:34
+   Duration  6.95s (transform 805ms, setup 605ms, import 1.37s, tests 2.84s, environment 1.76s)
+
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/supplierLogLedger.spec.tsx > /supplier-log — OWN-11: the ledger reaches its own history > a row older than the 400th is reachable, and the screen states the real total
+TestingLibraryElementError: Unable to find an accessible element with the role "button" and name `/ישנים יותר/`
+
+Here are the accessible roles:
+
+  banner:
+
+  Name "":
+  <header
+    class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between "
+  />
+
+  --------------------------------------------------
+  heading:
+
+  Name "יומן עדכון ספקים":
+  <h1
+    class="page-title break-words"
+  />
+
+  --------------------------------------------------
+  textbox:
+
+  Name "חיפוש ביומן":
+  <input
+    aria-label="חיפוש ביומן"
+    class="input ps-9!"
+    placeholder="חיפוש..."
+    value=""
+  />
+
+  --------------------------------------------------
+  combobox:
+
+  Name "סינון לפי סוג עדכון":
+  <select
+    aria-label="סינון לפי סוג עדכון"
+    class="input w-auto!"
+  />
+
+  Name "סינון לפי ספק":
+  <select
+    aria-label="סינון לפי ספק"
+    class="input w-auto!"
+  />
+
+  --------------------------------------------------
+  option:
+
+  Name "כל העדכונים":
+  <option
+    value=""
+  />
+
+  Name "פרטי ספק":
+  <option
+    value="suppliers"
+  />
+
+  Name "מחירון":
+  <option
+    value="supplier_products"
+  />
+
+  Name "כל הספקים":
+  <option
+    value=""
+  />
+
+  Name "ספק הבדיקה":
+  <option
+    value="sup-1"
+  />
+
+  --------------------------------------------------
+  list:
+
+  Name "":
+  <ul
+    class="lg:hidden divide-y divide-line-soft"
+  />
+
+  --------------------------------------------------
+  listitem:
+
+  Name "":
+  <li
+    class="mobile-data-card p-4 row-hover cursor-pointer "
+  />
+
+  Name "":
+  <li
+    class="mobile-data-card p-4 row-hover cursor-pointer "
+  />
+
+  Name "":
+  <li
+    class="mobile-data-card p-4 row-hover cursor-pointer "
+  />
+
+  Name "":
+  <li
+    class="mobile-data-card p-4 row-hover cursor-pointer "
+  />
+
+  Name "":
+  <li
+    class="mobile-data-card p-4 row-hover cursor-pointer "
+  />
+
+  Name "":
+  <li
+    class="mobile-data-card p-4 row-hover cursor-pointer "
+  />
+
+  Name "":
+  <li
+    class="mobile-data-card p-4 row-hover cursor-pointer "
+  />
+
+  Name "":
+  <li
+    class="mobile-data-card p-4 row-hover cursor-pointer "
+  />
+
+  Name "":
+  <li
+    class="mobile-data-card p-4 row-hover cursor-pointer "
+  />
+
+  Name "":
+  <li
+    class="mobile-data-card p-4 row-hover cursor-pointer "
+  />
+
+  Name "":
+  <li
+    class="mobile-data-card p-4 row-hover cursor-pointer "
+  />
+
+  Name "":
+  <li
+    class="mobile-data-card p-4 row-hover cursor-pointer "
+  />
+
+  Name "":
+  <li
+    class="mobile-data-card p-4 row-hover cursor-pointer "
+  />
+
+  Name "":
+  <li
+    class="mobile-data-card p-4 row-hover cursor-pointer "
+  />
+
+  Name "":
+  <li
+    class="mobile-data-card p-4 row-hover cursor-pointer "
+  />
+
+  --------------------------------------------------
+  button:
+
+  Name "שורת מחירון שנמחקה":
+  <button
+    class="min-w-0 break-words text-start font-medium text-ink-body focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+    type="button"
+  />
+
+  Name "מוצר 1 · ספק הבדיקה":
+  <button
+    class="min-w-0 break-words text-start font-medium text-ink-body focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+    type="button"
+  />
+
+  Name "מוצר 2 · ספק הבדיקה":
+  <button
+    class="min-w-0 break-words text-start font-medium text-ink-body focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+    type="button"
+  />
+
+  Name "מוצר 3 · ספק הבדיקה":
+  <button
+    class="min-w-0 break-words text-start font-medium text-ink-body focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+    type="button"
+  />
+
+  Name "מוצר 4 · ספק הבדיקה":
+  <button
+    class="min-w-0 break-words text-start font-medium text-ink-body focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+    type="button"
+  />
+
+  Name "מוצר 5 · ספק הבדיקה":
+  <button
+    class="min-w-0 break-words text-start font-medium text-ink-body focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+    type="button"
+  />
+
+  Name "מוצר 6 · ספק הבדיקה":
+  <button
+    class="min-w-0 break-words text-start font-medium text-ink-body focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+    type="button"
+  />
+
+  Name "מוצר 7 · ספק הבדיקה":
+  <button
+    class="min-w-0 break-words text-start font-medium text-ink-body focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+    type="button"
+  />
+
+  Name "מוצר 7 · ספק הבדיקה":
+  <button
+    class="min-w-0 break-words text-start font-medium text-ink-body focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+    type="button"
+  />
+
+  Name "שורת מחירון שנמחקה":
+  <button
+    class="min-w-0 break-words text-start font-medium text-ink-body focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+    type="button"
+  />
+
+  Name "ספק הבדיקה":
+  <button
+    class="min-w-0 break-words text-start font-medium text-ink-body focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+    type="button"
+  />
+
+  Name "ספק הבדיקה":
+  <button
+    class="min-w-0 break-words text-start font-medium text-ink-body focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+    type="button"
+  />
+
+  Name "ספק הבדיקה":
+  <button
+    class="min-w-0 break-words text-start font-medium text-ink-body focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+    type="button"
+  />
+
+  Name "ספק הבדיקה":
+  <button
+    class="min-w-0 break-words text-start font-medium text-ink-body focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+    type="button"
+  />
+
+  Name "ספק הבדיקה":
+  <button
+    class="min-w-0 break-words text-start font-medium text-ink-body focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+    type="button"
+  />
+
+  Name "מועד":
+  <button
+    class="inline-flex min-h-11 min-w-11 items-center gap-1 hover:text-shell-ink cursor-pointer focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+    type="button"
+  />
+
+  Name "ספק · מוצר":
+  <button
+    class="inline-flex min-h-11 min-w-11 items-center gap-1 hover:text-shell-ink cursor-pointer focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+    type="button"
+  />
+
+  Name "פתיחת קליטת מחירון · שורת מחירון שנמחקה":
+  <button
+    aria-label="פתיחת קליטת מחירון · שורת מחירון שנמחקה"
+    class="min-h-11 w-full text-start focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+    type="button"
+  />
+
+  Name "פתיחת עדכון · מוצר 1 · ספק הבדיקה":
+  <button
+    aria-label="פתיחת עדכון · מוצר 1 · ספק הבדיקה"
+    class="min-h-11 w-full text-start focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+    type="button"
+  />
+
+  Name "פתיחת עדכון · מוצר 2 · ספק הבדיקה":
+  <button
+    aria-label="פתיחת עדכון · מוצר 2 · ספק הבדיקה"
+    class="min-h-11 w-full text-start focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+    type="button"
+  />
+
+  Name "פתיחת עדכון · מוצר 3 · ספק הבדיקה":
+  <button
+    aria-label="פתיחת עדכון · מוצר 3 · ספק הבדיקה"
+    class="min-h-11 w-full text-start focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+    type="button"
+  />
+
+  Name "פתיחת עדכון · מוצר 4 · ספק הבדיקה":
+  <button
+    aria-label="פתיחת עדכון · מוצר 4 · ספק הבדיקה"
+    class="min-h-11 w-full text-start focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+    type="button"
+  />
+
+  Name "פתיחת עדכון · מוצר 5 · ספק הבדיקה":
+  <button
+    aria-label="פתיחת עדכון · מוצר 5 · ספק הבדיקה"
+    class="min-h-11 w-full text-start focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+    type="button"
+  />
+
+  Name "פתיחת עדכון · מוצר 6 · ספק הבדיקה":
+  <button
+    aria-label="פתיחת עדכון · מוצר 6 · ספק הבדיקה"
+    class="min-h-11 w-full text-start focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+    type="button"
+  />
+
+  Name "פתיחת עדכון מחיר · מוצר 7 · ספק הבדיקה":
+  <button
+    aria-label="פתיחת עדכון מחיר · מוצר 7 · ספק הבדיקה"
+    class="min-h-11 w-full text-start focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+    type="button"
+  />
+
+  Name "פתיחת עדכון · מוצר 7 · ספק הבדיקה":
+  <button
+    aria-label="פתיחת עדכון · מוצר 7 · ספק הבדיקה"
+    class="min-h-11 w-full text-start focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+    type="button"
+  />
+
+  Name "פתיחת מחיקה · שורת מחירון שנמחקה":
+  <button
+    aria-label="פתיחת מחיקה · שורת מחירון שנמחקה"
+    class="min-h-11 w-full text-start focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+    type="button"
+  />
+
+  Name "פתיחת עדכון · ספק הבדיקה":
+  <button
+    aria-label="פתיחת עדכון · ספק הבדיקה"
+    class="min-h-11 w-full text-start focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+    type="button"
+  />
+
+  Name "פתיחת עדכון · ספק הבדיקה":
+  <button
+    aria-label="פתיחת עדכון · ספק הבדיקה"
+    class="min-h-11 w-full text-start focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+    type="button"
+  />
+
+  Name "פתיחת עדכון · ספק הבדיקה":
+  <button
+    aria-label="פתיחת עדכון · ספק הבדיקה"
+    class="min-h-11 w-full text-start focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+    type="button"
+  />
+
+  Name "פתיחת עדכון · ספק הבדיקה":
+  <button
+    aria-label="פתיחת עדכון · ספק הבדיקה"
+    class="min-h-11 w-full text-start focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+    type="button"
+  />
+
+  Name "פתיחת עדכון · ספק הבדיקה":
+  <button
+    aria-label="פתיחת עדכון · ספק הבדיקה"
+    class="min-h-11 w-full text-start focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+    type="button"
+  />
+
+  Name "הקודם":
+  <button
+    aria-label="הקודם"
+    class="btn-ghost p-1.5! min-w-11 min-h-11"
+    disabled=""
+  />
+
+  Name "הבא":
+  <button
+    aria-label="הבא"
+    class="btn-ghost p-1.5! min-w-11 min-h-11"
+  />
+
+  --------------------------------------------------
+  region:
+
+  Name "טבלת נתונים — ניתן לגלול אופקית":
+  <div
+    aria-label="טבלת נתונים — ניתן לגלול אופקית"
+    class="table-scroll overflow-x-auto hidden lg:block"
+    role="region"
+    tabindex="0"
+  />
+
+  --------------------------------------------------
+  table:
+
+  Name "":
+  <table
+    class="w-full"
+  />
+
+  --------------------------------------------------
+  rowgroup:
+
+  Name "":
+  <thead
+    class="table-head border-b border-line-soft"
+  />
+
+  Name "":
+  <tbody
+    class="divide-y divide-line-soft"
+  />
+
+  --------------------------------------------------
+  row:
+
+  Name "מועד ספק · מוצר סוג פעולה שינוי משתמש סיבה":
+  <tr />
+
+  Name "04.09.2026, 15:00 שורת מחירון שנמחקה מחירון קליטת מחירון אין נתוני מחיר בעל העסק בדיקת QA — סריקת רגרסיה 04.09.2026":
+  <tr
+    class="row-hover cursor-pointer"
+  />
+
+  Name "04.09.2026, 14:59 מוצר 1 · ספק הבדיקה מחירון עדכון לפני‏11.00 ‏₪אחרי‏13.00 ‏₪ בעל העסק לא נרשמה סיבה":
+  <tr
+    class="row-hover cursor-pointer"
+  />
+
+  Name "04.09.2026, 14:58 מוצר 2 · ספק הבדיקה מחירון עדכון לפני‏12.00 ‏₪אחרי‏14.00 ‏₪ בעל העסק לא נרשמה סיבה":
+  <tr
+    class="row-hover cursor-pointer"
+  />
+
+  Name "04.09.2026, 14:57 מוצר 3 · ספק הבדיקה מחירון עדכון לפני‏13.00 ‏₪אחרי‏15.00 ‏₪ בעל העסק לא נרשמה סיבה":
+  <tr
+    class="row-hover cursor-pointer"
+  />
+
+  Name "04.09.2026, 14:56 מוצר 4 · ספק הבדיקה מחירון עדכון לפני‏14.00 ‏₪אחרי‏16.00 ‏₪ בעל העסק לא נרשמה סיבה":
+  <tr
+    class="row-hover cursor-pointer"
+  />
+
+  Name "04.09.2026, 14:55 מוצר 5 · ספק הבדיקה מחירון עדכון לפני‏15.00 ‏₪אחרי‏17.00 ‏₪ בעל העסק לא נרשמה סיבה":
+  <tr
+    class="row-hover cursor-pointer"
+  />
+
+  Name "04.09.2026, 14:54 מוצר 6 · ספק הבדיקה מחירון עדכון לפני‏16.00 ‏₪אחרי‏18.00 ‏₪ בעל העסק לא נרשמה סיבה":
+  <tr
+    class="row-hover cursor-pointer"
+  />
+
+  Name "04.09.2026, 14:53 מוצר 7 · ספק הבדיקה מחירון עדכון מחיר אין נתוני מחיר בעל העסק בדיקת QA — החזרת מחיר מקורי":
+  <tr
+    class="row-hover cursor-pointer"
+  />
+
+  Name "04.09.2026, 14:52 מוצר 7 · ספק הבדיקה מחירון עדכון לפני‏30.00 ‏₪אחרי‏31.00 ‏₪ בעל העסק לא נרשמה סיבה":
+  <tr
+    class="row-hover cursor-pointer"
+  />
+
+  Name "04.09.2026, 14:51 שורת מחירון שנמחקה מחירון מחיקה ללא שינוי— בעל העסק לא נרשמה סיבה":
+  <tr
+    class="row-hover cursor-pointer"
+  />
+
+  Name "04.09.2026, 14:50 ספק הבדיקה פרטי ספק עדכון אין נתוני מחיר בעל העסק לא נרשמה סיבה":
+  <tr
+    class="row-hover cursor-pointer"
+  />
+
+  Name "04.09.2026, 14:49 ספק הבדיקה פרטי ספק עדכון אין נתוני מחיר בעל העסק לא נרשמה סיבה":
+  <tr
+    class="row-hover cursor-pointer"
+  />
+
+  Name "04.09.2026, 14:48 ספק הבדיקה פרטי ספק עדכון אין נתוני מחיר בעל העסק לא נרשמה סיבה":
+  <tr
+    class="row-hover cursor-pointer"
+  />
+
+  Name "04.09.2026, 14:47 ספק הבדיקה פרטי ספק עדכון אין נתוני מחיר בעל העסק לא נרשמה סיבה":
+  <tr
+    class="row-hover cursor-pointer"
+  />
+
+  Name "04.09.2026, 14:46 ספק הבדיקה פרטי ספק עדכון אין נתוני מחיר בעל העסק לא נרשמה סיבה":
+  <tr
+    class="row-hover cursor-pointer"
+  />
+
+  --------------------------------------------------
+  columnheader:
+
+  Name "מועד":
+  <th
+    aria-sort="none"
+    class="th"
+    scope="col"
+  />
+
+  Name "ספק · מוצר":
+  <th
+    aria-sort="none"
+    class="th"
+    scope="col"
+  />
+
+  Name "סוג":
+  <th
+    class="th"
+    scope="col"
+  />
+
+  Name "פעולה":
+  <th
+    class="th"
+    scope="col"
+  />
+
+  Name "שינוי":
+  <th
+    class="th"
+    scope="col"
+  />
+
+  Name "משתמש":
+  <th
+    class="th"
+    scope="col"
+  />
+
+  Name "סיבה":
+  <th
+    class="th"
+    scope="col"
+  />
+
+  --------------------------------------------------
+  cell:
+
+  Name "04.09.2026, 15:00":
+  <td
+    class="td "
+  />
+
+  Name "שורת מחירון שנמחקה":
+  <td
+    class="td "
+  />
+
+  Name "מחירון":
+  <td
+    class="td "
+  />
+
+  Name "קליטת מחירון":
+  <td
+    class="td "
+  />
+
+  Name "אין נתוני מחיר":
+  <td
+    class="td num"
+  />
+
+  Name "בעל העסק":
+  <td
+    class="td "
+  />
+
+  Name "בדיקת QA — סריקת רגרסיה 04.09.2026":
+  <td
+    class="td "
+  />
+
+  Name "04.09.2026, 14:59":
+  <td
+    class="td "
+  />
+
+  Name "מוצר 1 · ספק הבדיקה":
+  <td
+    class="td "
+  />
+
+  Name "מחירון":
+  <td
+    class="td "
+  />
+
+  Name "עדכון":
+  <td
+    class="td "
+  />
+
+  Name "לפני‏11.00 ‏₪אחרי‏13.00 ‏₪":
+  <td
+    class="td num"
+  />
+
+  Name "בעל העסק":
+  <td
+    class="td "
+  />
+
+  Name "לא נרשמה סיבה":
+  <td
+    class="td "
+  />
+
+  Name "04.09.2026, 14:58":
+  <td
+    class="td "
+  />
+
+  Name "מוצר 2 · ספק הבדיקה":
+  <td
+    class="td "
+  />
+
+  Name "מחירון":
+  <td
+    class="td "
+  />
+
+  Name "עדכון":
+  <td
+    class="td "
+  />
+
+  Name "לפני‏12.00 ‏₪אחרי‏14.00 ‏₪":
+  <td
+    class="td num"
+  />
+
+  Name "בעל העסק":
+  <td
+    class="td "
+  />
+
+  Name "לא נרשמה סיבה":
+  <td
+    class="td "
+  />
+
+  Name "04.09.2026, 14:57":
+  <td
+    class="td "
+  />
+
+  Name "מוצר 3 · ספק הבדיקה":
+  <td
+    class="td "
+  />
+
+  Name "מחירון":
+  <td
+    class="td "
+  />
+
+  Name "עדכון":
+  <td
+    class="td "
+  />
+
+  Name "לפני‏13.00 ‏₪אחרי‏15.00 ‏₪":
+  <td
+    class="td num"
+  />
+
+  Name "בעל העסק":
+  <td
+    class="td "
+  />
+
+  Name "לא נרשמה סיבה":
+  <td
+    class="td "
+  />
+
+  Name "04.09.2026, 14:56":
+  <td
+    class="td "
+  />
+
+  Name "מוצר 4 · ספק הבדיקה":
+  <td
+    class="td "
+  />
+
+  Name "מחירון":
+  <td
+    class="td "
+  />
+
+  Name "עדכון":
+  <td
+    class="td "
+  />
+
+  Name "לפני‏14.00 ‏₪אחרי‏16.00 ‏₪":
+  <td
+    class="td num"
+  />
+
+  Name "בעל העסק":
+  <td
+    class="td "
+  />
+
+  Name "לא נרשמה סיבה":
+  <td
+    class="td "
+  />
+
+  Name "04.09.2026, 14:55":
+  <td
+    class="td "
+  />
+
+  Name "מוצר 5 · ספק הבדיקה":
+  <td
+    class="td "
+  />
+
+  Name "מחירון":
+  <td
+    class="td "
+  />
+
+  Name "עדכון":
+  <td
+    class="td "
+  />
+
+  Name "לפני‏15.00 ‏₪אחרי‏17.00 ‏₪":
+  <td
+    class="td num"
+  />
+
+  Name "בעל העסק":
+  <td
+    class="td "
+  />
+
+  Name "לא נרשמה סיבה":
+  <td
+    class="td "
+  />
+
+  Name "04.09.2026, 14:54":
+  <td
+    class="td "
+  />
+
+  Name "מוצר 6 · ספק הבדיקה":
+  <td
+    class="td "
+  />
+
+  Name "מחירון":
+  <td
+    class="td "
+  />
+
+  Name "עדכון":
+  <td
+    class="td "
+  />
+
+  Name "לפני‏16.00 ‏₪אחרי‏18.00 ‏₪":
+  <td
+    class="td num"
+  />
+
+  Name "בעל העסק":
+  <td
+    class="td "
+  />
+
+  Name "לא נרשמה סיבה":
+  <td
+    class="td "
+  />
+
+  Name "04.09.2026, 14:53":
+  <td
+    class="td "
+  />
+
+  Name "מוצר 7 · ספק הבדיקה":
+  <td
+    class="td "
+  />
+
+  Name "מחירון":
+  <td
+    class="td "
+  />
+
+  Name "עדכון מחיר":
+  <td
+    class="td "
+  />
+
+  Name "אין נתוני מחיר":
+  <td
+    class="td num"
+  />
+
+  Name "בעל העסק":
+  <td
+    class="td "
+  />
+
+  Name "בדיקת QA — החזרת מחיר מקורי":
+  <td
+    class="td "
+  />
+
+  Name "04.09.2026, 14:52":
+  <td
+    class="td "
+  />
+
+  Name "מוצר 7 · ספק הבדיקה":
+  <td
+    class="td "
+  />
+
+  Name "מחירון":
+  <td
+    class="td "
+  />
+
+  Name "עדכון":
+  <td
+    class="td "
+  />
+
+  Name "לפני‏30.00 ‏₪אחרי‏31.00 ‏₪":
+  <td
+    class="td num"
+  />
+
+  Name "בעל העסק":
+  <td
+    class="td "
+  />
+
+  Name "לא נרשמה סיבה":
+  <td
+    class="td "
+  />
+
+  Name "04.09.2026, 14:51":
+  <td
+    class="td "
+  />
+
+  Name "שורת מחירון שנמחקה":
+  <td
+    class="td "
+  />
+
+  Name "מחירון":
+  <td
+    class="td "
+  />
+
+  Name "מחיקה":
+  <td
+    class="td "
+  />
+
+  Name "ללא שינוי—":
+  <td
+    class="td num"
+  />
+
+  Name "בעל העסק":
+  <td
+    class="td "
+  />
+
+  Name "לא נרשמה סיבה":
+  <td
+    class="td "
+  />
+
+  Name "04.09.2026, 14:50":
+  <td
+    class="td "
+  />
+
+  Name "ספק הבדיקה":
+  <td
+    class="td "
+  />
+
+  Name "פרטי ספק":
+  <td
+    class="td "
+  />
+
+  Name "עדכון":
+  <td
+    class="td "
+  />
+
+  Name "אין נתוני מחיר":
+  <td
+    class="td num"
+  />
+
+  Name "בעל העסק":
+  <td
+    class="td "
+  />
+
+  Name "לא נרשמה סיבה":
+  <td
+    class="td "
+  />
+
+  Name "04.09.2026, 14:49":
+  <td
+    class="td "
+  />
+
+  Name "ספק הבדיקה":
+  <td
+    class="td "
+  />
+
+  Name "פרטי ספק":
+  <td
+    class="td "
+  />
+
+  Name "עדכון":
+  <td
+    class="td "
+  />
+
+  Name "אין נתוני מחיר":
+  <td
+    class="td num"
+  />
+
+  Name "בעל העסק":
+  <td
+    class="td "
+  />
+
+  Name "לא נרשמה סיבה":
+  <td
+    class="td "
+  />
+
+  Name "04.09.2026, 14:48":
+  <td
+    class="td "
+  />
+
+  Name "ספק הבדיקה":
+  <td
+    class="td "
+  />
+
+  Name "פרטי ספק":
+  <td
+    class="td "
+  />
+
+  Name "עדכון":
+  <td
+    class="td "
+  />
+
+  Name "אין נתוני מחיר":
+  <td
+    class="td num"
+  />
+
+  Name "בעל העסק":
+  <td
+    class="td "
+  />
+
+  Name "לא נרשמה סיבה":
+  <td
+    class="td "
+  />
+
+  Name "04.09.2026, 14:47":
+  <td
+    class="td "
+  />
+
+  Name "ספק הבדיקה":
+  <td
+    class="td "
+  />
+
+  Name "פרטי ספק":
+  <td
+    class="td "
+  />
+
+  Name "עדכון":
+  <td
+    class="td "
+  />
+
+  Name "אין נתוני מחיר":
+  <td
+    class="td num"
+  />
+
+  Name "בעל העסק":
+  <td
+    class="td "
+  />
+
+  Name "לא נרשמה סיבה":
+  <td
+    class="td "
+  />
+
+  Name "04.09.2026, 14:46":
+  <td
+    class="td "
+  />
+
+  Name "ספק הבדיקה":
+  <td
+    class="td "
+  />
+
+  Name "פרטי ספק":
+  <td
+    class="td "
+  />
+
+  Name "עדכון":
+  <td
+    class="td "
+  />
+
+  Name "אין נתוני מחיר":
+  <td
+    class="td num"
+  />
+
+  Name "בעל העסק":
+  <td
+    class="td "
+  />
+
+  Name "לא נרשמה סיבה":
+  <td
+    class="td "
+  />
+
+  --------------------------------------------------
+
+Ignored nodes: comments, script, style
+<body>
+  <div>
+    <div
+      class="space-y-4"
+    >
+      <header
+        class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between "
+      >
+        <div
+          class="min-w-0 space-y-1"
+        >
+          <h1
+            class="page-title break-words"
+          >
+            <span
+              class="flex items-center gap-2"
+            >
+              <svg
+                aria-hidden="true"
+                class="lucide lucide-scroll-text"
+                fill="none"
+                height="22"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                viewBox="0 0 24 24"
+                width="22"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M15 12h-5"
+                />
+                <path
+                  d="M15 8h-5"
+                />
+                <path
+                  d="M19 17V5a2 2 0 0 0-2-2H4"
+                />
+                <path
+                  d="M8 21h12a2 2 0 0 0 2-2v-1a1 1 0 0 0-1-1H11a1 1 0 0 0-1 1v1a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v2a1 1 0 0 0 1 1h3"
+                />
+              </svg>
+               
+              יומן עדכון ספקים
+            </span>
+          </h1>
+          <span
+            aria-hidden="true"
+            class="section-mark"
+          />
+          <div
+            class="text-sm text-ink-muted"
+          >
+            בדיקה מי שינה פרט של ספק או מחיר של מוצר, מתי, ומאיזו סיבה.
+          </div>
+          <div
+            class="text-sm text-ink-soft"
+          >
+            400 עדכונים בתצוגה · 400 האחרונים
+          </div>
+        </div>
+      </header>
+      <div
+        class="card overflow-hidden"
+      >
+        <div
+          class="flex flex-wrap items-center gap-2 p-3 border-b border-line-soft"
+        >
+          <div
+            class="relative flex-1 min-w-44 max-w-xs"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-search absolute top-1/2 -translate-y-1/2 start-3 text-ink-faint"
+              fill="none"
+              height="15"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="15"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="m21 21-4.34-4.34"
+              />
+              <circle
+                cx="11"
+                cy="11"
+                r="8"
+              />
+            </svg>
+            <input
+              aria-label="חיפוש ביומן"
+              class="input ps-9!"
+              placeholder="חיפוש..."
+              value=""
+            />
+          </div>
+          <select
+            aria-label="סינון לפי סוג עדכון"
+            class="input w-auto!"
+          >
+            <option
+              value=""
+            >
+              כל העדכונים
+            </option>
+            <option
+              value="suppliers"
+            >
+              פרטי ספק
+            </option>
+            <option
+              value="supplier_products"
+            >
+              מחירון
+            </option>
+          </select>
+          <select
+            aria-label="סינון לפי ספק"
+            class="input w-auto!"
+          >
+            <option
+              value=""
+            >
+              כל הספקים
+            </option>
+            <option
+              value="sup-1"
+            >
+              ספק הבדיקה
+            </option>
+          </select>
+        </div>
+        <ul
+          class="lg:hidden divide-y divide-line-soft"
+        >
+          <li
+            class="mobile-data-card p-4 row-hover cursor-pointer "
+          >
+            <div
+              class="min-w-0 flex-1"
+            >
+              <div
+                class="flex items-center justify-between gap-3"
+              >
+                <button
+                  class="min-w-0 break-words text-start font-medium text-ink-body focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+                  type="button"
+                >
+                  <bdi>
+                    שורת מחירון שנמחקה
+                  </bdi>
+                </button>
+              </div>
+              <div
+                class="flex flex-wrap gap-x-4 gap-y-1 mt-1.5 text-sm text-ink-mid"
+              >
+                <span
+                  class="inline-flex min-w-0 flex-wrap items-baseline gap-1"
+                >
+                  <span
+                    class="text-xs text-ink-muted"
+                  >
+                    מועד
+    ...
+ ❯ Object.getElementError ../../../node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/pages/supplierLogLedger.spec.tsx:201:34
+    199|
+    200|     // The defect: there is no control of any kind that reaches past t…
+    201|     await userEvent.click(screen.getByRole('button', { name: /ישנים יו…
+       |                                  ^
+    202|
+    203|     await search(OLDEST_SUPPLIER);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+

@@ -580,6 +580,13 @@ export interface AuditLog {
   entity_type: string; entity_id: string | null;
   old_values: Record<string, unknown> | null; new_values: Record<string, unknown> | null;
   reason: string | null; created_at: string;
+  /**
+   * The request that wrote this row (`0062`). Filled by a column DEFAULT, so it is on the
+   * row-level trigger's rows as well as on the reasoned command's — which is what lets a reader
+   * tell that two rows describe one write. NULL for a write that predates `0062` or arrived
+   * without the header.
+   */
+  correlation_id?: string | null;
   scope_domain?: 'financial_accounting' | 'organization_identity_platform';
   scope_class?: 'legal_entity' | 'cross_scope';
   legal_entity_id?: string | null;

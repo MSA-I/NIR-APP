@@ -1,0 +1,37 @@
+PR41 — PERM-06 — RED
+against the UNFIXED tree — the four product files restored to HEAD 50188f6e with git checkout, and the FINAL spec file. src/lib/supplierLogLedger.ts exists on disk but nothing imports it in this state.
+
+command: npx vitest run src/pages/supplierLogLedger.spec.tsx -t "PERM-06"
+exit code: 1
+
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a3c9bf3ef67ad3992
+
+ ❯ src/pages/supplierLogLedger.spec.tsx (4 tests | 1 failed | 3 skipped) 409ms
+     × carries the import reason onto every price row that import wrote 400ms
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 3 skipped (4)
+   Start at  16:11:57
+   Duration  4.34s (transform 1.00s, setup 633ms, import 1.61s, tests 409ms, environment 1.40s)
+
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/supplierLogLedger.spec.tsx > /supplier-log — PERM-06: a price change is not shown as unattributed > carries the import reason onto every price row that import wrote
+AssertionError: expected '04.09.2026, 14:59 מוצר 1 · ספק הבדיקה…' not to contain 'לא נרשמה סיבה'
+
+Expected: "לא נרשמה סיבה"
+Received: "04.09.2026, 14:59 מוצר 1 · ספק הבדיקה מחירון עדכון לפני‏11.00 ‏₪אחרי‏13.00 ‏₪ בעל העסק לא נרשמה סיבה"
+
+ ❯ src/pages/supplierLogLedger.spec.tsx:256:35
+    254|     expect(imported.length).toBeGreaterThanOrEqual(6);
+    255|     for (const cells of imported) {
+    256|       expect(cells.join(' ')).not.toContain('לא נרשמה סיבה');
+       |                                   ^
+    257|     }
+    258|     // The reason itself, not merely the absence of the false claim. `…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
