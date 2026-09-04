@@ -5833,6 +5833,7 @@ export const en: Dictionary = {
     editTitle: 'Update price — {product} ({supplier})',
     savingPrice: 'Saving the price',
     unresolvedRows: 'Import cancelled: no supplier or product with an exact name match was found in rows {rows}.',
+    unresolvedReason: 'No supplier or product matched the name exactly',
     importReport: 'Updated {updated} prices, created {created} new records, {unchanged} unchanged.',
     previewSummary: '{count} rows identified. Matching uses exact supplier and product names.',
   },

@@ -5854,6 +5854,7 @@ export const he = {
     editTitle: 'עדכון מחיר — {product} ({supplier})',
     savingPrice: 'שומר את המחיר',
     unresolvedRows: 'הייבוא בוטל: ספק או מוצר לא נמצאו בשם מדויק בשורות {rows}.',
+    unresolvedReason: 'ספק או מוצר לא נמצאו בשם מדויק',
     importReport: 'עודכנו {updated} מחירים, נוצרו {created} רשומות חדשות, {unchanged} ללא שינוי.',
     previewSummary: '{count} שורות זוהו. ההתאמה מתבצעת לפי שם ספק ושם מוצר מדויקים.',
   },

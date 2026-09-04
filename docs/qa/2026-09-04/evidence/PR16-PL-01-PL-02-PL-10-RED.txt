@@ -1,0 +1,128 @@
+PR 16 — PL-01 · PL-02 · PL-10 (branch qa/pr16-price-import)
+Oracle: src/pages/priceListMultiImport.spec.tsx
+Fixture: 8 data rows on file lines 2-9; six prices the 0298 parser refuses (lines 3-8), one row
+that resolves against the catalogue (line 2), one row naming a product the catalogue lacks (line 9).
+Command: npx vitest run src/pages/priceListMultiImport.spec.tsx   (DEBUG_PRINT_LIMIT=0)
+
+TREE: UNFIXED. src/pages/PriceLists.tsx as it stands on origin/main — the fix was reverted with the
+same anchored pairs that apply it, so this run is against the defective code, not against an
+earlier draft of it.
+
+WHAT EACH FAILURE MEANS
+  PL-01  "Unable to find an element with the text: /6 שורות דולגו/" — the modal binds only
+         `valid` from mapRows, so the six refused rows are reported nowhere at all.
+  PL-02  "expected null not to be null" — rpcBody is null: one unresolved row aborted the whole
+         file and the row that DID resolve was discarded with it. Nothing was written.
+  PL-10  "expected null not to be null" — the product the sheet names sits at index 1000 of a
+         1001-row catalogue. The unpaged read stops at the fake PostgREST's 1000-row ceiling, so
+         the row never resolves and the import is refused.
+
+-------------------------------------------------------------------------------- run output below
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/pr16-price-import
+
+stderr | src/pages/priceListMultiImport.spec.tsx > PL-01 — the refused rows are reported, not dropped > names all six refused rows by their SOURCE line in the uploaded file
+An update to DataTable inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/pages/priceListMultiImport.spec.tsx > PL-02 — the source line, and the rows that do resolve > imports the row that resolves and reports the unresolved one as file line 9
+An update to DataTable inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/pages/priceListMultiImport.spec.tsx > PL-10 — the catalogue is read in pages > resolves a product that sits past the PostgREST page ceiling
+An update to DataTable inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+ ❯ src/pages/priceListMultiImport.spec.tsx (3 tests | 3 failed) 9538ms
+     × names all six refused rows by their SOURCE line in the uploaded file 3270ms
+     × imports the row that resolves and reports the unresolved one as file line 9 3102ms
+     × resolves a product that sits past the PostgREST page ceiling 3160ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/priceListMultiImport.spec.tsx > PL-01 — the refused rows are reported, not dropped > names all six refused rows by their SOURCE line in the uploaded file
+TestingLibraryElementError: Unable to find an element with the text: /6 שורות דולגו/. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+...
+
+Ignored nodes: comments, script, style
+...
+ ❯ waitForWrapper ../../../node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ src/pages/priceListMultiImport.spec.tsx:178:25
+    176|     // The other six are now named — by the line they occupy in the fi…
+    177|     // would have had in the filtered preview.
+    178|     expect(await screen.findByText(/6 שורות דולגו/)).toBeInTheDocument…
+       |                         ^
+    179|     expect(await skippedRowNumbers()).toEqual([3, 4, 5, 6, 7, 8]);
+    180|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  src/pages/priceListMultiImport.spec.tsx > PL-02 — the source line, and the rows that do resolve > imports the row that resolves and reports the unresolved one as file line 9
+AssertionError: expected null not to be null
+
+Ignored nodes: comments, script, style
+...
+ ❯ waitFor.timeout src/pages/priceListMultiImport.spec.tsx:192:45
+    190|     // The one row the catalogue can resolve is written. Nothing was, …
+    191|     // row aborted the entire file.
+    192|     await waitFor(() => expect(rpcBody).not.toBeNull(), { timeout: 3_0…
+       |                                             ^
+    193|     expect(rpcBody?.p_rows).toEqual([
+    194|       { supplier_id: 'sup-alpha', product_id: 'prod-tomato', price: 9.…
+ ❯ runWithExpensiveErrorDiagnosticsDisabled ../../../node_modules/@testing-library/dom/dist/config.js:47:12
+ ❯ checkCallback ../../../node_modules/@testing-library/dom/dist/wait-for.js:124:77
+ ❯ Timeout.checkRealTimersCallback ../../../node_modules/@testing-library/dom/dist/wait-for.js:118:16
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  src/pages/priceListMultiImport.spec.tsx > PL-10 — the catalogue is read in pages > resolves a product that sits past the PostgREST page ceiling
+AssertionError: expected null not to be null
+
+Ignored nodes: comments, script, style
+...
+ ❯ waitFor.timeout src/pages/priceListMultiImport.spec.tsx:218:45
+    216|     fireEvent.click(screen.getByRole('button', { name: translateIn('he…
+    217|
+    218|     await waitFor(() => expect(rpcBody).not.toBeNull(), { timeout: 3_0…
+       |                                             ^
+    219|     expect(rpcBody?.p_rows).toEqual([
+    220|       { supplier_id: 'sup-alpha', product_id: 'prod-tomato', price: 9.…
+ ❯ runWithExpensiveErrorDiagnosticsDisabled ../../../node_modules/@testing-library/dom/dist/config.js:47:12
+ ❯ checkCallback ../../../node_modules/@testing-library/dom/dist/wait-for.js:124:77
+ ❯ Timeout.checkRealTimersCallback ../../../node_modules/@testing-library/dom/dist/wait-for.js:118:16
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed (3)
+   Start at  13:30:07
+   Duration  12.84s (transform 779ms, setup 480ms, import 1.54s, tests 9.54s, environment 1.06s)
+

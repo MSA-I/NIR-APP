@@ -1,0 +1,29 @@
+PR 16 — PL-01 · PL-02 · PL-10 (branch qa/pr16-price-import)
+Oracle: src/pages/priceListMultiImport.spec.tsx
+Fixture: 8 data rows on file lines 2-9; six prices the 0298 parser refuses (lines 3-8), one row
+that resolves against the catalogue (line 2), one row naming a product the catalogue lacks (line 9).
+Command: npx vitest run src/pages/priceListMultiImport.spec.tsx   (DEBUG_PRINT_LIMIT=0)
+
+TREE: FIXED. Run widened to the neighbouring price specs (comparison, the PriceLists source-text
+guard, the sheet reader, the price parser, the product-name queue, quick-create-product) so a
+regression in what this PR touches cannot hide behind a passing oracle.
+
+Command: npx vitest run src/pages/priceListMultiImport.spec.tsx src/pages/priceComparison.spec.tsx
+  src/pages/priceListsI18n.spec.ts src/lib/importSheetI18n.spec.ts src/lib/price.spec.ts
+  src/pages/productNameReview.spec.tsx src/components/quickCreateProduct.spec.tsx
+
+Read alongside this: PR16-skipped-panel-preview-1440x900.png and
+PR16-skipped-panel-report-1440x900.png — the real component DOM under the real compiled stylesheet
+at 1440x900. The preview names lines 3-8; the completed import names lines 3-8 AND line 9, and
+reports one price written.
+
+-------------------------------------------------------------------------------- run output below
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/pr16-price-import
+
+
+ Test Files  7 passed (7)
+      Tests  47 passed (47)
+   Start at  13:30:37
+   Duration  5.97s (transform 2.91s, setup 3.95s, import 7.19s, tests 5.38s, environment 9.87s)
+
