@@ -1,0 +1,58 @@
+PR 46 · ASSIST-04 — GREEN. The same oracle after the fix.
+
+date:    2026-09-04
+branch:  worktree-agent-a0a2aac045395d268
+change:  src/components/assistant/roleExamples.ts — the accountant's fourth opening
+         src/lib/i18n/dictionaries/he.ts · src/lib/i18n/dictionaries/en.ts
+
+THE OPENING WENT, NOT THE BOUNDARY. `get_business_summary` still declares
+requiredRoles ["owner","office"] and nothing under supabase/functions/ was touched;
+`routePolicy.ts` and the role enum are untouched. What changed is which question the
+accountant is offered.
+
+The accountant's six openings after the change, each with the tool that answers it and
+that tool's own requiredRoles, read out of the Edge sources:
+
+1. אילו תנועות בנק אינן מותאמות?
+   Which bank transactions are unmatched?
+   -> get_unmatched_bank_transactions [owner, accountant]
+2. מה דורש טיפול עכשיו?
+   What needs attention right now?
+   -> get_open_alerts [owner, office, accountant]
+3. למה החשבונית חסומה?
+   Why is the invoice blocked?
+   -> explain_invoice_block [owner, office, accountant]
+4. מה ההוצאה על רכש ב־30 הימים האחרונים?
+   What did we spend on purchasing over the last 30 days?
+   -> get_purchase_metrics [owner, office, accountant]
+5. האם ההזמנה, הקבלה והחשבונית מתאימות זו לזו?
+   Do the order, the receipt and the invoice match each other?
+   -> compare_order_receipt_invoice [owner, office, accountant]
+6. איפה רואים חשבוניות שממתינות לאישור?
+   Where can I see invoices waiting for approval?
+   -> get_product_help [owner, office, accountant]
+
+command: npx vitest run src/components/assistant/roleSuggestionsAreAnswerable.spec.tsx
+    -> 7 passed (7). The rendered half opened the panel as accountant and found all six
+       sentences as buttons on screen before checking their tools.
+
+command: npx vitest run src/components/assistant/ src/lib/assistant/
+    -> 7 files, 142 passed. That is the 135 assistant tests that were there plus this
+       oracle's 7; `assistantPanel.spec.tsx` and `assistantHistoryAdoption.spec.tsx`
+       (PR 22's oracle) are green in the same run.
+
+guards: check:assistant-no-send · check:assistant-tool-schemas · check:i18n ·
+        check:orphan-keys · check:plurals · check:money · check:currency all pass,
+        and `npx tsc --noEmit` is silent. check:orphan-keys is still at its pinned 106,
+        which is the proof the retired key was REMOVED rather than left dangling.
+
+--------------------------------------------------------------------------------
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a0a2aac045395d268
+
+
+ Test Files  7 passed (7)
+      Tests  142 passed (142)
+   Start at  16:07:23
+   Duration  8.91s (transform 3.69s, setup 4.74s, import 6.22s, tests 6.09s, environment 11.58s)
+

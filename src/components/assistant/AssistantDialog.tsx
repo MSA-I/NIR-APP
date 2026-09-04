@@ -1,5 +1,4 @@
 import { useT } from '../../lib/i18n/LocaleProvider';
-import type { TKey } from '../../lib/i18n/t.ts';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useLocation } from 'react-router';
@@ -24,6 +23,7 @@ import { APP_ROUTE_POLICY, appRouteAllowsRole } from '../../lib/routePolicy';
 import { ConfirmDialog, ErrorNote, ICON, Note, Skeleton, useDialogLayer } from '../ui';
 import AnswerView from './AnswerView';
 import CollapsibleAnswer from './CollapsibleAnswer';
+import { ROLE_EXAMPLE_KEYS } from './roleExamples';
 
 /**
  * Refusals with a working deterministic alternative. For these the panel does not stop at the
@@ -86,61 +86,6 @@ function useAssistantDesktopMode(): boolean {
 
   return desktop;
 }
-
-/**
- * The openings each role is offered — six per role since 26.08.2026 (owner: "צריך להוסיף יותר
- * הצעות מבחינת השאלות"). Two was not a menu, it was a pair of samples, and a person who wanted
- * neither of them was left facing an empty box with no idea what this surface can be asked.
- *
- * EVERY ENTRY IS CHECKED AGAINST THE TOOL THAT WOULD ANSWER IT, and against that tool's
- * `requiredRoles` in `supabase/functions/assistant/tools/`. That check is the reason the
- * accountant's list changes rather than only growing: it used to offer "כמה כסף ממתין לזיכוי?",
- * which is `get_open_credits`, and that tool is `["owner", "office"]`. The panel was handing the
- * accountant a question the server would refuse — a suggested dead end, which is worse than no
- * suggestion, because the person reasonably reads the refusal as the assistant being broken.
- *
- * The mapping, so the next edit can be checked the same way:
- *   get_open_alerts, get_purchase_metrics, explain_invoice_block, find_entity, get_product_help,
- *   compare_order_receipt_invoice   -> all three roles
- *   get_business_summary, get_open_credits, get_monthly_price_rises, get_payment_exposure,
- *   get_supplier_performance, get_inventory_risk, get_orders_awaiting_confirmation,
- *   get_purchase_comparison, get_dashboard_snapshot, draft_supplier_reminder -> owner + office
- *   get_unmatched_bank_transactions -> owner + accountant
- */
-/**
- * The example questions, as KEYS rather than sentences — and the reason is not tidiness.
- *
- * Clicking one SENDS it: the example becomes the question the assistant is asked. Since
- * `OPEN-DECISIONS #283` the assistant answers in the reader's language, so an English reader
- * clicking a Hebrew example would be asking in a language they did not choose and reading the
- * answer in one they did. The example has to be in their language before it is sent, not after.
- */
-const ROLE_EXAMPLE_KEYS: Record<'owner' | 'office' | 'accountant', readonly TKey[]> = {
-  owner: [
-    'assistantDialog.exampleWhatNeedsAttention',
-    'assistantDialog.exampleBusinessPicture',
-    'assistantDialog.exampleCreditsPending',
-    'assistantDialog.examplePriceRises',
-    'assistantDialog.examplePaymentExposure',
-    'assistantDialog.exampleUnmatchedBank',
-  ],
-  office: [
-    'assistantDialog.exampleWhatNeedsAttention',
-    'assistantDialog.exampleInvoiceBlocked',
-    'assistantDialog.exampleOrdersUnconfirmed',
-    'assistantDialog.examplePriceRises',
-    'assistantDialog.exampleLateSuppliers',
-    'assistantDialog.exampleInventoryRisk',
-  ],
-  accountant: [
-    'assistantDialog.exampleUnmatchedBank',
-    'assistantDialog.exampleWhatNeedsAttention',
-    'assistantDialog.exampleInvoiceBlocked',
-    'assistantDialog.exampleInvoicesLastWeek',
-    'assistantDialog.exampleThreeWayMatch',
-    'assistantDialog.exampleWhereApprovals',
-  ],
-};
 
 function needsFallback(rawError: string): boolean {
   return FALLBACK_CODES.some((code) => rawError.includes(code));

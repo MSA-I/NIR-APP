@@ -4450,7 +4450,7 @@ export const he = {
     exampleOrdersUnconfirmed: 'אילו הזמנות נשלחו ולא אושרו?',
     exampleLateSuppliers: 'אילו ספקים מאחרים באספקה?',
     exampleInventoryRisk: 'אילו פריטים במלאי בסיכון?',
-    exampleInvoicesLastWeek: 'כמה חשבוניות נקלטו ב־7 הימים האחרונים?',
+    examplePurchaseSpend: 'מה ההוצאה על רכש ב־30 הימים האחרונים?',
     exampleThreeWayMatch: 'האם ההזמנה, הקבלה והחשבונית מתאימות זו לזו?',
     exampleWhereApprovals: 'איפה רואים חשבוניות שממתינות לאישור?',
     openCheckLabel: 'פתיחת הבדיקה {title}',

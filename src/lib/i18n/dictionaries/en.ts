@@ -4417,7 +4417,7 @@ export const en: Dictionary = {
     exampleOrdersUnconfirmed: 'Which orders were sent and not confirmed?',
     exampleLateSuppliers: 'Which suppliers are late on delivery?',
     exampleInventoryRisk: 'Which stock items are at risk?',
-    exampleInvoicesLastWeek: 'How many invoices came in over the last 7 days?',
+    examplePurchaseSpend: 'What did we spend on purchasing over the last 30 days?',
     exampleThreeWayMatch: 'Do the order, the receipt and the invoice match each other?',
     exampleWhereApprovals: 'Where can I see invoices waiting for approval?',
     openCheckLabel: 'Open the check {title}',
