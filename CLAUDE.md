@@ -88,7 +88,9 @@ Vite 6 · React 19 · **React Router 8** · TypeScript strict · Supabase · **T
   **אין ESLint ואין Prettier** בריפו; TypeScript ו־Knip מכסים את השכבה הסטטית הנוכחית.
 - `npm run quality` — שער האינטגרציה הכבד: SQL ו־preflight מול Supabase מבודד, חוזי Deno,
   OCR worker ותרחישי דפדפן. השער רץ ב־CI; אין להריץ אותו מקומית כחלק מעבודה רגילה.
-  ב־CI כל job מופעל רק כאשר הנתיבים הרלוונטיים השתנו. `workflow_dispatch` מריץ את כולם.
+  ב־CI כל job מופעל רק כאשר הנתיבים הרלוונטיים השתנו. ‏`workflow_dispatch` מסמן כיום
+  ‏`edge`/`ocr`/`audit`/`sql`/`browser`, אבל **אינו מסמן `render=true`** — לכן הוא אינו מריץ
+  את מסלול ה-render עד שהפער ב-`quality-gate.yml` יתוקן.
 
   **איך מריצים את השער עכשיו:**
   ```
@@ -112,16 +114,13 @@ Vite 6 · React 19 · **React Router 8** · TypeScript strict · Supabase · **T
   (‏88), ‏`Invoke-PriceListEdgeSmoke`, ‏`Invoke-OcrEdgeSmoke` ו-`check-p4-integrated-journey.cjs`.
   אלה קשורים ל-PowerShell של Windows ורצים רק בריצה הידנית. **תיק ירוק אינו טענה שהם עברו.**
 
-  **וגם — ‏13 מתוך 27 שומרי `npm run verify` (נמדד 01.09.2026 על `d9146bf4`).** ה-job
-  ‏`verify` ב-`build.yml` מריץ 14 תת-פקודות **בשמן** ואינו קורא `npm run verify` בשום מקום,
-  ולכן שומר שנוסף ל-`verify` בלי צעד ב-YAML פשוט אינו רץ. אלה שאינם רצים באף workflow:
-  ‏`check:typography`, ‏`check:i18n`, ‏`check:plurals`, ‏`check:orphan-keys`,
-  ‏`check:plan-labels`, ‏`check:jsx-space`, ‏`check:assistant-tool-schemas`,
-  ‏`check:anchored-replacements`, ‏`check:currency`, ‏`check:tolerance-surfaces`,
-  ‏`check:paddle-secrets`, ‏`check:appearance-scope`, ‏`check:contrast`.
-  ‏`quality-gate.yml` מריץ את **המדידה** בדפדפן (`check-contrast-rendered.mjs`) ולא את שומר
-  המניפסט. ‏**‏`check:contrast` נכשל על `main` היום** ומעולם לא עבר שם. ‏`DEBT §97`.
-  לפני מסירה: `npm run verify` מקומי הוא **הרחב** מבין השניים, לא הצר.
+  **מלאי הפקודות זהה, הביצוע אינו** (נמדד מחדש 04.09.2026 על `8f7296e4`): ‏`npm run verify`
+  מריץ **32** תת-פקודות, וה-job ‏`verify` ב-`build.yml` מונה את אותן 32 בשמן — אין פקודה
+  מקומית שחסרה ב-YAML. ‏CI עדיין מפעיל אותן לפי path filters, בעוד הריצה המקומית מפעילה את
+  כולן תמיד; לכן `npm run verify` המקומי נשאר **הרחב מבין השניים בפועל**. שינוי ברשימה מחייב
+  לעדכן את שני המקורות יחד ולהריץ את שומרי ה-gate. ‏`quality-gate.yml` מריץ גם את מדידת
+  הניגודיות בדפדפן (`check-contrast-rendered.mjs`). ‏`check:contrast` עצמו עובר: 53 צמדי טקסט,
+  ‏7 צמדי non-text וחוזה כיוון אחד במדידה הטרייה.
 
   ‏`.github/workflows/build.yml` יוצר תמיד את שמות ה־checks שהגנת הענף מצפה להם, אבל מקצה runner
   רק לצרכן הרלוונטי: `build` לקלטי bundle/typecheck; ‏`verify` לקוד, tests, scripts, migrations,
@@ -133,11 +132,9 @@ Vite 6 · React 19 · **React Router 8** · TypeScript strict · Supabase · **T
   והמסונן לפי נתיבים. migration בלבד אינו מפעיל browser, אלא אם תוכנו משנה policy/RLS,
   ‏`user_role`, פונקציות ה־auth של ה־scope או grant/revoke ל־`authenticated`/`anon`.
 
-  **‏PR שהבסיס שלו אינו `main` מקבל אפס בדיקות, וזה נראה כמו הצלחה.** שני ה-workflows
-  מופעלים על `pull_request: branches: [main]` בלבד. ‏PR ערום על ענף של PR אחר מחזיר
-  „no checks reported" — לא build, לא verify, לא סוויטות SQL — ואין סימן אדום שיאמר זאת.
-  לענף כזה מריצים את השער במפורש — `gh workflow run quality-gate.yml --ref <branch>` — וקושרים
-  לתוצאה בהערה על ה-PR, מפני ש-`workflow_dispatch` אינו מופיע ברשימת ה-checks שלו. ‏`DEBT §65`.
+  **‏PR נבדק בלי קשר לענף הבסיס.** ‏§65 נסגר 02.09.2026: שני ה-workflows מכילים
+  ‏`pull_request:` ללא `branches` או `branches-ignore`, ו-`check:workflow-triggers` מונע חזרה
+  של המסנן. PR מוערם עדיין מקבל את אותם classifiers ו-jobs לפי הנתיבים שנפגעו.
 
   **ריצה מקומית — רק כמוצא אחרון**, לניפוי כשל ש-CI כבר דיווח עליו או לעבודה על הסקריפט עצמו:
   ‏`$env:SUPPLYFLOW_ALLOW_LOCAL_QUALITY = '1'; npm run quality`. לפני כן: לעצור `npm run dev`
@@ -176,7 +173,8 @@ Vite 6 · React 19 · **React Router 8** · TypeScript strict · Supabase · **T
   ואפס מסמכים עובדו במשך חמישה ימים. ‏`Up` אינו ראיה — הראיה היא `job_claimed` ביומן.
 
   שינוי חוצה־משטחים מחבר את הדרישות; הוא אינו מחזיר אוטומטית את השער הידני המלא. ריצת
-  `workflow_dispatch` היא חריג מפורש שמריץ הכול. PASS היסטורי לעולם אינו מחליף check טרי על ה־SHA.
+  `workflow_dispatch` היא חריג מפורש שמסמן את כל המסלולים **מלבד `render`**, עד לתיקון הפער
+  המתועד למעלה. PASS היסטורי לעולם אינו מחליף check טרי על ה־SHA.
 - מיגרציות: `scripts/db-query.ps1` (Windows) / `scripts/db-query.sh` (Linux/Mac) — שניהם רצים מול
   **הפרויקט המרוחק** דרך Management API (`-SqlFile` + `-ProjectRef` חובה). ריצה מקומית של סוויטה או
   מיגרציה היא `docker exec … psql` על `supabase_db_supplyflow-p0`, הדפוס של `Invoke-SqlTest`.
