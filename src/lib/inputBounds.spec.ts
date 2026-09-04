@@ -2,7 +2,8 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
-  QUANTITY_MAX, VAT_RATE_MAX, VAT_RATE_MIN, isQuantityInRange, isVatRateInRange,
+  BANK_MATCH_DAYS_MIN, QUANTITY_MAX, VAT_RATE_MAX, VAT_RATE_MIN,
+  isBankMatchWindowInRange, isQuantityInRange, isVatRateInRange,
 } from './inputBounds';
 
 const read = (path: string) => readFileSync(join(process.cwd(), ...path.split('/')), 'utf8');
@@ -142,5 +143,56 @@ describe('every screen that writes a quantity states the ceiling', () => {
     // Both screens that use a plain input therefore also test the parsed number before writing.
     expect(read('src/pages/Inventory.tsx')).toContain('isQuantityInRange(parsed)');
     expect(read('src/components/InvoiceLineReviewModal.tsx')).toContain('isQuantityInRange(line.quantity)');
+  });
+});
+
+/**
+ * `OWN-13` — the bank-matching window, and the ceiling this repository deliberately did not invent.
+ *
+ * The block above pins client bounds to the server bounds they mirror. This one cannot, and that
+ * is the fact worth testing rather than hiding: `organizations.settings.bank_match_days` sits in a
+ * `jsonb` column with no CHECK and no server reader, so the only things derivable are what the
+ * arithmetic in `Bank.tsx` already decides — whole days, and a window that does not run backwards.
+ *
+ * The last test is the guard rail. A `max` on this field would be an owner's answer written by
+ * whoever happened to be editing the screen, and `docs/OPEN-DECISIONS.md` has no ceiling in it to
+ * quote. When one is ruled on, this test is what has to be changed on purpose.
+ */
+describe('the bank-matching window is bounded by its own arithmetic, and by nothing it invented', () => {
+  it('accepts whole days from zero up and refuses everything the calendar cannot honour', () => {
+    expect(isBankMatchWindowInRange(BANK_MATCH_DAYS_MIN)).toBe(true);
+    expect(isBankMatchWindowInRange(7)).toBe(true);
+    expect(isBankMatchWindowInRange(3650)).toBe(true); // no ceiling, on purpose
+    expect(isBankMatchWindowInRange(-1)).toBe(false);  // inverts the window in Bank.tsx
+    expect(isBankMatchWindowInRange(7.5)).toBe(false); // Date.UTC truncates a fraction of a day
+    expect(isBankMatchWindowInRange(Number.NaN)).toBe(false);
+    expect(isBankMatchWindowInRange(Number.POSITIVE_INFINITY)).toBe(false);
+  });
+
+  it('leaves the blank trap to the caller, exactly as the VAT rate does', () => {
+    // `Number('')` is 0, and 0 is a REAL window — "only a payment dated the same day". So the
+    // helper cannot tell an empty box from a deliberate zero, and the screen tests the string.
+    expect(isBankMatchWindowInRange(Number(''))).toBe(true);
+    expect(read('src/pages/Settings.tsx')).toContain("matchDays.trim() === ''");
+  });
+
+  it('states the floor and the unit on the one screen that writes the value', () => {
+    const settings = read('src/pages/Settings.tsx');
+    expect(settings).toContain('min={BANK_MATCH_DAYS_MIN} step={BANK_MATCH_DAYS_STEP}');
+    expect(settings).toContain('isBankMatchWindowInRange(days)');
+    // Before the write, not as a message after it.
+    expect(settings.indexOf('isBankMatchWindowInRange(days)'))
+      .toBeLessThan(settings.indexOf("supabase.from('organizations').update({"));
+  });
+
+  it('asserts no maximum, because no server bound and no owner decision supplies one', () => {
+    const bounds = read('src/lib/inputBounds.ts');
+    expect(bounds).not.toContain('BANK_MATCH_DAYS_MAX');
+
+    // And the field itself carries no `max`, so the DOM makes no claim the product cannot keep.
+    const settings = read('src/pages/Settings.tsx');
+    const start = settings.indexOf('<input id="settings-match-days"');
+    expect(start).toBeGreaterThan(-1);
+    expect(settings.slice(start, settings.indexOf('/>', start))).not.toContain('max');
   });
 });

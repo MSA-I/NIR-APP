@@ -341,6 +341,18 @@ function BusinessStep({ onSaved }: { onSaved: () => void }) {
         title={t('onboarding.title_2')}
         subtitle={t('onboarding.subtitle')}
       />
+      {/* `OWN-14`. This step is not a form for a business being set up — it OPENS pre-filled from
+          the organisation the business is already trading on (the name and the VAT rate above are
+          read straight off `org`), and `save()` below patches that same row. Everything about the
+          screen said otherwise: it is called "הקמת המערכת", its later steps report "הושלם" for an
+          organisation months old, and its first button says only "שמירה והמשך". A wizard that
+          edits the live business record says so BEFORE the first save, which is why this sits
+          above the fields rather than in a toast after the press. `info` and not `alert`: nothing
+          is wrong, and the merge below is safe — the person simply has the right to know which
+          record is under the cursor. */}
+      <Note tone="info">
+        <p data-testid="onboarding-live-record-notice">{t('onboarding.liveRecordNotice')}</p>
+      </Note>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="sm:col-span-2">
           <label className="label" htmlFor="onboarding-business-name">{t('onboarding.text')}</label>

@@ -133,11 +133,25 @@ export function writeTolerance(
   // in it, and the next reader would have to know that means the same as nothing.
   if (Object.keys(map).length === 0) return undefined;
 
-  // A map that says only what the scalar said stays a scalar. Nothing is gained by rewriting the
-  // stored shape of an organisation that has not left shekels, and a diff nobody asked for on a
-  // financial settings row is a diff somebody has to explain later.
+  /* A map that says only what the scalar said stays a scalar. Nothing is gained by rewriting the
+     stored shape of an organisation that has not left shekels, and a diff nobody asked for on a
+     financial settings row is a diff somebody has to explain later.
+
+     THE TEST IS THE RESULT, NOT THE ARGUMENT, and that distinction is `OWN-09`. This used to read
+     `typeof setting === 'number' && …` — it asked what shape it had been HANDED. By the time the
+     last non-shekel currency is cleared, the value in hand is already the promoted map, so the
+     branch could never fire on the one press that needed it: an organisation that typed a dollar
+     tolerance and then removed it came back as `{"ILS": 1}` and stayed there for ever, with no
+     sequence of presses in the product able to restore the row it started with. Measured on the
+     server row, 04.09.2026.
+
+     Collapsing is safe because the two shapes SAY THE SAME THING here and both readers know it:
+     `storedTolerance` above, and `private.money_tolerance` (`0245:38-46`), which reads a bare
+     number as the ILS value and an object by code. It is only ever done when the map has exactly
+     one entry and that entry is the one currency the scalar can speak for — a row stating only a
+     dollar figure must stay a map, because the scalar would silently move that figure to shekels. */
   const codes = Object.keys(map);
-  if (typeof setting === 'number' && codes.length === 1 && codes[0] === LEGACY_SCALAR_CURRENCY) {
+  if (codes.length === 1 && codes[0] === LEGACY_SCALAR_CURRENCY) {
     return map[LEGACY_SCALAR_CURRENCY];
   }
   return map;

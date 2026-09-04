@@ -1,0 +1,62 @@
+PR42 / OWN-09 — RED. Oracle: npx vitest run src/lib/tolerances.spec.ts
+Run against the UNFIXED tree at 2001b9af, before any change to src/lib/tolerances.ts.
+The two controls in the same block pass in this run: a map that still says something a scalar
+cannot say stays a map, and the round trip reads identically either way.
+
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-aa6ab415e44e16b91
+
+ ❯ src/lib/tolerances.spec.ts (31 tests | 2 failed) 19ms
+     × returns to the scalar the shekel-only business started on 5ms
+     × survives the panel's own save loop, which walks every currency in turn 1ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/lib/tolerances.spec.ts > OWN-09 — clearing the second currency puts the shape back > returns to the scalar the shekel-only business started on
+AssertionError: expected { ILS: 1 } to be 1 // Object.is equality
+
+- Expected:
+1
+
++ Received:
+{
+  "ILS": 1,
+}
+
+ ❯ src/lib/tolerances.spec.ts:110:51
+    108|     expect(promoted).toEqual({ ILS: 1, USD: 2.5 });
+    109|     // The press that closed the door: the value in hand here is the M…
+    110|     expect(writeTolerance(promoted, 'USD', null)).toBe(1);
+       |                                                   ^
+    111|   });
+    112|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/lib/tolerances.spec.ts > OWN-09 — clearing the second currency puts the shape back > survives the panel's own save loop, which walks every currency in turn
+AssertionError: expected { ILS: 1 } to be 1 // Object.is equality
+
+- Expected:
+1
+
++ Received:
+{
+  "ILS": 1,
+}
+
+ ❯ src/lib/tolerances.spec.ts:121:56
+    119|         start,
+    120|       );
+    121|     expect(fold({ ILS: 1, USD: 2.5 }, ['ILS', 'USD'])).toBe(1);
+       |                                                        ^
+    122|     expect(fold({ ILS: 1, USD: 2.5 }, ['USD', 'ILS'])).toBe(1);
+    123|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 29 passed (31)
+   Start at  14:59:00
+   Duration  1.69s (transform 103ms, setup 406ms, import 85ms, tests 19ms, environment 969ms)
+

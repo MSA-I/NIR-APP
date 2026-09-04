@@ -4,7 +4,10 @@ import { useState } from 'react';
 import { Link } from 'react-router';
 import { Settings as SettingsIcon, Users, MailPlus, Send, Ban, KeyRound, ClipboardCheck, ImageUp, Download, Undo2, UserCog, LogOut } from 'lucide-react';
 import { MIN_PASSWORD_LENGTH, passwordProblemOf } from '../lib/password';
-import { VAT_RATE_MAX, VAT_RATE_MIN, isVatRateInRange } from '../lib/inputBounds';
+import {
+  BANK_MATCH_DAYS_MIN, BANK_MATCH_DAYS_STEP, VAT_RATE_MAX, VAT_RATE_MIN,
+  isBankMatchWindowInRange, isVatRateInRange,
+} from '../lib/inputBounds';
 import { OPTIONAL_REASON_LABEL_KEY, reasonOr } from '../lib/reason';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
@@ -182,12 +185,24 @@ export default function Settings() {
       toast(t('settings.vatRateOutOfRange'), 'error');
       return;
     }
+    /* `OWN-13`. The field beside the VAT rate had no bound of any kind, so this function wrote
+       `-30` (a window that inverts and can never contain a date), `7.5` (a fraction `Date.UTC`
+       truncates) and, from an empty box, the `0` that `Number('')` produces — the narrowest
+       window there is, stored as though somebody had chosen it. This refuses all three. It is
+       NOT the mirror of a server constraint the way the VAT check above is: there is none to
+       mirror, `organizations.settings` carries no CHECK, and a ceiling is an owner's answer that
+       is still open. See `inputBounds.ts` for what is derived and what is deliberately absent. */
+    const days = Number(matchDays);
+    if (matchDays.trim() === '' || !isBankMatchWindowInRange(days)) {
+      toast(t('settings.matchDaysOutOfRange'), 'error');
+      return;
+    }
     setBusy(true);
     // merge, don't replace — settings also carries keys this screen doesn't edit
     // (e.g. invite_expiry_days, read by invitation_expiry_days() in migration 0007)
     const settings: Record<string, unknown> = {
       ...(org?.settings ?? {}),
-      bank_match_days: Number(matchDays),
+      bank_match_days: days,
     };
     /* THE TOLERANCE KEYS ARE NOT WRITTEN HERE, and the spread above is why that is safe: this
        screen no longer names them, so they travel through untouched. It used to save
@@ -564,7 +579,17 @@ export default function Settings() {
               here as one field labelled `(₪)`, which was three separate untruths: the business may
               not keep its books in shekels, the same key holds a value per currency (#288), and
               three sibling tolerances had no field at all. A day range is not an amount and stays. */}
-          <div><label className="label" htmlFor="settings-match-days">{t('settings.setMatchDays')}</label><input id="settings-match-days" type="number" className="input num" value={matchDays} disabled={!canWrite} onChange={(e) => setMatchDays(e.target.value)} /></div>
+          {/* A floor and a unit, and deliberately no ceiling: `docs/OPEN-DECISIONS.md` row 3
+              records the default window and no maximum, and there is no server bound to mirror,
+              so the hint says what the number DOES instead of asserting a limit nobody set. */}
+          <div>
+            <label className="label" htmlFor="settings-match-days">{t('settings.setMatchDays')}</label>
+            <input id="settings-match-days" type="number" min={BANK_MATCH_DAYS_MIN} step={BANK_MATCH_DAYS_STEP}
+              className="input num" value={matchDays} disabled={!canWrite}
+              aria-describedby="settings-match-days-hint"
+              onChange={(e) => setMatchDays(e.target.value)} />
+            <p id="settings-match-days-hint" className="mt-1 text-sm text-ink-muted">{t('settings.setMatchDaysHint')}</p>
+          </div>
         </div>
         {canWrite && <div className="flex justify-end"><button className="btn-primary" disabled={busy} onClick={() => void saveOrg()}>{t('settings.saveOrg')}</button></div>}
       </Card>

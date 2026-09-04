@@ -1,0 +1,60 @@
+PR42 — what the two screens actually show, read from the running product
+
+Both screenshots were taken headed, at 1440x900, through system Edge driven by playwright-core
+(the bundled chromium fails on this machine with `spawn UNKNOWN`), against a Vite dev server on
+port 5231 with a cacheDir of its own — node_modules in this worktree is a junction to the main
+checkout, so the default node_modules/.vite is shared with every other worktree on the machine.
+
+The signed-in session is the local demo owner (owner@demo.supplyflow.local), reached through the
+login screen's own local-demo disclosure. NOTHING WAS WRITTEN: no save button was pressed on
+either screen, and the run recorded zero /rest/v1 responses at 400 or above. The only console
+errors in the run are the realtime WebSocket's, which are unrelated to either finding. The shared
+local Supabase stack was read from and not touched; it is at an older migration head than this
+tree, and both screens still rendered in full.
+
+
+PR42-settings-1440x900.png — /settings, `OWN-13`
+------------------------------------------------
+The business card at the top of the screen carries three fields. Reading right to left, as the
+screen does: שם הארגון לתצוגה = "עסק לדוגמה"; שיעור מע״מ (%) = 18; טווח ימים להתאמת בנק = 7.
+
+The day field now looks like the VAT field beside it. Measured on the live element in the same
+run, not inferred from the source:
+
+  #settings-match-days -> {min: "0", max: null, step: "1", value: "7",
+                           aria-describedby: "settings-match-days-hint"}
+
+`max` is null ON PURPOSE and is the one thing in this PR that is an absence rather than a value:
+no server bound exists to mirror (the value lives in a jsonb column with no CHECK and no server
+reader) and OPEN-DECISIONS row 3 records the default window and no ceiling, so a maximum here
+would be an owner's answer written by a developer.
+
+In place of that missing ceiling the field states the unit and the effect, in three muted lines
+under the input, in the same treatment the logo hint above the fold already uses:
+
+  "מספר שלם של ימים. תשלום שנרשם בטווח הזה סביב מועד השורה בדף הבנק מוצע כהתאמה סבירה יותר."
+
+The hint is wired to the input by aria-describedby, so it is read out with the field rather than
+being decoration beside it. The card below is unchanged — שפת הממשק, then סטיות סכום מותרות, the
+panel that owns the tolerance keys this screen deliberately does not name.
+
+
+PR42-onboarding-1440x900.png — /onboarding, `OWN-14`
+-----------------------------------------------------
+The screenshot is the finding, in one frame. The step rail reads פרטי העסק · שלב 1 as the open
+step, and קטגוריות, ספקים and מוצרים ומחירון all read הושלם — an organisation that has been
+trading for months, being walked through "הקמת המערכת". The form beneath it is pre-filled from
+that same organisation: שם העסק = "עסק לדוגמה", שיעור מע״מ = 18, and the four contact fields
+empty because this organisation never set them.
+
+Between the step heading and the first field there is now a sky-toned note, and it is above the
+fields rather than beside the button:
+
+  "השדות כאן טעונים בפרטי העסק השמורים כרגע — זה אינו טופס לעסק חדש. לחיצה על „שמירה והמשך"
+   מעדכנת את רשומת העסק שהמערכת כבר עובדת מולה, ומחליפה את הערכים הקיימים בשדות ששינית."
+
+The primary button at the foot of the card still reads שמירה והמשך, and it was NOT pressed here.
+What it does was measured separately, in the spec: it issues
+PATCH /rest/v1/organizations?id=eq.<org> carrying name, vat_rate and settings.business, merging
+the bank-matching keys through untouched. See PR42-OWN-14-RED.txt, where that measurement is the
+test that passes on the unfixed tree.

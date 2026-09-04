@@ -65,7 +65,12 @@ describe('writeTolerance changes one currency and leaves the rest alone', () => 
   });
 
   it('clears a currency back to "never stated", which is not zero', () => {
-    expect(writeTolerance({ ILS: 1, USD: 0.3 }, 'USD', null)).toEqual({ ILS: 1 });
+    // Asserted as MEANING rather than as shape. What this test is about is that the cleared
+    // currency reads "never stated" afterwards; which of the two legal shapes carries the
+    // remaining shekel figure is the subject of the OWN-09 block below, not of this one.
+    const cleared = writeTolerance({ ILS: 1, USD: 0.3 }, 'USD', null);
+    expect(storedTolerance(cleared, 'USD')).toBeNull();
+    expect(storedTolerance(cleared, 'ILS')).toBe(1);
     expect(storedTolerance(writeTolerance({ USD: 0.3 }, 'USD', null), 'USD')).toBeNull();
   });
 
@@ -74,7 +79,61 @@ describe('writeTolerance changes one currency and leaves the rest alone', () => 
   });
 
   it('refuses a value that is not a finite number', () => {
-    expect(writeTolerance({ ILS: 1 }, 'USD', Number.NaN)).toEqual({ ILS: 1 });
+    const next = writeTolerance({ ILS: 1 }, 'USD', Number.NaN);
+    expect(storedTolerance(next, 'USD')).toBeNull();
+    expect(storedTolerance(next, 'ILS')).toBe(1);
+  });
+});
+
+/**
+ * `OWN-09` — the stored shape has to be a function of what the row SAYS, not of the order the
+ * owner happened to type it in.
+ *
+ * Measured on the server row during the sweep of 04.09.2026: an organisation stored
+ * `bank_match_amount_tolerance: 1`; a dollar tolerance was typed and saved, then cleared and saved
+ * again; the row came back as `{"ILS": 1}` and stayed there. Nothing behaves differently —
+ * `storedTolerance` and `private.money_tolerance` read `1` and `{"ILS": 1}` identically — but the
+ * stored shape of a financial settings row changed and no sequence of presses in the product
+ * brings it back. That is a one-way door, and the module's own comment already forbids it: "a map
+ * that says only what the scalar said stays a scalar… a diff nobody asked for on a financial
+ * settings row is a diff somebody has to explain later."
+ *
+ * The collapse used to be gated on `typeof setting === 'number'` — on the shape it was HANDED.
+ * By the time the last non-shekel currency is cleared, the value in hand is already the promoted
+ * map, so the gate could never fire on the one press that needed it.
+ */
+describe('OWN-09 — clearing the second currency puts the shape back', () => {
+  it('returns to the scalar the shekel-only business started on', () => {
+    const promoted = writeTolerance(1, 'USD', 2.5);
+    expect(promoted).toEqual({ ILS: 1, USD: 2.5 });
+    // The press that closed the door: the value in hand here is the MAP, not the original scalar.
+    expect(writeTolerance(promoted, 'USD', null)).toBe(1);
+  });
+
+  it('survives the panel\'s own save loop, which walks every currency in turn', () => {
+    // CurrencyTolerancesPanel.save() folds writeTolerance over every listed currency, so the
+    // round trip has to hold across the fold and in either currency order.
+    const fold = (start: ReturnType<typeof writeTolerance>, order: string[]) =>
+      order.reduce<ReturnType<typeof writeTolerance>>(
+        (value, currency) => writeTolerance(value, currency, currency === 'ILS' ? 1 : null),
+        start,
+      );
+    expect(fold({ ILS: 1, USD: 2.5 }, ['ILS', 'USD'])).toBe(1);
+    expect(fold({ ILS: 1, USD: 2.5 }, ['USD', 'ILS'])).toBe(1);
+  });
+
+  it('leaves a map that still says something the scalar cannot say', () => {
+    // The control. The legacy scalar answers for ILS and for nothing else (0219), so a row that
+    // states only a dollar figure MUST stay a map — collapsing it would change what it says.
+    expect(writeTolerance({ ILS: 1, USD: 0.3 }, 'ILS', null)).toEqual({ USD: 0.3 });
+    expect(writeTolerance({ ILS: 1, USD: 0.3 }, 'EUR', 0.2)).toEqual({ ILS: 1, USD: 0.3, EUR: 0.2 });
+  });
+
+  it('reads the same before and after the round trip, which is why the collapse is safe', () => {
+    const promoted = writeTolerance(1, 'USD', 2.5);
+    const restored = writeTolerance(promoted, 'USD', null);
+    expect(storedTolerance(restored, 'ILS')).toBe(storedTolerance(1, 'ILS'));
+    expect(storedTolerance(restored, 'USD')).toBeNull();
   });
 });
 
