@@ -8,7 +8,7 @@ import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
 import { Breadcrumbs, DataTable, MonthPicker, StatusBadge, useToast, ConfirmDialog, LifecycleStrip, Modal, ErrorNote, PageHeader, RecordHeader, RecordSkeleton, SkeletonTable, Note, EmptyState, Card, ICON, type Column } from '../components/ui';
-import { PO_STATUS } from '../lib/status';
+import { PO_STATUS, SUPPLIER_PROPOSAL_STATUS } from '../lib/status';
 import { fmtMoneyExact, fmtDate, fmtDateTime, formatQuantity, formatUnit, localDateKey, productLabel, todayISO } from '../lib/format';
 import { orderWhatsAppLink, markOrderSentToSupplier, needsSentConfirmation } from '../lib/share';
 import { downloadDocumentPdf } from '../lib/pdf';
@@ -17,7 +17,7 @@ import { WhatsAppSendDialog } from '../components/WhatsAppSendDialog';
 import { SupplierPortalCard } from '../components/SupplierPortalCard';
 import { EmailOrderCard } from '../components/EmailOrderCard';
 import { cancelOrderDraft } from '../lib/orderDrafts';
-import type { PurchaseOrder, PurchaseOrderItem, PoStatus } from '../lib/types';
+import type { PurchaseOrder, PurchaseOrderItem, PoStatus, SupplierOrderProposal } from '../lib/types';
 import { DocumentPlate } from '../components/DocumentPlate';
 
 /**
@@ -29,6 +29,15 @@ type OrderRow = PurchaseOrder & {
   supplier: { name: string; phone: string | null; whatsapp: string | null };
   items: { qty: number; unit_price: number; product: { name: string; unit: string; sku: string | null } }[];
 };
+
+/**
+ * A supplier's counter-offer that is still waiting on a decision (REQ-04, `0167`).
+ *
+ * Only the fields the announcement needs: which order it sits on, when it arrived, and what it
+ * would do to the money. The lines themselves belong to the review screen, which is where the
+ * decision is actually taken.
+ */
+type WaitingProposal = Pick<SupplierOrderProposal, 'id' | 'purchase_order_id' | 'supplier_id' | 'total_delta' | 'submitted_at'>;
 
 type DraftListRow = {
   id: string;
@@ -162,7 +171,7 @@ export function OrdersList() {
   const canWrite = organizationAccess.canWrite && !!profile && ['owner', 'office'].includes(profile.role);
 
   const { data, loading, error, refetch } = useQuery(async () => {
-    const [orders, drafts] = await Promise.all([
+    const [orders, drafts, proposals] = await Promise.all([
       supabase.from('purchase_orders')
         .select('*, supplier:suppliers(name, phone, whatsapp), items:purchase_order_items(qty, unit_price, product:products(name, unit, sku))')
         .order('created_at', { ascending: false }),
@@ -171,9 +180,26 @@ export function OrdersList() {
           .select('id, number, currency, updated_at, notes, editor_step, items:purchase_request_items(qty, unit_price, product:products(name))')
           .eq('status', 'draft').eq('created_by', profile!.id).order('updated_at', { ascending: false })
         : Promise.resolve({ data: [], error: null }),
+      /* REQ-04. The supplier already acted; `submitted` is the one proposal state waiting on US
+         (`status.ts`, `SUPPLIER_PROPOSAL_STATUS`). The same table the order's own portal card
+         reads, under the same RLS, narrowed to that one status — nothing is widened, and the
+         oldest is first because it is the decision that has been owed longest. */
+      supabase.from('supplier_order_proposals')
+        .select('id, purchase_order_id, supplier_id, total_delta, submitted_at')
+        .eq('status', 'submitted').order('submitted_at', { ascending: true }),
     ]);
-    return { orders: unwrap(orders) as OrderRow[], drafts: unwrap(drafts) as DraftListRow[] };
+    return {
+      orders: unwrap(orders) as OrderRow[],
+      drafts: unwrap(drafts) as DraftListRow[],
+      waiting: unwrap(proposals) as WaitingProposal[],
+    };
   }, [profile?.id]);
+
+  /** The order ids a decision is owed on, so a list row can say so without a second read. */
+  const waitingByOrder = useMemo(
+    () => new Map((data?.waiting ?? []).map((proposal) => [proposal.purchase_order_id, proposal])),
+    [data],
+  );
 
   const rows = useMemo(() => (data?.orders ?? []).filter((order) => orderMatchesListFilters(order, {
     status: statusFilter, delivery: deliveryFilter, month: monthFilter, currency: currencyFilter,
@@ -252,7 +278,18 @@ export function OrdersList() {
     { key: 'expected', header: t('orders.fmtDate_2'), sortValue: (r) => r.expected_date ?? '', render: (r) => fmtDate(r.expected_date) },
     { key: 'items', header: t('orders.text_3'), priority: 3, className: 'num', render: (r) => r.items.length },
     { key: 'total', header: t('orders.fmtMoneyExact'), className: 'num', mobileLabel: null, sortValue: orderTotal, render: (r) => fmtMoneyExact(orderTotal(r), r.currency) },
-    { key: 'status', header: t('orders.text_4'), priority: 3, render: (r) => <StatusBadge meta={PO_STATUS[r.status]} /> },
+    {
+      key: 'status', header: t('orders.text_4'), priority: 3,
+      /* REQ-04. The lifecycle status and the counter-offer are two different claims and both are
+         made: an order can be "מוכנה לשליחה לספק" AND already answered, which is exactly the pair
+         the sweep read as one unmarked row among 272. */
+      render: (r) => (
+        <span className="flex flex-wrap items-center gap-1">
+          <StatusBadge meta={PO_STATUS[r.status]} />
+          {waitingByOrder.has(r.id) && <StatusBadge meta={SUPPLIER_PROPOSAL_STATUS.submitted} />}
+        </span>
+      ),
+    },
   ];
 
   if (loading) return <SkeletonTable cols={6} />;
@@ -263,6 +300,50 @@ export function OrdersList() {
       <PageHeader title={t('orders.title')}
         meta={t('orders.listMeta', { shown: rows.length, total: data?.orders.length ?? 0 })}
         actions={canWrite && <button type="button" className="btn-primary" onClick={() => navigate('/orders/new?fresh=1')}><Plus size={ICON.sm} aria-hidden="true" /> {t('orders.navigate')}</button>} />
+
+      {/* REQ-04. A supplier's counter-offer was announced on exactly one screen: the detail page
+          of the order it sits on. So the only way to learn that a decision — with money attached —
+          was owed was to open that one order out of 272. It is announced here because this is the
+          screen a person working orders already has open, and because a queue entry costs no new
+          capability: the same table, the same RLS, narrowed to the one status waiting on us.
+          Rendered only when one is waiting; an empty queue would be furniture. */}
+      {!!data?.waiting.length && (
+        <section aria-labelledby="waiting-proposals-title" className="border-y border-line-strong bg-surface">
+          <div className="flex items-center justify-between gap-2 border-b border-line-soft px-3 py-3 sm:px-4">
+            <div>
+              <h2 id="waiting-proposals-title" className="section-title">{t('orders.proposalQueueTitle')}</h2>
+              <p className="mt-0.5 text-xs text-ink-muted">{t('orders.proposalQueueSubtitle')}</p>
+            </div>
+            <span className="badge badge-await num">{data.waiting.length}</span>
+          </div>
+          <div className="divide-y divide-line-soft">
+            {data.waiting.map((proposal) => {
+              const waitingOrder = data.orders.find((o) => o.id === proposal.purchase_order_id);
+              return (
+                <div key={proposal.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-3 py-3 sm:px-4">
+                  <div className="min-w-0">
+                    <div className="font-medium text-ink-body">
+                      {t('orders.text_20')} <span className="num">#{waitingOrder?.number ?? '—'}</span>
+                      {waitingOrder && <> · {waitingOrder.supplier.name}</>}
+                    </div>
+                    <div className="text-xs text-ink-muted">
+                      {t('orders.proposalReceivedAt', { at: fmtDateTime(proposal.submitted_at) })}
+                      {/* The delta is money in the ORDER's currency, so it is printed only when
+                          that order is in hand — a figure with no unit is not a figure. */}
+                      {waitingOrder && <> · {t('orders.proposalDeltaLabel')} <span className="num">{fmtMoneyExact(proposal.total_delta, waitingOrder.currency)}</span></>}
+                    </div>
+                  </div>
+                  {/* A Link, not a button: middle-click, ⌘/Ctrl-click and the hover status bar all
+                      work on the row the product is telling the manager to act on (DASH-12). */}
+                  <Link className="btn-secondary ms-auto inline-flex" to={`/orders/proposals/${proposal.id}`}>
+                    {t('orders.proposalReviewAction')}
+                  </Link>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {canWrite && !!data?.drafts.length && (
         <section aria-labelledby="my-drafts-title" className="border-y border-line-strong bg-surface">
@@ -296,7 +377,12 @@ export function OrdersList() {
         onRowClick={(r) => navigate(`/orders/${r.id}`)}
         mobile="cards"
         mobileTitle={(r) => <><span className="num">#{r.number}</span> · {r.supplier.name}</>}
-        mobileTrailing={(r) => <StatusBadge meta={PO_STATUS[r.status]} />}
+        mobileTrailing={(r) => (
+          <span className="flex flex-wrap items-center justify-end gap-1">
+            <StatusBadge meta={PO_STATUS[r.status]} />
+            {waitingByOrder.has(r.id) && <StatusBadge meta={SUPPLIER_PROPOSAL_STATUS.submitted} />}
+          </span>
+        )}
         rowActions={(r) => [
           { key: 'edit', label: t('orders.actionEdit'), icon: Pencil, hidden: !canWrite, onSelect: () => navigate(`/orders/${r.id}`) },
           { key: 'duplicate', label: t('orders.actionDuplicate'), icon: Copy, hidden: !canWrite, onSelect: () => navigate(`/orders/new?from=${r.id}`) },
