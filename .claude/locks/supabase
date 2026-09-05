@@ -1,7 +1,21 @@
 resource=local-supabase-stack + SQL suites + npm run quality
 SINGLE OCCUPANCY. Read this file before ANY command that touches the local stack.
 
-HELD BY: PR 5+6 (PERM-01) — granted 05.09.2026 07:47 local.
+HELD BY: PR 11 (MON-04) — granted 05.09.2026 08:35 local.
+
+  PR 5+6 RELEASED IT, done and proved, and it did something worth copying: it found the SUITE
+  ITSELF could not satisfy the brief. As committed, p112 raised inside its first assertion under
+  ON_ERROR_STOP, which makes "a control passing beside the failure" STRUCTURALLY IMPOSSIBLE. So it
+  restructured the harness to record every case as an expected/observed pair and raise once at the
+  end -- and re-ran BOTH sides against the corrected file, hash read back inside the container both
+  times. RED 15/47 with 11 of 11 controls green; GREEN 47/47 with the same 11. It also corrected
+  two expectations that were factually wrong (every organisation is born with default flag and
+  autonomy rows) by MEASURING them into the literal rather than filtering them out.
+  Seven regression suites: six pass. `p22_trial_read_only` fails on a guard installed 185
+  migrations before ours, is in no gate, and its own header says it is retired and must not be
+  re-wired -- recorded, not made to pass. Landed at ccc72b0e. Stack left at head 0319, healthy,
+  crash count 0, demo tenant restored and signed into.
+  NOTE FOR THE COORDINATOR: `p22_trial_read_only` is a suite in the tree that NOTHING RUNS.
 
   PR 14 RELEASED IT, done and proved: it asserted the head before and after every one of its
   three resets (0315 was indeed missing and came back), got 4 of 16 red with all three deliberate
