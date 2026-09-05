@@ -1,7 +1,15 @@
 resource=local-supabase-stack + SQL suites + npm run quality
 SINGLE OCCUPANCY. Read this file before ANY command that touches the local stack.
 
-HELD BY: PR 14 (MON-03/FIN-04/FIN-07) — granted 05.09.2026 06:45 local.
+HELD BY: PR 5+6 (PERM-01) — granted 05.09.2026 07:47 local.
+
+  PR 14 RELEASED IT, done and proved: it asserted the head before and after every one of its
+  three resets (0315 was indeed missing and came back), got 4 of 16 red with all three deliberate
+  controls green in the same run, 16 of 16 green on a suite file whose SHA-256 it recorded, read
+  four screenshots, and finished with `npm run demo:restore` proved by three real sign-ins. Its
+  fixture was SOFT-deleted -- a hard delete was refused by the audit immutability guard and by a
+  foreign key, which is the project's own rule enforced by the database rather than by a habit.
+  Landed on the campaign branch at 48499e85.
 
   PR 17 HELD THIS AND LOST IT, and the reason is written down rather than left as a judgement
   call. Measured at 06:41: no file written in its worktree since 04:54, and NO APPLICATION

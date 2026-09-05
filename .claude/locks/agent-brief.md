@@ -14,7 +14,18 @@ git reset --hard worktree-qa-sweep-20260904
 Verify with `git log --oneline -1` that you are on a commit whose message is one of the campaign's
 `fix(...)` commits. If the reset fails, STOP and report — do not work on `origin/main`.
 
-`node_modules` is a junction to the main checkout. Do not run `npm ci` or `npm install`.
+`node_modules` is a junction to the main checkout. Do not run `npm ci` or `npm install`. It is
+sometimes MISSING in a fresh agent worktree — if so, create the junction yourself; still no `npm ci`.
+
+**Four environment facts measured on this machine, each of which has cost an agent time:**
+- A fresh worktree has **no `.env` / `.env.local`**. Copy both from the main checkout before
+  running a dev server, or it cannot reach the local stack. They are gitignored — never commit them.
+- **Port 5199 is held by another worktree's dev server** that has been running since 03.09. Do not
+  kill it. Use another port with `--strictPort`, say which one you used, and stop yours afterwards.
+- **Vite binds the IPv6 loopback here.** `http://127.0.0.1:<port>` is refused; use
+  `http://localhost:<port>`.
+- **Playwright's bundled Chromium fails to spawn** (`spawn UNKNOWN`). Use system Edge with an
+  explicit `executablePath`. Port 6000 is `ERR_UNSAFE_PORT` in every Chromium.
 
 ## 1. Rules that have already cost this campaign time
 
