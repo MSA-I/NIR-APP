@@ -312,7 +312,46 @@ insert into p116.expectations (actor, row_key, expected, is_control, note) value
 do $report$
 declare
   v_lines text;
+  v_rollcall text;
+  v_pass integer;
+  v_total integer;
+  v_control_pass integer;
+  v_control_total integer;
 begin
+  -- THE ROLL-CALL, printed before the verdict and in BOTH runs. The verdict below names only the
+  -- pairs that DISAGREED, so on a red run the pairs that agreed are invisible and "the controls
+  -- were green" would be an inference drawn from an absence. This prints every expected/observed
+  -- pair with its own PASS/FAIL, so a red that is really a broken harness -- which shows up as the
+  -- CONTROLS failing beside the finding -- is told apart from a real one in the same output.
+  select string_agg(
+           format('  %-4s %-13s %-20s expected %-5s read %-18s %s%s',
+                  case when observed.visible is not distinct from expectation.expected
+                       then 'PASS' else 'FAIL' end,
+                  expectation.actor, expectation.row_key,
+                  expectation.expected::text,
+                  coalesce(observed.visible::text, '(no read recorded)'),
+                  case when expectation.is_control then '[control] ' else '' end,
+                  expectation.note),
+           chr(10) order by expectation.actor, expectation.row_key)
+    into v_rollcall
+  from p116.expectations expectation
+  left join p116.reads observed
+    on observed.actor = expectation.actor and observed.row_key = expectation.row_key;
+
+  select count(*) filter (where observed.visible is not distinct from expectation.expected),
+         count(*),
+         count(*) filter (where expectation.is_control
+                            and observed.visible is not distinct from expectation.expected),
+         count(*) filter (where expectation.is_control)
+    into v_pass, v_total, v_control_pass, v_control_total
+  from p116.expectations expectation
+  left join p116.reads observed
+    on observed.actor = expectation.actor and observed.row_key = expectation.row_key;
+
+  raise notice e'P116 roll-call, every expected/observed pair:\n%', v_rollcall;
+  raise notice 'P116 tally: % of % pairs pass; of those, % of % controls pass.',
+    v_pass, v_total, v_control_pass, v_control_total;
+
   select string_agg(
            format('  %-13s %-20s expected %-5s read %-18s %s%s',
                   expectation.actor, expectation.row_key,

@@ -1,0 +1,144 @@
+PR13 — PERM-02 — RED
+=====================================================================================
+A password_changed row is not the holder's own record. Measured 05.09.2026 on the local
+stack (supabase_db_supplyflow-p0), by the holder of the campaign's single-occupancy lock.
+
+WHAT MAKES THIS A RED AND NOT A HAND-WRITTEN REVERT
+-------------------------------------------------------------------------------------
+The unfixed tree is the genuine one. `supabase/migrations/0323_a_password_change_is_the_
+holders_own_record.sql` was MOVED OUT of the migrations directory entirely and the database
+was rebuilt from the remaining migrations with `supabase db reset`. Nothing was hand-edited
+back out of a policy: the database below is one that migration 0323 has never touched.
+
+THE HARNESS WAS CORRECTED BEFORE EITHER SIDE WAS RUN — AND BOTH SIDES RAN AGAINST THE
+CORRECTED FILE
+-------------------------------------------------------------------------------------
+p116 as committed already reported once at the end rather than raising inside its first
+failing assertion, so it did NOT have the structural defect PR 5+6 found in p112. It had a
+smaller one: the verdict block names only the pairs that DISAGREED, so on a red run the
+pairs that agreed are invisible and "the controls were green" would have been an inference
+drawn from an absence rather than a thing anyone read.
+
+One additive change was made: a roll-call, raised as a NOTICE inside the same `$report$`
+block before the verdict, printing EVERY expected/observed pair with its own PASS/FAIL and a
+[control] marker, plus a tally. No assertion, expectation or fixture was altered — the
+change can only add output. RED and GREEN were then both run against this corrected file,
+and its SHA-256 was read back INSIDE the container on both sides and is identical.
+
+THE HEAD, ASSERTED AND NOT INHERITED
+-------------------------------------------------------------------------------------
+The shared stack had been clobbered by another campaign earlier in the day, so the head was
+reset from this worktree and then read, never assumed:
+
+  select version from supabase_migrations.schema_migrations where version >= '0310'
+    -> 0310 0311 0312 0313 0314 0315
+
+  0315 PRESENT  (PR 7's guard is in the database)
+  0323 ABSENT   (held out on purpose — this is the red)
+
+This branch predates PR 5+6, PR 14 and PR 11, so 0319 / 0320 / 0322 are not in its tree and
+are correctly not in this database. 0316 / 0317 / 0318 belong to the other campaign and are
+likewise absent. This is what was actually seen, not what was expected.
+
+And the policy itself was read rather than trusted:
+
+  select case when position('password_changed' in pg_get_expr(polqual, polrelid)) > 0
+              then 'NARROWED' else 'UNFIXED — no password_changed conjunct' end
+    from pg_policy
+   where polrelid = 'public.audit_logs'::regclass and polname = 'audit_select';
+    -> UNFIXED — no password_changed conjunct
+
+THE SUITE, HASHED INSIDE THE CONTAINER
+-------------------------------------------------------------------------------------
+  docker cp supabase/tests/p116_a_password_change_is_the_holders_own_record.sql \
+            supabase_db_supplyflow-p0:/var/lib/postgresql/p116.sql
+  docker exec supabase_db_supplyflow-p0 sha256sum /var/lib/postgresql/p116.sql
+    -> aa43679d5b47bebd64c4e87e8f671fce58d963bae07834026e4f30f3ec889813
+  docker exec supabase_db_supplyflow-p0 wc -l /var/lib/postgresql/p116.sql
+    -> 446
+
+  docker exec -e PGPASSWORD=postgres -e PGTZ=Asia/Jerusalem supabase_db_supplyflow-p0 \
+    psql -U postgres -d postgres -v ON_ERROR_STOP=1 -f /var/lib/postgresql/p116.sql
+
+EVERY READ BELOW WAS ISSUED ON THE GUARDED PATH: role `authenticated`, carrying that
+person's own subject in request.jwt.claims. A read as `postgres` skips RLS and proves
+nothing, so none was used to measure anything.
+
+THE OUTPUT
+-------------------------------------------------------------------------------------
+psql:/var/lib/postgresql/p116.sql:374: NOTICE:  P116 roll-call, every expected/observed pair:
+  PASS accountant_a  financial_control_a  expected true  read true               [control] CONTROL: the financial cross-scope branch survives
+  PASS accountant_a  identity_control_a   expected true  read true               [control] CONTROL: the identity ledger is not narrowed
+  PASS accountant_a  identity_control_b   expected false read false              [control] CONTROL: another tenant is still another tenant
+  PASS accountant_a  pw_accountant_a      expected true  read true               the subject reads their OWN record
+  FAIL accountant_a  pw_office_a          expected false read true               PERM-02: and a colleague's
+  FAIL accountant_a  pw_owner_a           expected false read true               PERM-02: the accountant reads the owner's password change
+  PASS accountant_a  pw_owner_b           expected false read false              cross-tenant: another tenant's password change
+  PASS accountant_b  identity_control_b   expected true  read true               [control] CONTROL
+  PASS accountant_b  pw_owner_a           expected false read false              [control] CONTROL: cross-tenant
+  FAIL accountant_b  pw_owner_b           expected false read true               tenant B's accountant is the subject of none of it either
+  PASS office_a      financial_control_a  expected false read false              [control] CONTROL
+  PASS office_a      identity_control_a   expected false read false              [control] CONTROL
+  PASS office_a      pw_office_a          expected false read false              [control] CONTROL: office reads no audit row, not even its own
+  PASS office_a      pw_owner_a           expected false read false              [control] CONTROL
+  PASS owner_a       financial_control_a  expected true  read true               [control] CONTROL
+  PASS owner_a       identity_control_a   expected true  read true               [control] CONTROL
+  PASS owner_a       identity_control_b   expected false read false              [control] CONTROL: cross-tenant
+  PASS owner_a       pw_accountant_a      expected true  read true               the audit surface still reads what it must
+  PASS owner_a       pw_office_a          expected true  read true               the audit surface still reads what it must
+  PASS owner_a       pw_owner_a           expected true  read true               [control] CONTROL: the owner reads its own tenant's password rows
+  PASS owner_a       pw_owner_b           expected false read false              [control] CONTROL: cross-tenant
+  PASS owner_b       identity_control_a   expected false read false              [control] CONTROL: cross-tenant
+  PASS owner_b       identity_control_b   expected true  read true               [control] CONTROL
+  PASS owner_b       pw_owner_a           expected false read false              [control] CONTROL: cross-tenant
+  PASS owner_b       pw_owner_b           expected true  read true               subject AND audit surface
+psql:/var/lib/postgresql/p116.sql:374: NOTICE:  P116 tally: 22 of 25 pairs pass; of those, 17 of 17 controls pass.
+psql:/var/lib/postgresql/p116.sql:374: ERROR:  P116 failed — a password_changed row is not the holder's own record:
+  accountant_a  pw_office_a          expected false read true               PERM-02: and a colleague's
+  accountant_a  pw_owner_a           expected false read true               PERM-02: the accountant reads the owner's password change
+  accountant_b  pw_owner_b           expected false read true               tenant B's accountant is the subject of none of it either
+CONTEXT:  PL/pgSQL function inline_code_block line 59 at RAISE
+
+  psql exit code: 3
+
+WHAT THE RED SAYS, READ RATHER THAN COUNTED
+-------------------------------------------------------------------------------------
+22 of 25 pairs pass and 17 of 17 CONTROLS PASS IN THE SAME RUN, so this is a red about the
+policy and not a red about a broken harness — a harness that was not measuring RLS would
+have shown the controls failing beside the finding, in this same list.
+
+The three failures are the finding and nothing else:
+
+  * accountant_a reads pw_owner_a  — the owner's password change. They are not its subject.
+  * accountant_a reads pw_office_a — a colleague's. They are not its subject.
+  * accountant_b reads pw_owner_b  — the same leak, proved a second time in a second tenant,
+    so it is a rule of the policy and not an accident of one fixture.
+
+Asserted PER ROW, PER ACTOR. A count would have agreed for the wrong reason: "the accountant
+reads 2 rows" is equally true of an accountant reading two rows they are the subject of
+neither of, and of one reading their own row plus a colleague's.
+
+Note which lines already pass in the RED and must therefore still pass in the GREEN — they
+are regression guards, not things 0323 has to create:
+  * accountant_a / pw_accountant_a — the subject reads their OWN record.
+  * owner_a on every password row of its tenant — the audit surface.
+  * office_a on all four rows — office reads no audit row at all, not even its own.
+  * every cross-tenant pair.
+A fix that "closed" the finding by breaking any of those would be a narrowing that broke the
+screen it was meant to protect, and would show up here as a green that lost a passing line.
+
+THE PRODUCTION MEASUREMENT THIS REPRODUCES
+-------------------------------------------------------------------------------------
+Read-only on production (rkftlbctohswhbbiaqin), on the guarded path, role `authenticated`
+carrying accountant@gamos.demo's own subject:
+  rows the accountant reads = 2 ; rows they are the subject of = 0. Both name the owner.
+Recorded in full in docs/qa/2026-09-04/evidence/PR13-PERM-02-PRODUCTION-MEASUREMENT.txt.
+
+CONTENTION NOTE
+-------------------------------------------------------------------------------------
+Another campaign (docs/ux-remediation-documents-assistant), which does not read
+.claude/locks/supabase, rebuilt the shared stack at 09:03 UTC while this work was in
+progress. It did NOT touch this red or the green: both were run against a head that was read
+out of schema_migrations immediately before the run, and 0323 exists in no other campaign's
+tree, so a database carrying it can only be this one. The intrusion is recorded here because
+a measurement whose stack you did not read is not evidence, and this one was read.

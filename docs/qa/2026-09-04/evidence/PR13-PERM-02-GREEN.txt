@@ -1,0 +1,217 @@
+PR13 — PERM-02 — GREEN
+=====================================================================================
+A password_changed row is the holder's own record. Measured 05.09.2026 on the local stack
+(supabase_db_supplyflow-p0), by the holder of the campaign's single-occupancy lock.
+
+Same suite file as the RED, unchanged, hash read back inside the container on both sides.
+
+THE HEAD, ASSERTED
+-------------------------------------------------------------------------------------
+0323 was moved back into supabase/migrations and the database was rebuilt with
+`supabase db reset`. The head was then read, not assumed:
+
+  select version from supabase_migrations.schema_migrations where version >= '0310'
+    -> 0310 0311 0312 0313 0314 0315 0323
+
+  0315 PRESENT. 0323 PRESENT. 0316-0322 absent, correctly: this branch predates PR 5+6,
+  PR 14 and PR 11, and 0316/0317/0318 belong to the other campaign.
+
+0323 HAD NEVER BEEN EXECUTED BEFORE THIS CAMPAIGN. Its first ever run applied cleanly, and
+all of its own post-conditions held — it asserts, in its own tail, that the narrowing is in
+the live policy, that the subject clause is present, that all three of 0175's scope branches
+survived the deparse-and-reparse round trip, that the policy still applies to `authenticated`
+alone, that it is still a SELECT policy, that audit_log_read_model is still security_invoker,
+and that private.scope_enforcement_violations() is empty. A failure of any of those would
+have aborted the reset.
+
+The installed qual, read back out of pg_policy:
+
+  ((org_id = auth_org())
+   AND (auth_role() = ANY (ARRAY['owner'::user_role, 'accountant'::user_role]))
+   AND (((scope_class = 'legal_entity') AND (legal_entity_id = ANY (auth_scopes())))
+     OR ((scope_class = 'cross_scope') AND (scope_domain = 'organization_identity_platform'))
+     OR ((scope_class = 'cross_scope') AND (scope_domain = 'financial_accounting')
+         AND (EXISTS (SELECT 1 FROM org_units root
+                       WHERE root.org_id = audit_logs.org_id
+                         AND root.unit_type = 'root'
+                         AND root.id = ANY (auth_scopes())))))
+   AND ((action <> 'password_changed') OR (user_id = auth.uid()) OR (auth_role() = 'owner')))
+
+One conjunct was added and the three 0175 branches are byte-identical to the red's. A
+conjunct can only remove rows: there is no arrangement of AND (…) that returns a row the
+policy did not already return, so this shape cannot widen a read even by accident.
+
+THE SUITE, HASHED INSIDE THE CONTAINER — IDENTICAL TO THE RED
+-------------------------------------------------------------------------------------
+  docker exec supabase_db_supplyflow-p0 sha256sum /var/lib/postgresql/p116.sql
+    -> aa43679d5b47bebd64c4e87e8f671fce58d963bae07834026e4f30f3ec889813
+
+  RED  hash: aa43679d5b47bebd64c4e87e8f671fce58d963bae07834026e4f30f3ec889813
+  GREEN hash: aa43679d5b47bebd64c4e87e8f671fce58d963bae07834026e4f30f3ec889813
+  Same file, same 446 lines, both sides.
+
+THE OUTPUT
+-------------------------------------------------------------------------------------
+psql:/var/lib/postgresql/p116.sql:374: NOTICE:  P116 roll-call, every expected/observed pair:
+  PASS accountant_a  financial_control_a  expected true  read true               [control] CONTROL: the financial cross-scope branch survives
+  PASS accountant_a  identity_control_a   expected true  read true               [control] CONTROL: the identity ledger is not narrowed
+  PASS accountant_a  identity_control_b   expected false read false              [control] CONTROL: another tenant is still another tenant
+  PASS accountant_a  pw_accountant_a      expected true  read true               the subject reads their OWN record
+  PASS accountant_a  pw_office_a          expected false read false              PERM-02: and a colleague's
+  PASS accountant_a  pw_owner_a           expected false read false              PERM-02: the accountant reads the owner's password change
+  PASS accountant_a  pw_owner_b           expected false read false              cross-tenant: another tenant's password change
+  PASS accountant_b  identity_control_b   expected true  read true               [control] CONTROL
+  PASS accountant_b  pw_owner_a           expected false read false              [control] CONTROL: cross-tenant
+  PASS accountant_b  pw_owner_b           expected false read false              tenant B's accountant is the subject of none of it either
+  PASS office_a      financial_control_a  expected false read false              [control] CONTROL
+  PASS office_a      identity_control_a   expected false read false              [control] CONTROL
+  PASS office_a      pw_office_a          expected false read false              [control] CONTROL: office reads no audit row, not even its own
+  PASS office_a      pw_owner_a           expected false read false              [control] CONTROL
+  PASS owner_a       financial_control_a  expected true  read true               [control] CONTROL
+  PASS owner_a       identity_control_a   expected true  read true               [control] CONTROL
+  PASS owner_a       identity_control_b   expected false read false              [control] CONTROL: cross-tenant
+  PASS owner_a       pw_accountant_a      expected true  read true               the audit surface still reads what it must
+  PASS owner_a       pw_office_a          expected true  read true               the audit surface still reads what it must
+  PASS owner_a       pw_owner_a           expected true  read true               [control] CONTROL: the owner reads its own tenant's password rows
+  PASS owner_a       pw_owner_b           expected false read false              [control] CONTROL: cross-tenant
+  PASS owner_b       identity_control_a   expected false read false              [control] CONTROL: cross-tenant
+  PASS owner_b       identity_control_b   expected true  read true               [control] CONTROL
+  PASS owner_b       pw_owner_a           expected false read false              [control] CONTROL: cross-tenant
+  PASS owner_b       pw_owner_b           expected true  read true               subject AND audit surface
+psql:/var/lib/postgresql/p116.sql:374: NOTICE:  P116 tally: 25 of 25 pairs pass; of those, 17 of 17 controls pass.
+
+                         result
+  ---------------------------------------------------------
+   p116_a_password_change_is_the_holders_own_record_passed
+
+  psql exit code: 0
+
+THE FOUR THINGS THIS HAD TO PROVE
+-------------------------------------------------------------------------------------
+1. THE ACCOUNTANT NO LONGER READS ROWS THEY ARE NOT THE SUBJECT OF.
+   accountant_a / pw_owner_a   true -> false
+   accountant_a / pw_office_a  true -> false
+   accountant_b / pw_owner_b   true -> false   (the same rule, second tenant)
+   Exactly the three lines that were red, and no others moved.
+
+2. THE SUBJECT STILL READS THEIR OWN ROW.
+   accountant_a / pw_accountant_a  expected true, read true.
+   owner_b      / pw_owner_b       expected true, read true.
+   Without this the fix would have been "nobody but the owner", which is a different policy.
+
+3. THE AUDIT-SURFACE ROLE STILL READS WHAT IT MUST — the one a careless narrowing breaks.
+   owner_a / pw_owner_a       true    owner_a / pw_accountant_a  true
+   owner_a / pw_office_a      true    owner_a / identity_control_a true
+   owner_a / financial_control_a true
+   The owner is asserted on EVERY password row of its own tenant, not on a sample.
+
+4. CROSS-TENANT READS NOTHING.
+   accountant_a / pw_owner_b        false   owner_a / pw_owner_b        false
+   owner_a      / identity_control_b false   owner_b / pw_owner_a        false
+   owner_b      / identity_control_a false   accountant_b / pw_owner_a   false
+
+AND THE SET THAT WAS TAKEN AWAY IS EXACTLY THE SET THAT WAS NAMED
+-------------------------------------------------------------------------------------
+The suite's closing block ran (it is after the verdict, and the run exited 0). It compares,
+row by row, everything tenant A's owner can read against everything tenant A's accountant can
+read — the two hold identical scopes, asserted at the top of the suite, so any difference
+between them is a difference of ROLE. It then requires that the difference contain NOTHING
+except password_changed rows whose subject is not the accountant. Collateral damage from a
+conjunct that was supposed to name one action would have been raised by name. None was.
+
+It also asserts the reverse direction: the accountant reads no tenant-A row the owner does
+not. A "fix" that widened instead of narrowed would fail there.
+
+PERM-03's PLAN, RE-MEASURED — "did not change" rather than "should not change"
+-------------------------------------------------------------------------------------
+0323 alters the qual of the same policy whose owner-side read PERM-03 measured, and adds a
+conjunct that no index can serve. PERM-03 was closed as NOT A DEFECT on a plan captured
+before 0323 existed, so the plan was re-measured on both stacks. Identical data on both
+sides: p116's fixtures, 17 audit rows in tenant A, 4 password_changed rows in the database,
+the read issued as tenant A's OWNER on the guarded path.
+
+  EXPLAIN (ANALYZE, BUFFERS)
+  SELECT * FROM public.audit_log_read_model WHERE action = 'password_changed';
+
+  RED (0323 absent):
+    Index Scan using audit_logs_org_created_idx on audit_logs
+      (cost=0.40..17.37 rows=1) (actual time=0.344..0.385 rows=3 loops=1)
+      Index Cond: (org_id = auth_org())
+      Rows Removed by Filter: 13
+      Buffers: shared hit=13
+      SubPlan 2 -> Index Scan using org_units_one_root_per_org (never executed)
+      Planning Time: 2.844 ms   Execution Time: 0.412 ms
+    rows the owner reads: 3
+
+  GREEN (0323 applied):
+    Index Scan using audit_logs_org_created_idx on audit_logs
+      (cost=0.40..17.65 rows=1) (actual time=0.858..0.898 rows=3 loops=1)
+      Index Cond: (org_id = auth_org())
+      Rows Removed by Filter: 13
+      Buffers: shared hit=17
+      SubPlan 2 -> Index Scan using org_units_one_root_per_org (never executed)
+      Planning Time: 3.998 ms   Execution Time: 0.928 ms
+    rows the owner reads: 3
+
+  THE PLAN DID NOT CHANGE. Same node, same access method, same index
+  (audit_logs_org_created_idx), same Index Cond (org_id = auth_org()), same subplan and it is
+  still never executed, same 3 rows returned and the same 13 removed by filter. The new
+  conjunct lands in the FILTER, not in the Index Cond: it neither consumes nor creates an
+  index opportunity, and it cannot displace the index the owner's read already uses. Cost
+  estimate moves 17.37 -> 17.65 and buffers 13 -> 17, which is the extra predicate being
+  evaluated; auth.uid() deparses inline to current_setting(...) and reads no page of its own.
+
+  STATED PLAINLY AS A LIMIT: this is a 17-row table on a local stack. It proves the ACCESS
+  PATH is unchanged, which is what "an index already exists for the cross-scope path" was
+  about. It does not and cannot reproduce production's 27,533-row table or the HTTP 500s
+  PERM-03 originally reported. PERM-03 is not re-opened by this change; neither is it
+  re-closed by this measurement at production scale.
+
+THE SUITE PASSES A SECOND TIME, ON A DIFFERENT DATABASE STATE
+-------------------------------------------------------------------------------------
+p116 was run once more against a stack that ALSO carried the restored demo tenant, rather
+than only its own fixtures: 25 of 25 pairs pass, 17 of 17 controls, result row returned.
+The suite is therefore not dependent on being the only tenant in the database.
+
+DEMO RESTORE — PROVED, NOT ANNOUNCED
+-------------------------------------------------------------------------------------
+The stack was reset repeatedly here, so restoring it is this holder's duty. `npm run
+demo:restore` on the final stack:
+
+  created owner@demo.supplyflow.local
+  created office@demo.supplyflow.local
+  created accountant@demo.supplyflow.local
+  == Proving the restore
+    sign-in OK: owner@demo.supplyflow.local
+    sign-in OK: office@demo.supplyflow.local
+    sign-in OK: accountant@demo.supplyflow.local
+    profile OK: owner
+    profile OK: office
+    profile OK: accountant
+  Demo restore complete: 3 sign-ins proved, 3 profiles present.
+
+Three real password sign-ins, three profiles in the right roles. Head at handoff:
+0310 0311 0312 0313 0314 0315 0323, narrowing installed, demo tenant present.
+
+A HYPOTHESIS THAT WAS TESTED AND REJECTED, RATHER THAN ASSUMED
+-------------------------------------------------------------------------------------
+An earlier demo:restore failed with GoTrue HTTP 500 "Database error finding users". The
+obvious suspect was p116 itself: it inserts five rows into auth.users with only (id, email),
+leaving confirmation_token and its neighbours NULL, and GoTrue's admin list is known to fail
+on exactly that. That would have been a real residual — check-quality-gates.ps1 runs p116 and
+then runs demo:restore.
+
+It was measured instead of assumed. p116 was run on a fully restored stack, leaving its five
+fixture users present (5 of 5 with confirmation_token NULL, confirmed by query), and
+demo:restore was run again: it succeeded, with all three sign-ins and all three profiles
+proved. p116 does NOT break GoTrue.
+
+The real cause was contention: at the moment of that failure the database had 0 migrations,
+0 users and a postmaster one minute old, because another campaign
+(docs/ux-remediation-documents-assistant), which does not read .claude/locks/supabase, had
+begun rebuilding the shared stack underneath this run. Its reset finished at 12:12:21 local
+and left the head at 0310-0314 + 0316/0317/0318 with 0315 gone — the same clobber the lock
+file already records once. The stack was then re-taken from this worktree, the head re-read,
+and the restore re-run and proved. No red or green above was measured during that window:
+each was run against a head read out of schema_migrations immediately beforehand, and 0323
+exists in no other campaign's tree.
