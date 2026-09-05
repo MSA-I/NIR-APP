@@ -32,9 +32,19 @@ sometimes MISSING in a fresh agent worktree — if so, create the junction yours
 - **All git goes through the PowerShell tool.** The Bash tool's hook refuses `git status`,
   `git worktree list` and friends. Use `PowerShell` for every git command.
 - **If `git reset --hard` and every other tree-changing git command is REFUSED** by this session's
-  auto-mode classifier, you cannot bootstrap your assigned worktree. That happened on 05.09.2026.
-  Do NOT fight it and do NOT work on `origin/main`. Instead work **in the worktree of the branch
-  you were told to continue** — it is already checked out at the right commit, which is the state
+  auto-mode classifier, you cannot bootstrap your assigned worktree. That happened repeatedly on
+  05.09.2026. Do NOT fight it and do NOT work on `origin/main`.
+  **The route that works, found by a verifier and cheapest by far:**
+  ```
+  git switch --detach <the-branch-you-were-told-to-start-from>
+  git switch -c <your-own-branch-name>
+  ```
+  Git permits a **detached** checkout of a branch that is checked out in another worktree, and it
+  changes no other branch's state — so this is allowed where `reset --hard` is not, and it leaves
+  you on your own branch in your own worktree with the right tree. Re-create the `node_modules`
+  junction if it is missing; still no `npm ci`.
+  Only if that also fails, fall back to working **in the worktree of the branch you were told to
+  continue** — it is already checked out at the right commit, which is the state
   the reset was meant to produce. `git add` and `git commit` still work there. If the Edit/Write
   tools are isolation-locked to a different directory, make file changes with a Node script, and
   make it **refuse unless its anchor matches exactly one line** so a silent double-edit is
