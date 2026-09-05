@@ -278,29 +278,20 @@
   --color-elevation: oklch(19.57% 0.022 229);
 
   /* ---- The assistant card — one DARK surface inside a light product ----
-     Owner ruling 01.09.2026. The reference the owner chose (21st.dev `ai-chat`) is a dark glass
-     card with a drifting gradient and rising motes; `CLAUDE.md` bans glassmorphism and heavy
-     animation, and `DESIGN.md:700` bans a gradient on this surface by name. Both were quoted back
-     to the owner with the light palette named, and the faithful copy was chosen anyway. The
-     exception is written down — in `DESIGN.md` beside the assistant section and in
-     `docs/GATES-assistant-chat-20260901.md` — because an unrecorded exception gets re-litigated
-     by every agent that touches the surface.
-
-     What is NOT an exception: the hue. Every step below is Onyx (hue ~226, the shell's own), so
+     The surface remains the floating Onyx card the owner kept in decision #372. The 05.09.2026
+     remediation removed glass, moving paint and decorative light bodies; none carried state.
+     Every step below is Onyx (hue ~226, the shell's own), so
      the card reads as the product's dark and not as a widget from another palette — the same
      complaint the owner made on 26.08.2026 about `action-wash` on this exact surface. A separate
      family rather than reusing `--color-shell` directly, because a card needs rungs the top bar
      never needed: a rim, an inner edge, a bubble and an input well, and each has to move together
      when the dark is retuned. */
   --color-assistant-card: oklch(21.5% 0.023 226);       /* the card body */
-  --color-assistant-card-lift: oklch(27% 0.026 219);    /* the gradient's lit corner */
-  --color-assistant-card-deep: oklch(15.5% 0.02 233);   /* the gradient's far corner */
   --color-assistant-rim: oklch(43% 0.022 226);          /* the outer frame */
   --color-assistant-edge: oklch(32% 0.021 226);         /* inner hairlines and dividers */
   --color-assistant-well: oklch(15.5% 0.02 231);        /* the composer's field */
   --color-assistant-bubble: oklch(30% 0.022 226);       /* a soft surface ON the card */
   --color-assistant-bubble-hover: oklch(35% 0.023 226);
-  --color-assistant-mote: oklch(62% 0.02 226);          /* the rising motes: atmosphere only */
   /* `--color-focus` is a 50%-lightness oceanic chosen against paper; on a 21.5% card it is nearly
      invisible, and a focus ring that cannot be seen is not a focus ring. */
   --color-assistant-focus: oklch(80% 0.075 205);
@@ -1321,9 +1312,7 @@ body {
   padding-block-end: env(safe-area-inset-bottom);
 }
 
-/* Assistant B, owner-approved 20.08.2026: full-screen below lg; a real non-modal dock at lg.
-   The dock occupies the logical end (left in RTL), while #main reserves the same measure so a
-   source route and its evidence remain visible side-by-side instead of painting under the panel. */
+/* Assistant B: full-screen below lg; a floating non-modal card at lg. */
 .assistant-surface {
   position: fixed;
   inset: 0;
@@ -1331,20 +1320,11 @@ body {
   block-size: 100dvh;
 }
 
-/* ---- The assistant card (owner ruling 01.09.2026 — see the token block and DESIGN.md) ----
-   The frame is two rings, exactly as the reference draws it: a 2px rim that catches light and a
-   hairline inner edge, with the whole card clipping its own contents so the gradient and the
-   motes can run edge to edge without escaping the corner radius. */
-/* The one place `backdrop-filter` is allowed in this product, and it is allowed by name: owner
-   ruling 01.09.2026 chose the reference's glass card with the ban read back to them. It is bought
-   at 8% — the card is 92% opaque, which is the reference's own `bg-black/90` rounded to where the
-   contrast measurement still clears AA with room (7.2:1 for the dimmest text on the card, read
-   back from the composited pixels, not from a token). A browser without `backdrop-filter` simply
-   gets the same colour without the blur; nothing about the card depends on it. */
+/* ---- The assistant card ----
+   Two quiet rings and one opaque Onyx surface. No glass, decorative light bodies or moving paint. */
 .assistant-frame {
   border: 2px solid color-mix(in oklab, var(--color-assistant-rim) 60%, transparent);
-  background-color: transparent;
-  backdrop-filter: blur(20px);
+  background-color: var(--color-assistant-card);
 }
 
 .assistant-inner {
@@ -1353,45 +1333,6 @@ body {
 
 .assistant-divider {
   border-color: color-mix(in oklab, var(--color-assistant-edge) 90%, transparent);
-}
-
-/* The drift is 18s and 45% of a hue step wide: at that speed the card looks lit rather than
-   animated, which is the only way a moving background belongs on a financial control room. */
-.assistant-gradient {
-  /* Each stop carries the card's 92%, because this layer IS the card's paint — an opaque gradient
-     over a translucent frame would put the glass behind a wall and undo it. */
-  background-image: linear-gradient(
-    140deg,
-    color-mix(in oklab, var(--color-assistant-card-lift) 92%, transparent) 0%,
-    color-mix(in oklab, var(--color-assistant-card) 92%, transparent) 48%,
-    color-mix(in oklab, var(--color-assistant-card-deep) 92%, transparent) 100%);
-  background-size: 200% 200%;
-  animation: assistant-drift 18s ease-in-out infinite;
-}
-
-@keyframes assistant-drift {
-  0%, 100% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-}
-
-/* Motes: atmosphere, never information. `translate` rather than an inset, so the whole rise runs
-   on the compositor and cannot cost a layout pass per frame on a panel that is also scrolling. */
-.assistant-mote {
-  position: absolute;
-  inset-block-end: -1rem;
-  inline-size: 0.25rem;
-  block-size: 0.25rem;
-  border-radius: 9999px;
-  background-color: color-mix(in oklab, var(--color-assistant-mote) 24%, transparent);
-  animation: assistant-rise var(--assistant-mote-duration, 16s) linear infinite;
-  animation-delay: var(--assistant-mote-delay, 0s);
-}
-
-@keyframes assistant-rise {
-  0% { translate: 0 0; opacity: 0; }
-  12% { opacity: 1; }
-  85% { opacity: 1; }
-  100% { translate: 0 -52rem; opacity: 0; }
 }
 
 .assistant-field {
@@ -1471,17 +1412,6 @@ body {
     transparent 0%,
     color-mix(in oklab, var(--color-surface) 92%, transparent) 65%,
     var(--color-surface) 100%);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .assistant-gradient { animation: none; }
-  .assistant-mote { display: none; }
-}
-
-/* Phones get no motes, for the same reason they get no pointer glow: atmosphere on a short
-   viewport is a smudge, and the device is the one most likely to be metering its battery. */
-@media (max-width: 63.999rem) {
-  .assistant-mote { display: none; }
 }
 
 .dialog-backdrop-safe {

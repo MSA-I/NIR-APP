@@ -147,11 +147,31 @@ export async function deleteAssistantConversation(conversationId: string): Promi
   ok(await supabase.rpc('assistant_delete_conversation', { p_conversation_id: conversationId }));
 }
 
-/** Helpful / not helpful on one run. The server ties it to the stored run, not to browser state. */
-export async function sendAssistantFeedback(runId: string, helpful: boolean): Promise<void> {
+export interface AssistantFeedbackReadback {
+  helpful: boolean;
+  note: string | null;
+}
+
+/** Helpful / not helpful on one run. Confirmation comes from a tenant-scoped read after write. */
+export async function sendAssistantFeedback(
+  runId: string,
+  helpful: boolean,
+  note?: string | null,
+): Promise<AssistantFeedbackReadback> {
+  const cleanNote = note?.trim() || null;
   ok(await supabase.rpc('assistant_record_feedback', {
     p_run_id: runId,
     p_helpful: helpful,
-    p_note: null,
+    p_note: cleanNote,
   }));
+  const read = ok(await supabase.from('assistant_feedback')
+    .select('rating, note')
+    .eq('run_id', runId)
+    .single());
+  const row = read.data as { rating?: unknown; note?: unknown } | null;
+  if (!row || !['helpful', 'not_helpful'].includes(String(row.rating))
+      || (row.note !== null && typeof row.note !== 'string')) {
+    throw new Error('assistant_persistence_failed');
+  }
+  return { helpful: row.rating === 'helpful', note: row.note as string | null };
 }

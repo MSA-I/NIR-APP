@@ -58,19 +58,19 @@ Scope: complete every authorized package from P2b through P10, excluding cancell
 - [x] P8B: replacement supersedes the old document softly, keeps its source readable, rejects role/tenant violations, replays safely and audits a reason
   EVIDENCE: p111 passed five Postgres cases after the exact 0318 file was applied locally: owner and office success, source row retained with deleted_at/deleted_by and unchanged storage path, Storage object retained, replacement active, one reasoned document_superseded audit, exact replay, latest-scan-state enforcement, role/tenant/unit/reason/source/replacement/idempotency denials and zero writes on every refusal. Browser uploaded and registered one replacement, called supersede_failed_document once with a stable key and reason, navigated to the new document and removed the old name from the active list in both viewports. Full clean-chain reset remains R2, not this package claim.
 
-- [ ] P9A: suggested-question failure recovers without reload; auto-restore occurs only through 10 minutes; suggestions depend on user tenure/data
+- [x] P9A: suggested-question failure recovers without reload; auto-restore occurs only through 10 minutes; suggestions depend on user tenure/data
   CHECK: npm.cmd run test -- src/components/assistant/assistantRemediation.spec.tsx
   EXPECT: passed
-  EVIDENCE: pending
+  EVIDENCE: the focused assistant frontend set passed 129/129. Browser forced a suggested-question timeout, kept the exact question in the composer, retried successfully with the navigation-entry count unchanged, auto-restored a five-minute conversation, kept a conversation older than ten minutes in the explicit history list, and switched from usage questions at zero live suppliers to data questions after the same bounded HEAD count reported data. Desktop/mobile screenshots and p9-metrics.json record every state.
 
 - [ ] P9B: product-help answer for unresolved supplier includes a route, authorized roles are checked entry-by-entry, and Fact.as_of is an offset datetime
-  EVIDENCE: pending
+  EVIDENCE: local implementation is proved: productHelpRegistry/routeAccess tests cover the eight entry-by-entry audience expansions and keep onboarding owner-only; helpAndDrafts passed 17/17 with the unresolved-supplier entry, owner/office link, accountant refusal and each static fact normalized from YYYY-MM-DD to midnight Z; browser rendered the /documents source and "updated" timestamp in both viewports. Required post-deploy live Edge call remains pending, so this gate stays unchecked.
 
-- [ ] P9C: assistant feedback note is stored and read back
-  EVIDENCE: pending
+- [x] P9C: assistant feedback note is stored and read back
+  EVIDENCE: client/component tests passed with p_note trimmed into assistant_record_feedback followed by a tenant-scoped assistant_feedback read; browser entered a non-helpful note, captured the RPC body, returned the stored row from the read and rendered that readback in desktop and mobile screenshots.
 
-- [ ] P9D: glass, backdrop filters and decorative light bodies are absent; floating panel remains; no AI disclosure was added
-  EVIDENCE: pending
+- [x] P9D: glass, backdrop filters and decorative light bodies are absent; floating panel remains; no AI disclosure was added
+  EVIDENCE: assistantRemediation source guards and browser DOM/computed-style checks prove zero assistant-gradient/assistant-mote nodes, backdrop-filter none, no AI disclosure, a fixed 24rem desktop card and full-screen mobile surface. The new-check action uses Plus, the panel remains reachable and DESIGN.md/index.css now describe the same opaque Onyx contract. Both viewports were inspected from screenshots.
 
 - [ ] P10A: final bilingual wording contains no targeted jargon, raw internal error wording or hard-coded Hebrew product copy
   CHECK: npm.cmd run test -- src/lib/i18n/uxRemediationCopy.spec.ts

@@ -131,7 +131,10 @@ function EvidenceTrail({ facts, sources, sourceIsCurrent, onNavigate }: {
             <div key={fact.id} className="flex items-start justify-between gap-3">
               <dt className="min-w-0 text-xs text-ink-muted">
                 <span className="block">{fact.label}</span>
-                <span className="mt-0.5 block text-xs">{t('answerView.fmtDateTime')}<span className="num">{fmtDateTime(fact.as_of)}</span></span>
+                <span className="mt-0.5 block text-xs">
+                  {t(fact.tool === 'get_product_help' ? 'answerView.updatedAt' : 'answerView.fmtDateTime')}
+                  <span className="num">{fmtDateTime(fact.as_of)}</span>
+                </span>
               </dt>
               {/* `.num` is this repo's marker for a cell holding a FIGURE — tabular lining
                   numerals — and `shrink-0` because a number must never wrap. A `text` fact holds
@@ -228,27 +231,64 @@ function DraftBlock({ text, facts, sources, sourceIsCurrent, onNavigate }: {
 
 function FeedbackControl({ runId }: { runId: string }) {
   const { errorText, t } = useT();
-  const [state, setState] = useState<'idle' | 'busy' | 'sent'>('idle');
+  const [state, setState] = useState<'idle' | 'editing' | 'busy' | 'sent'>('idle');
+  const [note, setNote] = useState('');
+  const [recordedNote, setRecordedNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function send(helpful: boolean) {
+  async function send(helpful: boolean, submittedNote?: string) {
     setState('busy');
     setError(null);
     try {
-      await sendAssistantFeedback(runId, helpful);
+      const saved = submittedNote === undefined
+        ? await sendAssistantFeedback(runId, helpful)
+        : await sendAssistantFeedback(runId, helpful, submittedNote);
+      setRecordedNote(saved.note);
       setState('sent');
     } catch (e) {
       // Write path: translated here, where it is shown (the useQuery.ts convention).
       setError(errorText(e));
-      setState('idle');
+      setState(submittedNote === undefined ? 'idle' : 'editing');
     }
   }
 
   if (state === 'sent') {
     return (
-      <p className="flex items-center gap-1.5 text-xs text-ink-muted">
-        <Check size={ICON.xs} className="text-done-fg" aria-hidden="true" /> {t('answerView.feedbackRecorded')}
-      </p>
+      <div className="space-y-1.5">
+        <p className="flex items-center gap-1.5 text-xs text-ink-muted">
+          <Check size={ICON.xs} className="text-done-fg" aria-hidden="true" /> {t('answerView.feedbackRecorded')}
+        </p>
+        {recordedNote && <p className="text-xs text-ink-body">{recordedNote}</p>}
+      </div>
+    );
+  }
+  if (state === 'editing' || (state === 'busy' && note !== '')) {
+    return (
+      <div className="space-y-2">
+        <label className="block text-xs font-medium text-ink-muted">
+          <span>{t('answerView.feedbackNoteLabel')}</span>
+          <textarea
+            className="input mt-1 min-h-20 resize-y"
+            maxLength={1000}
+            value={note}
+            disabled={state === 'busy'}
+            placeholder={t('answerView.feedbackNotePlaceholder')}
+            onChange={(event) => setNote(event.target.value)}
+          />
+        </label>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" className="btn-primary btn-sm"
+            disabled={state === 'busy' || !note.trim()}
+            onClick={() => void send(false, note.trim())}>
+            {t('answerView.saveFeedback')}
+          </button>
+          <button type="button" className="btn-ghost btn-sm" disabled={state === 'busy'}
+            onClick={() => { setNote(''); setState('idle'); }}>
+            {t('answerView.cancelFeedback')}
+          </button>
+        </div>
+        {error && <span role="alert" className="text-xs text-alert-fg">{error}</span>}
+      </div>
     );
   }
   return (
@@ -257,7 +297,8 @@ function FeedbackControl({ runId }: { runId: string }) {
       <button type="button" className="btn-ghost btn-sm" disabled={state === 'busy'} onClick={() => void send(true)}>
         <ThumbsUp size={ICON.xs} aria-hidden="true" /> {t('answerView.helpful')}
       </button>
-      <button type="button" className="btn-ghost btn-sm" disabled={state === 'busy'} onClick={() => void send(false)}>
+      <button type="button" className="btn-ghost btn-sm" disabled={state === 'busy'}
+        onClick={() => { setError(null); setState('editing'); }}>
         <ThumbsDown size={ICON.xs} aria-hidden="true" /> {t('answerView.notHelpful')}
       </button>
       {error && <span role="alert" className="text-xs text-alert-fg">{error}</span>}

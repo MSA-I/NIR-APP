@@ -46,6 +46,7 @@ export const ASSISTANT_EXACT_ROUTE_RULES: readonly AssistantExactRouteRule[] = [
   { route: APP_ROUTE_POLICY.inventory.path, appRoute: 'inventory', entities: ['product', 'organization'] },
   { route: APP_ROUTE_POLICY.products.path, appRoute: 'products', entities: ['product'] },
   { route: APP_ROUTE_POLICY.suppliers.path, appRoute: 'suppliers', entities: ['organization'] },
+  { route: APP_ROUTE_POLICY.documents.path, appRoute: 'documents', entities: ['organization'] },
   { route: APP_ROUTE_POLICY.bank.path, appRoute: 'bank', entities: ['bank_transaction', 'organization'] },
   // `status=attention` is the screen's own name for `in ('unmatched','suggested')` — exactly the
   // population `get_unmatched_bank_transactions` returns.

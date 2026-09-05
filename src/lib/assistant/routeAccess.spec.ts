@@ -42,6 +42,13 @@ function expectedDecision(appRoute: AppRoutePolicyKey, role: ActiveRole) {
 }
 
 describe('assistant route policy parity', () => {
+  it('מאפשר למסמך ללא ספק להפנות owner/office למסך המסמכים בלבד', () => {
+    const documents = source(APP_ROUTE_POLICY.documents.path, 'organization');
+    expect(assistantSourceRouteDecision(documents, 'owner')).toBe('allowed');
+    expect(assistantSourceRouteDecision(documents, 'office')).toBe('allowed');
+    expect(assistantSourceRouteDecision(documents, 'accountant')).toBe('not_permitted');
+  });
+
   it('App.tsx צורך את ה-path ואת ה-roles של כל route שהעוזר רשאי להנפיק מאותו מקור אמת', () => {
     for (const key of Object.keys(APP_ROUTE_POLICY) as AppRoutePolicyKey[]) {
       expect(appSource).toContain(`path={APP_ROUTE_POLICY.${key}.path}`);

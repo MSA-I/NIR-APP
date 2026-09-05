@@ -343,7 +343,7 @@ const ENTRIES: readonly ProductHelpEntry[] = [
     version: 1,
     owner: 'product',
     locale: 'he',
-    roles: ['owner'],
+    roles: ['owner', 'office', 'accountant'],
     route: 'dashboard',
     label: 'חיפוש מהיר בכל המערכת',
     steps: [
@@ -357,7 +357,7 @@ const ENTRIES: readonly ProductHelpEntry[] = [
     version: 1,
     owner: 'product',
     locale: 'he',
-    roles: ['owner'],
+    roles: ['owner', 'office', 'accountant'],
     route: 'dashboard',
     label: 'מה דורש טיפול עכשיו',
     steps: [
@@ -371,7 +371,7 @@ const ENTRIES: readonly ProductHelpEntry[] = [
     version: 1,
     owner: 'product',
     locale: 'he',
-    roles: ['owner'],
+    roles: ['owner', 'office', 'accountant'],
     route: 'dashboard',
     label: 'ניווט בין אזורי העבודה',
     steps: [
@@ -385,7 +385,7 @@ const ENTRIES: readonly ProductHelpEntry[] = [
     version: 1,
     owner: 'product',
     locale: 'he',
-    roles: ['owner'],
+    roles: ['owner', 'office'],
     route: 'suppliers',
     label: 'הוספת הספק הראשון',
     steps: [
@@ -400,7 +400,7 @@ const ENTRIES: readonly ProductHelpEntry[] = [
     version: 1,
     owner: 'product',
     locale: 'he',
-    roles: ['owner'],
+    roles: ['owner', 'office'],
     route: 'newOrder',
     label: 'בניית הזמנת רכש',
     steps: [
@@ -415,7 +415,7 @@ const ENTRIES: readonly ProductHelpEntry[] = [
     version: 1,
     owner: 'product',
     locale: 'he',
-    roles: ['owner'],
+    roles: ['owner', 'office'],
     route: 'receiving',
     label: 'קבלת סחורה ובדיקת חריגים',
     steps: [
@@ -429,7 +429,7 @@ const ENTRIES: readonly ProductHelpEntry[] = [
     version: 1,
     owner: 'product',
     locale: 'he',
-    roles: ['owner'],
+    roles: ['owner', 'office'],
     route: 'documents',
     label: 'העלאת מסמך עסקי',
     steps: [
@@ -439,11 +439,27 @@ const ENTRIES: readonly ProductHelpEntry[] = [
     updated_at: '2026-08-27',
   },
   {
+    id: 'resolve_document_supplier',
+    version: 1,
+    owner: 'product',
+    locale: 'he',
+    roles: ['owner', 'office'],
+    route: 'documents',
+    label: 'שיוך ספק למסמך שלא זוהה',
+    steps: [
+      'פותחים את המסמך ממסך המסמכים ועוברים לאזור הספק במסך הבדיקה.',
+      'בוחרים ספק קיים, או יוצרים ספק חדש לאחר שמאשרים שהשם שנקרא מהמסמך נכון.',
+      'רק לאחר בחירת הספק ממשיכים לאישור המסמך; השם שנקרא נשמר כראיה ואינו הופך לבחירה בלי אדם.',
+    ],
+    source: 'src/pages/DocumentReview.tsx · src/components/document-review/DocumentReviewProposals.tsx',
+    updated_at: '2026-09-05',
+  },
+  {
     id: 'prepare_monthly_report',
     version: 1,
     owner: 'product',
     locale: 'he',
-    roles: ['owner'],
+    roles: ['owner', 'accountant'],
     route: 'reports',
     label: 'בדיקה וסגירת החודש',
     steps: [
@@ -773,7 +789,7 @@ const ENTRIES: readonly ProductHelpEntry[] = [
     version: 1,
     owner: 'product',
     locale: 'en',
-    roles: ['owner'],
+    roles: ['owner', 'office', 'accountant'],
     route: 'dashboard',
     label: 'What needs attention now',
     steps: [
@@ -787,7 +803,7 @@ const ENTRIES: readonly ProductHelpEntry[] = [
     version: 1,
     owner: 'product',
     locale: 'en',
-    roles: ['owner'],
+    roles: ['owner', 'office', 'accountant'],
     route: 'dashboard',
     label: 'Search across the product',
     steps: [
@@ -801,7 +817,7 @@ const ENTRIES: readonly ProductHelpEntry[] = [
     version: 1,
     owner: 'product',
     locale: 'en',
-    roles: ['owner'],
+    roles: ['owner', 'office', 'accountant'],
     route: 'dashboard',
     label: 'Navigate between work areas',
     steps: [
@@ -815,7 +831,7 @@ const ENTRIES: readonly ProductHelpEntry[] = [
     version: 1,
     owner: 'product',
     locale: 'en',
-    roles: ['owner'],
+    roles: ['owner', 'office'],
     route: 'suppliers',
     label: 'Add your first supplier',
     steps: [
@@ -830,7 +846,7 @@ const ENTRIES: readonly ProductHelpEntry[] = [
     version: 1,
     owner: 'product',
     locale: 'en',
-    roles: ['owner'],
+    roles: ['owner', 'office'],
     route: 'newOrder',
     label: 'Build a purchase order',
     steps: [
@@ -845,7 +861,7 @@ const ENTRIES: readonly ProductHelpEntry[] = [
     version: 1,
     owner: 'product',
     locale: 'en',
-    roles: ['owner'],
+    roles: ['owner', 'office'],
     route: 'receiving',
     label: 'Receive goods and record exceptions',
     steps: [
@@ -859,7 +875,7 @@ const ENTRIES: readonly ProductHelpEntry[] = [
     version: 1,
     owner: 'product',
     locale: 'en',
-    roles: ['owner'],
+    roles: ['owner', 'office'],
     route: 'documents',
     label: 'Upload a business document',
     steps: [
@@ -869,11 +885,27 @@ const ENTRIES: readonly ProductHelpEntry[] = [
     updated_at: '2026-08-27',
   },
   {
+    id: 'resolve_document_supplier',
+    version: 1,
+    owner: 'product',
+    locale: 'en',
+    roles: ['owner', 'office'],
+    route: 'documents',
+    label: 'Assign a supplier the document did not identify',
+    steps: [
+      'Open the document from Documents and go to the supplier area on the review screen.',
+      'Choose an existing supplier, or create a new one after confirming that the name read from the document is correct.',
+      'Approve the document only after choosing the supplier; the name read from the source remains evidence and never becomes the choice without a person.',
+    ],
+    source: 'src/pages/DocumentReview.tsx · src/components/document-review/DocumentReviewProposals.tsx',
+    updated_at: '2026-09-05',
+  },
+  {
     id: 'prepare_monthly_report',
     version: 1,
     owner: 'product',
     locale: 'en',
-    roles: ['owner'],
+    roles: ['owner', 'accountant'],
     route: 'reports',
     label: 'Review and close the month',
     steps: [
@@ -955,6 +987,10 @@ export const PRODUCT_HELP_KEYWORDS: Readonly<Record<string, readonly string[]>> 
   explain_purchase_order_flow: ['הזמנה חדשה', 'יצירת הזמנה', 'הזמנת רכש'],
   receive_goods: ['קבלת סחורה', 'מה הגיע', 'חוסר בקבלה'],
   upload_document: ['העלאת מסמך', 'צילום מסמך', 'מסמך חדש'],
+  resolve_document_supplier: [
+    'המסמך לא מצא ספק', 'לא נמצא ספק במסמך', 'לא זוהה ספק', 'אין ספק', 'לשייך ספק',
+    'שיוך ספק למסמך', 'document supplier',
+  ],
   prepare_monthly_report: ['דוח חודשי', 'סגירת חודש', 'ייצוא לרואה חשבון'],
   start_owner_onboarding: ['אשף ההקמה', 'הקמת העסק', 'איך מתחילים'],
 };

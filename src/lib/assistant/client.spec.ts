@@ -17,8 +17,13 @@ import { OrgScopeProvider } from '../query/orgScope';
 const invoke = vi.fn();
 const rpc = vi.fn();
 const limit = vi.fn();
+const single = vi.fn();
+const eq = vi.fn((..._args: unknown[]) => ({ single: (...args: unknown[]) => single(...args) }));
 const order = vi.fn((..._args: unknown[]) => ({ limit: (...args: unknown[]) => limit(...args) }));
-const select = vi.fn((..._args: unknown[]) => ({ order: (...args: unknown[]) => order(...args) }));
+const select = vi.fn((..._args: unknown[]) => ({
+  order: (...args: unknown[]) => order(...args),
+  eq: (...args: unknown[]) => eq(...args),
+}));
 const from = vi.fn((..._args: unknown[]) => ({ select: (...args: unknown[]) => select(...args) }));
 
 vi.mock('../supabase', () => ({
@@ -304,14 +309,21 @@ describe('פעולות שיחה', () => {
     expect(rpc).toHaveBeenCalledWith('assistant_delete_conversation', { p_conversation_id: 'conv-9' });
   });
 
-  it('משוב נקשר לריצה שהשרת שמר, לא למצב דפדפן', async () => {
-    rpc.mockResolvedValue({ data: null, error: null });
-    await sendAssistantFeedback('run-7', true);
+  it('משוב עם הערה נקשר לריצה, ואז נקרא חזרה מהמסד לפני אישור בממשק', async () => {
+    rpc.mockResolvedValue({ data: { feedback_id: 'feedback-7' }, error: null });
+    single.mockResolvedValue({
+      data: { rating: 'not_helpful', note: 'הסכום אינו תואם למסמך' }, error: null,
+    });
+    await expect(sendAssistantFeedback('run-7', false, '  הסכום אינו תואם למסמך  '))
+      .resolves.toEqual({ helpful: false, note: 'הסכום אינו תואם למסמך' });
     expect(rpc).toHaveBeenCalledWith('assistant_record_feedback', {
       p_run_id: 'run-7',
-      p_helpful: true,
-      p_note: null,
+      p_helpful: false,
+      p_note: 'הסכום אינו תואם למסמך',
     });
+    expect(from).toHaveBeenCalledWith('assistant_feedback');
+    expect(select).toHaveBeenCalledWith('rating, note');
+    expect(eq).toHaveBeenCalledWith('run_id', 'run-7');
   });
 
   it('כשל מחיקה נזרק במקום להיבלע — supabase-js לא זורק לבד', async () => {
