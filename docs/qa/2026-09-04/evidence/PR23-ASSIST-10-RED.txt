@@ -1,0 +1,42 @@
+PR23 — ASSIST-10 — RED (static; the local Supabase stack is held for this wave)
+
+Oracle: an entitlement override must be able to lift the assistant ceiling DURING the
+introductory window — the only state in which the defect exists. Stated as a property of
+private.assistant_effective_quota(uuid): the override read must be reachable when
+assistant_intro_window_start(org) is non-null and now() is inside the window.
+
+Measured on supabase/migrations/0202_assistant_quota_and_intro_window.sql:
+  intro branch opens                 line 304   if v_started is not null then
+  intro branch RETURNS               line 316   'source', 'intro'  (inside jsonb_build_object of a return)
+  intro branch closes                line 319   end if;
+  override/plan entitlement read     line 322   public.effective_entitlement(p_org_id, 'assistant_runs.monthly')
+
+  the override read is AFTER the intro branch: YES
+
+And the override table is only ever consulted through effective_entitlement. Every migration
+whose text names public.organization_entitlement_overrides at all (its definition, its grants,
+its comments, and the one live_override CTE in 0246 that reads it):
+  0154_subscription_plans_and_entitlements.sql
+  0196_abandoned_signup_cleanup.sql
+  0202_assistant_quota_and_intro_window.sql
+  0246_plan_capability_ladder.sql
+  0247_export_branding_entitlement.sql
+  0252_plan_capability_enforcement.sql
+  0289_abandoned_signup_released_in_a_day_with_its_identity.sql
+
+RESULT: FAIL — while an introductory window is open the resolver returns the
+introductory allowance and never reaches effective_entitlement, so an override granted for
+assistant_runs.monthly changes nothing. Both doors ask this one resolver (0202 section 5 for
+the pre-spend check, section 6 for the locked write), so the override is unreachable at both.
+
+WHY THIS ROW IS BLOCKED RATHER THAN FIXED: the fix is a change to a SECURITY DEFINER function
+body in a new migration. A migration number is drawn under the coordinator's lock, and its
+suite (supabase/tests/p77_assistant_quota_and_read_models.sql) needs the local stack, which
+another agent holds for this wave.
+
+WHAT THE FIX HAS TO DECIDE, and it is a business question rather than a mechanical one:
+whether an override BEATS the introductory allowance or is merely compared with it. The
+introductory allowance is 50 runs over 30 days; a plan override could be lower. Taking the
+greater of the two is the only reading under which "grant this customer more" always means
+more — but it is an owner ruling, not a migration's choice, and OPEN-DECISIONS is where it
+belongs before the body changes.

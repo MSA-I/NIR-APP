@@ -1,0 +1,121 @@
+PR 26 · DASH-01 · WHAT THE FOUR SCREENSHOTS SHOW, READ
+================================================================================
+HOW THEY WERE TAKEN
+  Headed system Edge (C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe),
+  viewport 1440x900, full-page capture, locale he-IL, Vite dev server on port 5217
+  (5199, 5200 and 5211 were held by other worktrees; the server was stopped
+  afterwards and the copied `.env` deleted).
+
+  AGAINST PRODUCTION DATA, not the local stack. Only `.env` was copied into the
+  worktree and `.env.local` deliberately was not, so the app talked to
+  `rkftlbctohswhbbiaqin.supabase.co` — the hosts the page contacted are recorded in
+  the run log and are exactly `localhost:5217` and that one. The local Supabase
+  stack was never touched; its lock is held by another agent.
+
+  Signed in as `owner@gamos.demo`, a live test account the project constitution
+  puts under the owner's control for exactly this. The password was read at run
+  time from the external manifest and is not printed anywhere here.
+
+  DISCLOSED SIDE EFFECT: `/alerts` marks delivered notifications read when it
+  renders them (`Alerts.tsx:60-64`). That is the screen's normal behaviour for any
+  visitor and it fired for this test account on both visits. Nothing else was
+  written; no form was submitted and no action button was pressed.
+
+  BEFORE and AFTER differ by exactly the four files this commit changes. The
+  before pass ran with them restored to HEAD (c1ee7a8b) and the after pass with
+  them restored from byte-exact copies whose SHA-256 are recorded in
+  PR26-DASH-01-RED.txt.
+
+--------------------------------------------------------------------------------
+PR26-before-alerts-1440x900.png  — READ
+--------------------------------------------------------------------------------
+  Subtitle, verbatim: "התור המלא של כל מה שדורש טיפול, מהדחוף ועד המידע.
+  מרכז הבקרה מסכם ומפנה לכאן." — the claim the finding quotes.
+  Under "דורש טיפול", FIVE rows:
+      דחוף    1 מספרי חשבונית מופיעים יותר מפעם אחת
+      דחוף    2 דרישות תשלום עברו את מועד הפירעון
+      לטיפול  4 הזמנות שנשלחו וטרם אושרו על ידי הספק
+      לטיפול  1 מחירים עלו ב-30 הימים האחרונים
+      מידע    5 חשבוניות ללא הזמנת רכש מקושרת
+  Footer names two uncovered conditions: low stock, over budget.
+  Not one exception, not one invoice awaiting approval, not one late delivery.
+
+--------------------------------------------------------------------------------
+PR26-after-alerts-1440x900.png  — READ
+--------------------------------------------------------------------------------
+  Subtitle, verbatim: "התור של כל מה שדורש טיפול, מהדחוף ועד המידע — אותם מצבים
+  שמרכז הבקרה סופר, למעט מה שהמסך עצמו מציין שאינו נבדק."
+  Under "דורש טיפול", FOURTEEN rows, most severe first:
+      דחוף    1 מספרי חשבונית מופיעים יותר מפעם אחת
+      דחוף    9 חריגים פתוחים            · 3 מהם בחומרה גבוהה
+      דחוף    2 דרישות תשלום עברו את מועד הפירעון
+      דחוף    2 הזמנות שמועד האספקה שלהן עבר
+      לטיפול  4 הזמנות שנשלחו וטרם אושרו על ידי הספק
+      לטיפול  1 מחירים עלו ב-30 הימים האחרונים
+      לטיפול  חשבונית אחת ממתינה לאישור            <- singular sibling, at 1
+      לטיפול  2 דרישות תשלום ממתינות לאישור        · "נספרות היחידות שבתחום האחריות שלך בלבד"
+      לטיפול  5 חשבוניות ממתינות לבדיקה
+      לטיפול  3 חשבוניות מאושרות טרם נשלחו להנהלת חשבונות
+      מידע    5 חשבוניות ללא הזמנת רכש מקושרת
+      מידע    דרישת תשלום אחת נשארה בטיוטה         <- singular sibling, at 1
+      מידע    9 זיכויים שטרם קוזזו
+      מידע    9 הזמנות פתוחות מול ספקים
+  Footer, verbatim: "כל מצב שמרכז הבקרה סופר נסרק גם כאן, ומאותו מקור נתונים.
+  לא נבדקים כאן: מלאי נמוך (אין מעקב כמויות במערכת) · חריגה בתקציב (לא הוגדר
+  תקציב) · התאמות בנק (מסך הבנק פתוח לבעלים ולהנהלת חשבונות, והמסך הזה גם
+  למשרד — הספירה נשארת במרכז הבקרה). מועדי פירעון נבדקים רק על דרישות תשלום
+  שהוזן להן תאריך."
+  No row reads 0. Offers above the average is 0 in this tenant and is simply
+  absent, as are the control-centre conditions that hold for nobody.
+  The severity filter still offers exactly הכל / דחוף / לטיפול / מידע.
+
+--------------------------------------------------------------------------------
+PR26-before-dashboard-1440x900.png and PR26-after-dashboard-1440x900.png — READ
+--------------------------------------------------------------------------------
+  Identical, as they must be: no dashboard code was touched. Read for the figures
+  the /alerts rows have to agree with.
+
+      דורש טיפול היום · 7 סוגי טיפול
+          2  דרישות תשלום באיחור
+          9  חריגים פתוחים                      3 בחומרה גבוהה
+          2  הזמנות באיחור באספקה
+          1  חשבוניות הממתינות לאישור
+          2  דרישות תשלום הממתינות לאישור
+          4  הזמנות ממתינות לאישור ספק
+          1  ספקים שהעלו מחירים (30 יום)
+        + מידע נוסף · 3   (the quieter tier, where credits and open commitments live)
+
+      משימות לפי תפקיד · 23 משימות פתוחות בכל התורים
+          9  הזמנות ממתינות לקבלת סחורה
+          5  חשבוניות לבדיקה
+          1  טיוטות דרישת תשלום
+          2  דרישות לאישור הנהלה
+          3  חריגים בחומרה גבוהה
+          3  חשבוניות שטרם הועברו לרו״ח        (9+5+1+2+3+3 = 23)
+
+      תמונת מצב תפעולית: חריגים פתוחים 9 · מוצרים שהתייקרו לאחרונה 1 ·
+      ספקים עם יתרה פתוחה 6
+
+  EVERY FIGURE ON /alerts NOW MATCHES ITS TWIN HERE: 9 exceptions (3 high), 2 late
+  deliveries, 1 invoice awaiting approval, 2 payment requests awaiting approval,
+  4 unconfirmed orders, 2 payment requests past due, 5 invoices to review, 1 draft,
+  3 not yet sent to the bookkeeper, 9 open orders, 9 credits.
+
+  THE TWO FIGURES THAT AGREE BY COINCIDENCE RATHER THAN BY CONSTRUCTION, said
+  plainly: the dashboard's "1 ספקים שהעלו מחירים (30 יום)" counts SUPPLIERS inside
+  the currency the picker is on, while /alerts' "1 מחירים עלו" counts OFFERS across
+  every currency. Both read 1 here. Neither was changed — each is honest about its
+  own population, and this finding is about conditions present on one surface and
+  absent from the other, not about two accurate labels. The same holds for the two
+  readings of overdue payment requests (see PR26-DASH-01-GAP.txt).
+
+--------------------------------------------------------------------------------
+WHAT THE SWEEP'S "4 vs 6 vs 23" LOOKS LIKE NOW
+--------------------------------------------------------------------------------
+  Before: /alerts 5 rows · דורש טיפול היום 7 · משימות לפי תפקיד 23, and the
+          smallest of the three was the one claiming to be complete.
+  After:  /alerts 14 rows, which is the union of both dashboard blocks with the
+          duplicates collapsed (open orders is counted twice on the dashboard —
+          once as a commitment, once as the receiving queue) and bank left out by
+          name. There is one answer to "what needs attention", and it is the one
+          the screen that claims completeness gives.

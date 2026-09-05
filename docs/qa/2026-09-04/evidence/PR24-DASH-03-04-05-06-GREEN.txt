@@ -1,0 +1,53 @@
+﻿PR24 — DASH-03/04/05/06 — GREEN
+branch worktree-agent-a73266a5292c4fb5f · base 182eef90
+
+1. THE ORACLE
+   npx vitest run src/pages/dashboardTileDestinations.spec.ts src/pages/tileClaimParity.spec.ts
+   Test Files  2 passed (2)   Tests  50 passed (50)
+   tileClaimParity.spec.ts is the pre-existing tile-link regression control and is still green.
+   Full raw log: docs/qa/2026-09-04/evidence/PR24-GREEN-raw.txt
+
+2. GUARDS
+   npm run check:i18n        passed (63 files, 908 Hebrew lines, all at pinned counts)
+   npm run check:orphan-keys passed (6002 leaf keys, 106 with no call site, pinned)
+   npm run check:plurals     passed (75 counted phrases, 48 pinned)
+   npx tsc --noEmit          clean
+   npx vitest run            236 files passed, 2510 tests passed
+
+3. VISUAL — signed in as the local demo owner, Edge via playwright-core, 1440x900,
+   dev server on :5213 from THIS worktree (5199/5200 belong to other agents).
+   Screenshots read with the Read tool, not assumed:
+
+   PR24-dashboard-1440x900.png
+     tile   יתרת חשבוניות פתוחות  30,970 ILS · 11 חשבוניות פתוחות
+     tile   נרכש החודש  —  (em dash: nothing purchased this month, never a fake 0)
+     row    הזמנות באיחור באספקה  5
+     the ILS/USD picker and the whole layout are unchanged — only hrefs moved.
+
+   PR24-DASH-03-destination-1440x900.png   /invoices?pay=open&currency=ILS
+     header   11 חשבוניות · 2 מסננים פעילים        <- equals the tile's 11
+     toolbar  פתוחות לתשלום  and the chip  מטבע: ILS — הסרה x
+     row 3377 אריזות הדרום  900.00 total, 150.00 balance, שולמה חלקית  <- the row
+              the finding said the old ?pay=unpaid link excluded. Also 2088 (562.00,
+              שולמה חלקית). No USD invoice on the page.
+     the eleven balances add to 30,970.20, which is the tile's rounded 30,970.
+
+   PR24-DASH-04-destination-1440x900.png   /receiving?status=late
+     filter   מועד האספקה עבר (the new option, selected from the URL)
+     5 cards, delivery dates 06.07 / 10.07 / 17.07 / 18.07 / 20.07.2026 — all before
+     04.09.2026.  5 = the tile's 5.
+     The header keeps its unfiltered wording here because in this tenant all five waiting
+     orders are late, so filtered.length === orders.length.
+
+   PR24-DASH-05-destination-1440x900.png   /orders?status=sent,confirmed,partial&delivery=undated
+     toolbar  אצל הספק — נשלחו, אושרו וחלקיות  +  ללא תאריך אספקה  + no currency chip
+     0 rows.  HONEST LIMIT: the demo tenant has no undated open order, so the dashboard
+     does not render this row at all (it is gated on count > 0) and the live pair is 0=0.
+     The non-zero case (7 undated among 254) is measured by the oracle, not by this shot.
+
+   PR24-DASH-06-destination-1440x900.png   /orders?status=ready,sent,confirmed,partial,received&month=2026-09&currency=ILS
+     toolbar  הזמנות שנשלחו — הכל חוץ מטיוטות ומבוטלות  +  ספטמבר 2026  +  מטבע: ILS — הסרה
+     0 rows, matching the tile's em dash. Drafts and cancellations are excluded by the
+     status set, which is the half ?status=all could not say.
+
+   Machine-read transcript of the run: PR24-visual-read.txt

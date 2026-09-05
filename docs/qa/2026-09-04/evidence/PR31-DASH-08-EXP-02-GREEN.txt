@@ -1,0 +1,15 @@
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/qa-sweep-20260904
+
+ ✓ src/pages/reportsProductWindow.spec.tsx > DASH-08 — the link a July report hands you > carries July, the way every other tile on that page does 409ms
+ ✓ src/pages/reportsProductWindow.spec.tsx > DASH-08 — the screen you arrive at > reads its window from the URL instead of resetting to the current month 104ms
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+ ✓ src/pages/reportsProductWindow.spec.tsx > EXP-02 — the file that leaves that screen > is named for the window on screen, and every sheet states that window 806ms
+ ✓ src/pages/reportsProductWindow.spec.tsx > EXP-02 — the file that leaves that screen > carries the rows, adds no two currencies together, and computes no error 162ms
+
+ Test Files  1 passed (1)
+      Tests  4 passed (4)
+   Start at  13:27:28
+   Duration  4.76s (transform 803ms, setup 541ms, import 1.30s, tests 1.49s, environment 1.17s)
+

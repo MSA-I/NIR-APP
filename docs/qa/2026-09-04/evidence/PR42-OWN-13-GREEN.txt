@@ -1,0 +1,17 @@
+PR42 / OWN-13 — GREEN. npx vitest run src/pages/settingsNumericBounds.spec.tsx src/pages/settingsUserArchive.spec.tsx
+
+min=0 and step=1 in the DOM, and saveOrg now refuses a negative window, a fractional day and
+an empty box. No max: none is derivable — organizations.settings carries no CHECK, no server
+function reads bank_match_days, and OPEN-DECISIONS row 3 records the default and no ceiling.
+The screen states the unit and what the number does instead. The other /settings spec is green
+in the same run, so the new refusal did not break the save path the rest of the card uses.
+
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-aa6ab415e44e16b91
+
+
+ Test Files  2 passed (2)
+      Tests  12 passed (12)
+   Start at  15:06:29
+   Duration  4.37s (transform 1.53s, setup 909ms, import 2.54s, tests 2.05s, environment 2.61s)
+

@@ -1,0 +1,31 @@
+PR 27 — DASH-02 — on-time rate needs five receipts (ruling #356)
+oracle:  src/pages/onTimeThreshold.spec.tsx
+command: npx vitest run src/pages/onTimeThreshold.spec.tsx --reporter=verbose
+tree:    pr27 sources + PR27-DASH-02.patch
+verdict: 6 passed (6)
+
+WHERE THIS WAS RUN. The harness pinned this agent's shell and write access to the worktree
+.claude/worktrees/qa-sweep-20260904, not to the assigned .claude/worktrees/pr27-ontime-threshold,
+so neither run could be performed inside the assigned worktree. Both runs were made against a
+byte-identical copy of pr27-ontime-threshold (branch qa/pr27-ontime-threshold @ 0618b846) taken
+into a scratch directory with node_modules junctioned to the repository's own. The RED run used
+the pristine pr27 sources; the GREEN run used the same tree with only the patch applied, and the
+oracle file was byte-identical in both. See the report for the blocker.
+
+
+ RUN  v4.1.10 C:/Users/art1/AppData/Local/Temp/claude/D----------------------------NIR-APP--claude-worktrees-qa-sweep-20260904/cf142aac-14f0-440f-9074-ba2294d57b9b/scratchpad/verify
+
+ ✓ src/pages/onTimeThreshold.spec.tsx > /analytics — on-time rate below the reportable sample size > draws the em dash at 4 receipts and the percentage at 5 310ms
+ ✓ src/pages/onTimeThreshold.spec.tsx > /analytics — on-time rate below the reportable sample size > does not print the unreportable figure anywhere on the screen 65ms
+ ✓ src/pages/onTimeThreshold.spec.tsx > /analytics — on-time rate below the reportable sample size > does not rank a supplier by the figure it refuses to show 215ms
+ ✓ src/pages/onTimeThreshold.spec.tsx > /analytics — on-time rate below the reportable sample size > states the threshold it enforces in its own header 44ms
+ ✓ src/pages/onTimeThreshold.spec.tsx > supplier card — the same word, the same threshold > draws the em dash at 4 receipts, where it used to print a percentage 81ms
+ ✓ src/pages/onTimeThreshold.spec.tsx > supplier card — the same word, the same threshold > prints the percentage at 5 receipts 89ms
+
+ Test Files  1 passed (1)
+      Tests  6 passed (6)
+   Start at  13:24:36
+   Duration  5.55s (transform 1.22s, setup 665ms, import 2.35s, tests 812ms, environment 1.44s)
+
+
+[process exit code 0]

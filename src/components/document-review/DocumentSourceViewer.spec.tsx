@@ -32,13 +32,13 @@ vi.mock('react-pdf', async () => {
 import { DocumentSourceViewer } from './DocumentSourceViewer';
 
 /** The same wiring DocumentReviewWorkspace provides: picker state in, picker state back out. */
-function Harness({ mimeType, pageCount = 2 }: { mimeType: string; pageCount?: number }) {
+function Harness({ mimeType, pageCount = 2, fileName }: { mimeType: string; pageCount?: number; fileName?: string }) {
   const [page, setPage] = useState(1);
   const [opened, setOpened] = useState(false);
   return (
     <>
       <DocumentSourceViewer
-        fileName={mimeType === 'application/pdf' ? 'invoice.pdf' : 'invoice.png'}
+        fileName={fileName ?? (mimeType === 'application/pdf' ? 'invoice.pdf' : 'invoice.png')}
         mimeType={mimeType}
         sourceUrl="https://files.example.test/preview"
         sourceError={null}
@@ -77,6 +77,34 @@ describe('the engine does not draw on the document', () => {
     // Confidence grades and bbox descriptions both left with the lists.
     expect(screen.queryByText(/זוהה בבירור|לא ודאי|רמת הזיהוי אינה ידועה/)).toBeNull();
     expect(screen.queryByText(/מיקום בעמוד|פרוס על פני כל העמוד/)).toBeNull();
+  });
+});
+
+/**
+ * A name whose FIRST STRONG CHARACTER is not Latin. Digits are not strong, so `93_00002007 …`
+ * takes its direction from `חלק`, and an un-isolated run renders `pdf.3 קלח — 00002007_93` —
+ * measured in the product's own stylesheet by `scripts/filename-bidi-visual-check.cjs`. The
+ * extension is torn off and parked at the opposite margin.
+ */
+const MIXED_SCRIPT_NAME = '93_00002007 — חלק 3.pdf';
+
+describe('the name of the document under review (DOC-07, חוק בידוד השמות)', () => {
+  it('draws the file name inside an explicit LTR isolate', () => {
+    render(<Harness mimeType="image/png" fileName={MIXED_SCRIPT_NAME} />);
+
+    // `getByText` matches on an element's OWN text nodes, so this is the `<p>` when the name is
+    // bare and the `<bdi>` when it is wrapped — one match either way.
+    const drawn = screen.getByText(MIXED_SCRIPT_NAME);
+    const isolate = drawn.closest('[dir="ltr"]');
+    expect(isolate, `the file name is drawn with no explicit LTR isolate above it: ${drawn.outerHTML}`).not.toBeNull();
+    // Tight around the name. An isolate that swallowed the surrounding Hebrew would flip THAT.
+    expect(isolate?.textContent).toBe(MIXED_SCRIPT_NAME);
+  });
+
+  it('CONTROL — the Hebrew section title is not forced LTR, so the assertion above can fail honestly', () => {
+    render(<Harness mimeType="image/png" fileName={MIXED_SCRIPT_NAME} />);
+
+    expect(screen.getByRole('heading', { name: 'המסמך המקורי' }).closest('[dir="ltr"]')).toBeNull();
   });
 });
 

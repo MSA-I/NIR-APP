@@ -1,0 +1,14 @@
+# PR25 · DASH-13 · GREEN
+# oracle: npx vitest run src/pages/dashboardGlanceHonesty.spec.tsx -t DASH-13
+# exit code: 0
+
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-ab86901d055337c47
+
+
+ Test Files  1 passed (1)
+      Tests  2 passed | 4 skipped (6)
+   Start at  15:25:23
+   Duration  3.52s (transform 723ms, setup 429ms, import 1.54s, tests 460ms, environment 899ms)
+
+

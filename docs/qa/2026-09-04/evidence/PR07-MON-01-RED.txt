@@ -1,0 +1,181 @@
+﻿PR07 / MON-01 + DEBT 119 -- RED
+run at 2026-09-04T14:51:10.3211115Z (UTC)
+database: local supabase_db_supplyflow-p0, migration head 0314 (0315 NOT applied)
+command: docker exec supabase_db_supplyflow-p0 psql -U supabase_admin -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/p108_one_balance_one_approval.sql
+
+CREATE EXTENSION
+DROP SCHEMA
+psql:/var/lib/postgresql/run-p108_one_balance_one_approval.sql:29: NOTICE:  schema "p108" does not exist, skipping
+CREATE SCHEMA
+CREATE TABLE
+GRANT
+GRANT
+CREATE FUNCTION
+GRANT
+CREATE FUNCTION
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 2
+INSERT 0 4
+              set_config              
+--------------------------------------
+ f1080000-0000-4000-8000-000000000002
+(1 row)
+
+                   set_config                    
+-------------------------------------------------
+ {"sub": "f1080000-0000-4000-8000-000000000002"}
+(1 row)
+
+SET
+                                         set_invoice_review_status                                         
+-----------------------------------------------------------------------------------------------------------
+ {"idempotent": false, "invoice_id": "f1080000-0000-4000-8000-000000000021", "review_status": "in_review"}
+(1 row)
+
+                                        set_invoice_review_status                                         
+----------------------------------------------------------------------------------------------------------
+ {"idempotent": false, "invoice_id": "f1080000-0000-4000-8000-000000000021", "review_status": "approved"}
+(1 row)
+
+                                         set_invoice_review_status                                         
+-----------------------------------------------------------------------------------------------------------
+ {"idempotent": false, "invoice_id": "f1080000-0000-4000-8000-000000000022", "review_status": "in_review"}
+(1 row)
+
+                                        set_invoice_review_status                                         
+----------------------------------------------------------------------------------------------------------
+ {"idempotent": false, "invoice_id": "f1080000-0000-4000-8000-000000000022", "review_status": "approved"}
+(1 row)
+
+                                         set_invoice_review_status                                         
+-----------------------------------------------------------------------------------------------------------
+ {"idempotent": false, "invoice_id": "f1080000-0000-4000-8000-000000000023", "review_status": "in_review"}
+(1 row)
+
+                                        set_invoice_review_status                                         
+----------------------------------------------------------------------------------------------------------
+ {"idempotent": false, "invoice_id": "f1080000-0000-4000-8000-000000000023", "review_status": "approved"}
+(1 row)
+
+                                         set_invoice_review_status                                         
+-----------------------------------------------------------------------------------------------------------
+ {"idempotent": false, "invoice_id": "f1080000-0000-4000-8000-000000000024", "review_status": "in_review"}
+(1 row)
+
+                                        set_invoice_review_status                                         
+----------------------------------------------------------------------------------------------------------
+ {"idempotent": false, "invoice_id": "f1080000-0000-4000-8000-000000000024", "review_status": "approved"}
+(1 row)
+
+RESET
+ set_config 
+------------
+ 
+(1 row)
+
+ set_config 
+------------
+ 
+(1 row)
+
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+              set_config              
+--------------------------------------
+ f1080000-0000-4000-8000-000000000002
+(1 row)
+
+  set_config   
+---------------
+ authenticated
+(1 row)
+
+                                                set_config                                                 
+-----------------------------------------------------------------------------------------------------------
+ {"amr": [{"method": "password", "timestamp": 1788533474}], "sub": "f1080000-0000-4000-8000-000000000002"}
+(1 row)
+
+SET
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+RESET
+ set_config 
+------------
+ 
+(1 row)
+
+ set_config 
+------------
+ 
+(1 row)
+
+ set_config 
+------------
+ 
+(1 row)
+
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE FUNCTION
+ dblink_connect 
+----------------
+ OK
+(1 row)
+
+ dblink_connect 
+----------------
+ OK
+(1 row)
+
+ dblink_send_query 
+-------------------
+                 1
+(1 row)
+
+ pg_sleep 
+----------
+ 
+(1 row)
+
+ dblink_send_query 
+-------------------
+                 1
+(1 row)
+
+INSERT 0 1
+INSERT 0 1
+ dblink_disconnect 
+-------------------
+ OK
+(1 row)
+
+ dblink_disconnect 
+-------------------
+ OK
+(1 row)
+
+DROP TRIGGER
+CREATE TABLE
+INSERT 0 13
+psql:/var/lib/postgresql/run-p108_one_balance_one_approval.sql:390: ERROR:  P108 failed — #350 is not enforced:
+  debt119_over_printed_balance: expected 'payment_request_allocation_invalid', got 'ok'  (DEBT §119: the writer must not admit 900.00 where the reader prints 780.00)
+  mon01_second_approve: expected 'payment_request_invoice_reserved', got 'ok'  (MON-01: approving 640.00 on an invoice already holding 300.00 approved must be refused BY NAME)
+  race: 2 approval(s) succeeded and 0 were refused by name; exactly one of each is required
+    session a: 'ok'
+    session b: 'ok'
+CONTEXT:  PL/pgSQL function inline_code_block line 31 at RAISE
+EXIT_CODE=3

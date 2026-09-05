@@ -445,6 +445,29 @@ console.log('\nwiring');
   } else {
     console.log(`  ✓ all ${required.length} guards reachable from package.json and build.yml`);
   }
+
+  // The claim above is derived from the guards that HAVE controls here, so a sub-command in
+  // `verify` with no control was invisible to it -- which is exactly how thirteen guards ran in
+  // no workflow for a month (DEBT §105). This second claim is derived from package.json instead,
+  // so a guard added to `verify` alone turns it red rather than silently running nowhere.
+  //
+  // Read off the workflow rather than matched against it, for two reasons: a sub-command that is
+  // a prefix of another must not be counted by the longer one's step, and a guard named only in
+  // a COMMENT -- which is how several of them appear here -- is documentation, not wiring.
+  const verifySubs = String(pkg.scripts?.verify ?? '')
+    .split('&&').map((s) => s.trim().replace(/^npm run /, '')).filter(Boolean);
+  const workflowRuns = new Set(
+    workflow.split(/\r?\n/).filter((line) => !/^\s*#/.test(line))
+      .flatMap((line) => [...line.matchAll(/npm run ([\w:-]+)/g)].map((m) => m[1])));
+  const unwired = verifySubs.filter((c) => !workflowRuns.has(c));
+  ran += 1;
+  if (unwired.length) {
+    failures += 1;
+    console.error('  ✗ every `verify` sub-command has a build.yml step');
+    console.error(`      no build.yml step: ${unwired.join(', ')}`);
+  } else {
+    console.log(`  ✓ all ${verifySubs.length} \`verify\` sub-commands appear in build.yml`);
+  }
 }
 
 // ============================================================ definer exemption pin

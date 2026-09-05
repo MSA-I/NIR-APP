@@ -1,0 +1,31 @@
+PR32 - EXP-05 - RED
+tree: unfixed, HEAD 50188f6e (worktree-qa-sweep-20260904)
+oracle: npx vitest run src/lib/exportAbsenceAndWindow.spec.ts -t "EXP-05"
+
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-ab033ae7e071c8f4a
+
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+ ❯ src/lib/exportAbsenceAndWindow.spec.ts (7 tests | 1 failed | 6 skipped) 690ms
+     × writes the screen's own sentence into each empty month sheet 682ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/lib/exportAbsenceAndWindow.spec.ts > EXP-05 — a sheet with no rows says so, the way the screen does > writes the screen's own sentence into each empty month sheet
+AssertionError: expected [ …(11) ] to include 'אין חשבוניות בחודש זה'
+ ❯ src/lib/exportAbsenceAndWindow.spec.ts:189:51
+    187|     };
+    188|     for (const [name, note] of Object.entries(notes)) {
+    189|       expect(grid(book, name).flat().map(String)).toContain(note);
+       |                                                   ^
+    190|     }
+    191|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 6 skipped (7)
+   Start at  15:53:50
+   Duration  3.75s (transform 652ms, setup 558ms, import 891ms, tests 690ms, environment 1.30s)
+

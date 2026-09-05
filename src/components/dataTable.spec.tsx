@@ -288,7 +288,7 @@ describe('DataTable — column picker (OPEN-DECISIONS #80)', () => {
       <DataTable rows={makeRows(3)} columns={clientColumns} columnPicker="spec-screen" />,
     );
     fireEvent.click(screen.getByRole('button', { name: 'עמודות' }));
-    expect(screen.getByRole('dialog', { name: 'בחירת עמודות' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'בחירת עמודות' })).toBeInTheDocument();
     const checkbox = screen.getByRole('checkbox', { name: 'סכום' });
     expect(screen.getByRole('checkbox', { name: 'שם' })).toHaveFocus();
     expect(checkbox).toBeChecked();
@@ -338,7 +338,7 @@ describe('DataTable — the column picker can be left with the keyboard', () => 
     const last = screen.getByRole('checkbox', { name: 'סכום' });
     last.focus();
     fireEvent.keyDown(window, { key: 'Tab' });
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'בחירת עמודות' })).not.toBeInTheDocument();
     expect(trigger).toHaveFocus();
   });
 
@@ -347,7 +347,7 @@ describe('DataTable — the column picker can be left with the keyboard', () => 
     const first = screen.getByRole('checkbox', { name: 'שם' });
     first.focus();
     fireEvent.keyDown(window, { key: 'Tab', shiftKey: true });
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'בחירת עמודות' })).not.toBeInTheDocument();
     expect(trigger).toHaveFocus();
   });
 
@@ -357,7 +357,7 @@ describe('DataTable — the column picker can be left with the keyboard', () => 
     first.focus();
     fireEvent.keyDown(window, { key: 'Tab' });
     // Still open: only the edges of the list are exits.
-    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'בחירת עמודות' })).toBeInTheDocument();
   });
 
   it('Tab from the trigger enters the panel, which a portal at the end of <body> otherwise prevents', () => {
@@ -365,22 +365,61 @@ describe('DataTable — the column picker can be left with the keyboard', () => 
     trigger.focus();
     fireEvent.keyDown(window, { key: 'Tab' });
     expect(screen.getByRole('checkbox', { name: 'שם' })).toHaveFocus();
-    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'בחירת עמודות' })).toBeInTheDocument();
   });
 
   it('Escape closes it and returns focus to the trigger', () => {
     const trigger = openPicker();
     fireEvent.keyDown(window, { key: 'Escape' });
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'בחירת עמודות' })).not.toBeInTheDocument();
     expect(trigger).toHaveFocus();
   });
 
-  it('focus moving anywhere else closes it, so no dialog stays open behind the page', () => {
+  it('focus moving anywhere else closes it, so no panel stays open behind the page', () => {
     openPicker();
     const outside = screen.getByRole('columnheader', { name: 'שם' }).querySelector('button');
     expect(outside).not.toBeNull();
     fireEvent.focusIn(outside as HTMLElement);
+    expect(screen.queryByRole('group', { name: 'בחירת עמודות' })).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * `RTL-A11Y-09` — what the picker TELLS assistive technology it is.
+ *
+ * The panel announced `role="dialog"` and never set `aria-modal`, while the contract three
+ * describes up is that Tab LEAVES it: measured in Edge on /suppliers, the ninth Tab closed the
+ * panel and returned focus to the trigger (`docs/qa/2026-09-04/evidence/PR37-RED-oracle.txt`).
+ * A dialog contains focus; this one is a disclosure and is now announced as one. These assertions
+ * are the shape of that promise, not a restatement of the markup: the trigger must say whether the
+ * region is open and must NAME the region, or a screen-reader user has a button that reveals
+ * something they are never told about.
+ *
+ * The same run also settled the half of the finding that turned out to be a measurement artifact,
+ * and the test below is why it will stay settled: Escape returns focus to the trigger.
+ */
+describe('DataTable — the column picker is announced as a disclosure, not a dialog', () => {
+  it('does not claim to be a dialog', () => {
+    render(<DataTable rows={makeRows(3)} columns={clientColumns} columnPicker="spec-role" />);
+    fireEvent.click(screen.getByRole('button', { name: 'עמודות' }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'בחירת עמודות' })).toBeInTheDocument();
+  });
+
+  it('the trigger reports the state and points at the region it reveals', () => {
+    render(<DataTable rows={makeRows(3)} columns={clientColumns} columnPicker="spec-controls" />);
+    const trigger = screen.getByRole('button', { name: 'עמודות' });
+    expect(trigger).not.toHaveAttribute('aria-haspopup');
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+
+    fireEvent.click(trigger);
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    const controls = trigger.getAttribute('aria-controls');
+    expect(controls).toBeTruthy();
+    // The panel is portalled to the end of <body>, so this id is the only tie back to the trigger.
+    const panel = document.getElementById(controls as string);
+    expect(panel).not.toBeNull();
+    expect(panel).toContainElement(screen.getByRole('checkbox', { name: 'שם' }));
   });
 });
 

@@ -1,0 +1,21 @@
+PR41 — the specs that live beside the change, with the fix applied.
+
+They are controls, not oracles: none of them was written for these four findings, and all of
+them pass on the unfixed tree too. What they cover is the surface the change actually touched —
+the ledger screen and its value renderer, the dictionary key resolver and the plural sibling the
+new counted phrase relies on, and the schema-column pin that asserts audit_logs really carries
+correlation_id (0062:16), which is the column the whole attribution rests on.
+
+command: npx vitest run src/pages/supplierLogLedger.spec.tsx src/lib/supplierLogChanges.spec.ts src/lib/productLabel.spec.ts src/lib/i18n/t.spec.ts src/lib/schemaColumns.spec.ts
+exit code: 0
+
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a3c9bf3ef67ad3992
+
+
+ Test Files  5 passed (5)
+      Tests  52 passed (52)
+   Start at  16:37:23
+   Duration  5.90s (transform 1.48s, setup 2.90s, import 2.56s, tests 2.46s, environment 8.08s)
+
+

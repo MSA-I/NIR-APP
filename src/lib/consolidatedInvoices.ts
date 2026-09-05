@@ -1,5 +1,6 @@
 import type { TKey } from './i18n/t.ts';
 import { BASE_LOCALE, INTL_LOCALE, type Locale } from './i18n/locale.ts';
+import { storageObjectName } from './storageObjectName';
 import { supabase } from './supabase';
 import { tusUploadToDocuments } from './tusUpload';
 import { unwrap } from './useQuery';
@@ -264,7 +265,12 @@ export function consolidatedPageTypeKey(documentType: string | null): TKey {
 export function consolidatedPageStatusKey(jobStatus: string | null): TKey {
   if (!jobStatus) return 'consolidated.pageStatusQueued';
   return ({
-    awaiting_scan: 'consolidated.pageStatusAwaitingScan',
+    /* MON-07. `awaiting_scan` is not a queue: it is the manual scan-approval gate DOC-01 named,
+       and nothing is running behind it. This screen used to call it `ממתין לסריקה` — its own
+       wording, which reads as a machine the owner can only wait out, and one page sat there for
+       a day while every figure on the case showed `—`. It now borrows the product's word for the
+       state, which is the rule this file already states two functions above. */
+    awaiting_scan: 'documentStatus.awaitingScanApproval',
     queued: 'consolidated.pageStatusQueued',
     leased: 'consolidated.pageStatusProcessing',
     extracted: 'consolidated.pageStatusProcessing',
@@ -369,7 +375,9 @@ export async function uploadConsolidatedInvoicePage(input: {
   onStored?: () => void;
   onResume?: (resume: ConsolidatedPageResume) => void;
 }): Promise<{ registration: ConsolidatedInvoicePageRegistration; resume: ConsolidatedPageResume }> {
-  const safeName = input.file.name.replace(/[^\w.\-]+/g, '_');
+  // DOC-10 again, one file away: the same ASCII-only `\w` that deleted the Hebrew half of every
+  // inbox object key was here too, on the consolidated-invoice page uploads.
+  const safeName = storageObjectName(input.file.name);
   const storagePath = input.resume.storagePath
     ?? `${input.orgId}/consolidated-invoices/${input.intakeId}/page-${input.pageNumber}/${safeName}`;
   let resume = input.resume;

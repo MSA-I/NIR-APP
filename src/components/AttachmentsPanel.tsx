@@ -3,7 +3,7 @@ import { Eye, FileText, Loader2, Trash2, Upload } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { useAuth } from '../auth/AuthContext';
-import { bidiIsolate, fmtDate, fmtDateTime } from '../lib/format';
+import { fmtDate, fmtDateTime, ltrIsolate } from '../lib/format';
 import { ok } from '../lib/errors';
 import { supabase } from '../lib/supabase';
 import { signedDocumentSourceUrl } from '../lib/documentSource';
@@ -230,7 +230,7 @@ export function InvoiceAttachments({ invoiceId, receipts }: { invoiceId: string;
                   {/* 44px like every other control (DESIGN.md): with the thumbnail demoted this is
                       the row's only direct open affordance, and it was ~20px tall. */}
                   <button type="button" onClick={() => void open(doc)} className="flex min-h-11 max-w-full items-center text-start text-sm font-medium text-ink-body hover:text-action">
-                    <bdi className="truncate">{doc.file_name}</bdi>
+                    <bdi dir="ltr" className="truncate">{doc.file_name}</bdi>
                   </button>
                   <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-ink-muted">
                     <span className="font-medium text-ink-soft">{source}</span>
@@ -279,7 +279,7 @@ export function InvoiceAttachments({ invoiceId, receipts }: { invoiceId: string;
 
       <ConfirmDialog open={pendingDelete !== null} onClose={() => setPendingDelete(null)}
         onConfirm={() => { if (pendingDelete) void remove(pendingDelete); }}
-        title={t('attachments.removeTitle')} message={t('attachments.removeMessage', { file: bidiIsolate(pendingDelete?.file_name ?? '') })}
+        title={t('attachments.removeTitle')} message={t('attachments.removeMessage', { file: ltrIsolate(pendingDelete?.file_name ?? '') })}
         confirmLabel={t('attachments.confirmLabel')} danger busy={deleting} />
     </section>
   );

@@ -4,7 +4,7 @@ import { Loader2, ShieldCheck } from 'lucide-react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthContext';
-import { Modal, ErrorNote, ICON, ReasonField } from './ui';
+import { Modal, ErrorNote, ICON, Note, ReasonField } from './ui';
 import type { TKey } from '../lib/i18n/t';
 
 const REAUTH_ERROR_KEY: Readonly<Record<string, TKey>> = {
@@ -72,6 +72,32 @@ export function hasFreshPasswordAuthentication(accessToken: string, nowMs: numbe
     latest >= nowSeconds - FRESH_PASSWORD_WINDOW_SECONDS &&
     latest <= nowSeconds + FRESH_PASSWORD_CLOCK_SKEW_SECONDS
   );
+}
+
+/**
+ * Do we KNOW this account has no password to be asked for? (Owner ruling #355, 04.09.2026.)
+ *
+ * `assert_recent_password_authentication()` can only ever be satisfied by a password sign-in, and
+ * this dialog knows only `signInWithPassword`. An owner who signed in through Google therefore gets
+ * a box they cannot fill — a dead end that predates the offboarding ruling (`OPEN-DECISIONS.md` →
+ * "הכרעת בעלים ל־Offboarding וייצוא דייר"; it is a prose section rather than a numbered table row,
+ * so it is cited by title — `check:decision-numbers` resolves numbers against the table only) and
+ * is not caused by it. Federated step-up is deliberately not built (`DEBT §116`): it is real server
+ * work and there is not one such owner today. What #355 asks for instead is that the screen say so.
+ *
+ * FAIL-OPEN ON PURPOSE, and it is the opposite direction from `hasFreshPasswordAuthentication`
+ * above. That function decides whether to *skip* a gate, so unknown must mean "ask". This one
+ * decides whether to *withhold* the only control that can satisfy the gate, so unknown must mean
+ * "offer it": `session.user.identities` is populated by GoTrue but is not guaranteed to be present
+ * on every session shape, and an absent list must never lock a password user out of an action they
+ * can perform. Only a present, non-empty list with no `email` provider in it is an answer.
+ */
+export function lacksPasswordIdentity(session: Session | null | undefined): boolean {
+  const identities = (session?.user as { identities?: unknown } | undefined)?.identities;
+  if (!Array.isArray(identities) || identities.length === 0) return false;
+  return !identities.some((identity) =>
+    typeof identity === 'object' && identity !== null
+    && (identity as { provider?: unknown }).provider === 'email');
 }
 
 export interface ReauthModalProps {
@@ -193,6 +219,29 @@ export function ReauthModal({
   }
 
   if (!open || fresh) return null;
+
+  /* Ruling #355. The password form is replaced, not disabled: a disabled box still asks for
+     something this account does not have. The caller's `details` sentence stays — the person still
+     needs to know what they were about to do — and the only way out is the same cancel the dialog
+     always had, so a caller that counts on `onCancel` to clear its pending state keeps working. */
+  if (lacksPasswordIdentity(session)) {
+    return (
+      <Modal
+        open
+        onClose={onCancel}
+        title={title ?? t('reauthModal.title')}
+        description={details}
+      >
+        <div className="space-y-4">
+          {/* Prose as a SINGLE child — `Note` is a flex row and shreds bare text into columns. */}
+          <Note tone="await"><span className="min-w-0 flex-1">{t('reauthModal.noPasswordIdentity')}</span></Note>
+          <div className="flex justify-end">
+            <button type="button" className="btn-secondary" onClick={onCancel}>{t('reauthModal.cancel')}</button>
+          </div>
+        </div>
+      </Modal>
+    );
+  }
 
   return (
     <Modal

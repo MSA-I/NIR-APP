@@ -1,0 +1,141 @@
+{
+  "verdict": {
+    "RTL-A11Y-09": {
+      "pass": true,
+      "measuredOn": [
+        "suppliers"
+      ],
+      "runs": {
+        "suppliers": {
+          "pass": true,
+          "announcesDialog": false,
+          "containsFocus": false,
+          "escapeReturns": true,
+          "disclosureWired": true,
+          "panelRole": null,
+          "firstTabThatLeft": 9,
+          "focusAfterEscape": {
+            "tag": "BUTTON",
+            "role": null,
+            "type": "button",
+            "name": "עמודות",
+            "where": "trigger"
+          },
+          "focusAfterSweepRepro": {
+            "tag": "BUTTON",
+            "role": null,
+            "type": "button",
+            "name": "יתרה פתוחה",
+            "where": "table-behind"
+          },
+          "semantics": {
+            "role": null,
+            "ariaModal": null,
+            "ariaLabel": null,
+            "id": "_r_0_",
+            "innerGroupLabel": "בחירת עמודות",
+            "triggerHasPopup": null,
+            "triggerExpanded": "true",
+            "triggerControls": "_r_0_",
+            "controlsResolves": true
+          }
+        }
+      }
+    },
+    "RTL-A11Y-11": {
+      "pass": true,
+      "cards": 2,
+      "orphans": []
+    },
+    "RTL-A11Y-10": {
+      "pass": true,
+      "counts": {
+        "left": 12
+      },
+      "occurrences": 12
+    },
+    "RTL-A11Y-12": {
+      "pass": true,
+      "byWidth": [
+        {
+          "width": 430,
+          "bars": 4,
+          "ticks": [
+            "יוני 2026",
+            "יולי 2026",
+            "אוגוסט 2026",
+            "ספטמבר 2026"
+          ],
+          "cardWidth": 415
+        },
+        {
+          "width": 412,
+          "bars": 4,
+          "ticks": [
+            "יוני 2026",
+            "יולי 2026",
+            "אוגוסט 2026",
+            "ספטמבר 2026"
+          ],
+          "cardWidth": 397
+        },
+        {
+          "width": 390,
+          "bars": 4,
+          "ticks": [
+            "יוני 2026",
+            "יולי 2026",
+            "אוגוסט 2026",
+            "ספטמבר 2026"
+          ],
+          "cardWidth": 375
+        },
+        {
+          "width": 375,
+          "bars": 4,
+          "ticks": [
+            "יוני 2026",
+            "יולי 2026",
+            "אוגוסט 2026",
+            "ספטמבר 2026"
+          ],
+          "cardWidth": 360
+        },
+        {
+          "width": 360,
+          "bars": 4,
+          "ticks": [
+            "יוני 2026",
+            "יולי 2026",
+            "אוגוסט 2026",
+            "ספטמבר 2026"
+          ],
+          "cardWidth": 345
+        },
+        {
+          "width": 344,
+          "bars": 4,
+          "ticks": [
+            "יוני 2026",
+            "יולי 2026",
+            "אוגוסט 2026",
+            "ספטמבר 2026"
+          ],
+          "cardWidth": 329
+        }
+      ],
+      "unlabelledAt": []
+    }
+  },
+  "pageErrors": [],
+  "missedRoutes": [
+    "/rest/v1/rpc/my_subscription"
+  ],
+  "shots": [
+    "D:\\משה פרוייקטים\\פיתוח אתרים\\NIR-APP\\.claude\\worktrees\\agent-a72ce96274003d4f1\\docs\\qa\\2026-09-04\\evidence\\PR37-GREEN-09-suppliers-picker-open-1440x900.png",
+    "D:\\משה פרוייקטים\\פיתוח אתרים\\NIR-APP\\.claude\\worktrees\\agent-a72ce96274003d4f1\\docs\\qa\\2026-09-04\\evidence\\PR37-GREEN-11-suppliers-mobile-390x844.png",
+    "D:\\משה פרוייקטים\\פיתוח אתרים\\NIR-APP\\.claude\\worktrees\\agent-a72ce96274003d4f1\\docs\\qa\\2026-09-04\\evidence\\PR37-GREEN-dashboard-desktop-1440x900.png",
+    "D:\\משה פרוייקטים\\פיתוח אתרים\\NIR-APP\\.claude\\worktrees\\agent-a72ce96274003d4f1\\docs\\qa\\2026-09-04\\evidence\\PR37-GREEN-dashboard-mobile-390x844.png",
+    "D:\\משה פרוייקטים\\פיתוח אתרים\\NIR-APP\\.claude\\worktrees\\agent-a72ce96274003d4f1\\docs\\qa\\2026-09-04\\evidence\\PR37-GREEN-12-monthly-chart-344px.png"
+  ]
+}

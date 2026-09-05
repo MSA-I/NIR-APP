@@ -102,13 +102,23 @@ const PLAN_FEATURE_LABEL: Record<string, string> = {
  * to a blank or to a raw key.
  */
 function catalogueLabel(
-  statusLabel: (key: string) => string,
+  statusLabel: (key: string, vars?: Record<string, string | number>) => string,
   map: Record<string, string>,
   machineKey: string | null | undefined,
   serverLabel: string | null | undefined,
+  /**
+   * The number this label will be printed BESIDE, when there is one. It reaches `t()` as `count`,
+   * which is the only thing that can select a `_one` sibling — Hebrew has one/two/many/other and
+   * a quota of one read «1 משתמשים פעילים» on the public pricing page (`ENTRY-08`).
+   *
+   * The server label is still the fallback, and it is still plural: it is one column, written for
+   * the general case, and a language rule is not something a `label` column can carry.
+   */
+  count?: number,
 ): string {
   const dictionaryKey = machineKey ? map[machineKey] : undefined;
-  return (dictionaryKey ? statusLabel(dictionaryKey) : '') || serverLabel || '';
+  const vars = typeof count === 'number' ? { count } : undefined;
+  return (dictionaryKey ? statusLabel(dictionaryKey, vars) : '') || serverLabel || '';
 }
 
 /**
@@ -124,9 +134,17 @@ export function usePlanCatalogue() {
     /** A rung of the ladder: «Premium» / «פרימיום». */
     planName: (planKey: string | null | undefined, serverLabel: string | null | undefined) =>
       catalogueLabel(statusLabel, PLAN_LABEL, planKey, serverLabel),
-    /** What a quota is called where its number is printed: «Documents per month». */
-    quotaName: (entitlementKey: string | null | undefined, serverLabel: string | null | undefined) =>
-      catalogueLabel(statusLabel, ENTITLEMENT_LABEL, entitlementKey, serverLabel),
+    /**
+     * What a quota is called where its number is printed: «Documents per month».
+     *
+     * `count` is the figure it will stand next to, and it is optional because a quota row that
+     * prints no number — an unmeasured one, an unlimited one — has nothing to agree with.
+     */
+    quotaName: (
+      entitlementKey: string | null | undefined,
+      serverLabel: string | null | undefined,
+      count?: number,
+    ) => catalogueLabel(statusLabel, ENTITLEMENT_LABEL, entitlementKey, serverLabel, count),
     /** The same entitlement as a plan card sells it: «Documents read automatically». */
     featureName: (entitlementKey: string | null | undefined, serverLabel: string | null | undefined) =>
       catalogueLabel(statusLabel, PLAN_FEATURE_LABEL, entitlementKey, serverLabel),

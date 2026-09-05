@@ -1,0 +1,204 @@
+PR 14 — MON-03 / FIN-04 / FIN-07 — THE GREEN
+============================================
+
+Same branch, same machine, same day as `PR14-MON-03-FIN-04-FIN-07-RED.txt`, which this file
+continues. Read that one first: it carries the clobbered-stack finding, the head assertion, and the
+red with its twelve passing controls.
+
+--------------------------------------------------------------------------------------------
+1. THE TREE WAS PUT BACK EXACTLY, AND THAT WAS CHECKED RATHER THAN ASSUMED
+--------------------------------------------------------------------------------------------
+
+`0320` was moved back into `supabase/migrations`, and the two label lines that had been reverted
+for the "before" screenshot were restored.
+
+    git status --short -- src supabase
+    -> (empty)
+
+Empty means the working tree is byte-identical to `a04b7e0f`. Nothing about the red survived into
+the green except the knowledge of what it said.
+
+--------------------------------------------------------------------------------------------
+2. THE GREEN — the SAME suite file, unchanged, on the fixed database
+--------------------------------------------------------------------------------------------
+
+    supabase db reset            (from this worktree)
+    -> Applying migration 0320_a_currency_this_role_cannot_value.sql...
+       Finished supabase db reset on branch main.       -> exit 0
+
+    select version from supabase_migrations.schema_migrations where version >= '0310'
+    -> 0310  0311  0312  0313  0314  0315  0320         <-- 0315 PRESENT, 0320 PRESENT
+
+    SHA-256 of supabase/tests/p113_a_currency_this_role_cannot_value.sql
+    -> 63009A131E9507A3C668D834A892D1D4E3F782BF2B6DA5A054DDA51E3881AB52
+       — the same digest as the red run, and `git diff HEAD` on that path is empty.
+
+    docker cp … && docker exec -e PGPASSWORD=postgres -e PGTZ=Asia/Jerusalem \
+      supabase_db_supplyflow-p0 psql -U postgres -d postgres -v ON_ERROR_STOP=1 \
+      -f /var/lib/postgresql/p113.sql
+    -> exit 0
+
+    INSERT 0 8        (the owner's readings)
+    INSERT 0 8        (the accountant's readings)
+    INSERT 0 16       (the expectations)
+    DO                (the report block — no disagreement to raise)
+    DO                (the coverage block — every expectation had a reading)
+    ROLLBACK
+                        result
+    -----------------------------------------------
+     p113_a_currency_this_role_cannot_value_passed
+
+16 of 16 per-row expectations matched, including all twelve that were already green in the red run.
+The four that moved are exactly the four the finding is about:
+
+    accountant_a_usd        0.000/0  ->  no row
+    accountant_d_usd        0.000/0  ->  no row
+    accountant_a_usd_leak   0.000    ->  none
+    accountant_all_rows     A/ILS=150.000/1 A/USD=0.000/0 B/ILS=640.000/1 B/USD=200.000/1
+                            C/ILS=0.000/0 D/USD=0.000/0
+                        ->  A/ILS=150.000/1 B/ILS=640.000/1 B/USD=200.000/1 C/ILS=0.000/0
+
+Nothing else moved, and the three deliberate controls are the proof of that rather than a claim:
+`accountant_b_usd` is still `200.000/1` (a currency this role CAN value is reported in full, so the
+fix hides nothing it was allowed to show), `accountant_c_ils` is still `0.000/0` (a MEASURED zero
+stays a zero — turning that into an em dash would be the mirror mistake the constitution also
+forbids), and every `owner_*` row is unchanged including `owner_a_usd = 300.000/1`.
+
+The suite ends in `rollback`, so it commits no fixture and the suites after it see the database they
+would have seen anyway.
+
+--------------------------------------------------------------------------------------------
+3. THE FUNCTION, READ BACK FROM `pg_proc` AFTER THE GREEN RESET
+--------------------------------------------------------------------------------------------
+
+    body_md5   = 24a2e15a89bf816f3cf0a290860e3771     (LF-normalised; identical to step 1's)
+    secdef     = true
+    proconfig  = search_path=public
+    A5 `p0_supplier_balance_rows_by_currency()` body_hash matches pg_proc  -> true
+    private.scope_enforcement_violations()                                 -> 0 rows
+
+--------------------------------------------------------------------------------------------
+4. THE SAME SURFACES ON SCREEN, AFTER
+--------------------------------------------------------------------------------------------
+
+The identical screenshot fixture was re-applied to the demo tenant after the green reset — ILS 150
+approved on the guarded path, USD 300 left at `received`, on supplier `aa000000-…-0013` — and read
+on the guarded path:
+
+    OWNER       ILS 150.000 / 1 open      USD 300.000 / 1 open     <-- UNCHANGED from the red
+    ACCOUNTANT  ILS 150.000 / 1 open      (no USD row at all)      <-- the zero is gone, not zeroed
+
+The owner's figures being byte-identical across the two runs is the point of the control: the four
+predicates the supplier reader puts on `public.invoices` are the same four the invoice reader
+applies, so for an owner every joined invoice already had a balance row and the INNER join drops
+nothing. Only the accountant's approval predicate can make the two sides differ.
+
+Headed system Edge, 1440x900, `reducedMotion: 'reduce'`, `locale: 'he-IL'`, real sign-in as the demo
+accountant. Both PNGs were opened and read; the reading is in `PR14-SCREEN-READ.txt`.
+
+    PR14-GREEN-accountant-supplier-card-1440x900.png
+      "יתרה פתוחה"   ->   150 ₪                    (one line; the `0 $` line is gone)
+    PR14-GREEN-accountant-dashboard-1440x900.png
+      "יתרת חשבוניות פתוחות — מאושרות בלבד"   ->   ₪ 4,184
+    /invoices balance column header  ->  "יתרה (מאושרות)"
+
+FIN-07 IS ANSWERED BY THE LABEL AND NOT BY THE QUERY, AND THE NUMBER IS THE EVIDENCE: the
+accountant's KPI reads ₪ 4,184 in BOTH the before and the after screenshot. Nothing was widened, no
+population was reconciled, no row this role may not read became readable. What changed is that the
+words over the figure now say which population it was counted over. The owner keeps the plain word,
+because nothing narrowed the owner's figure and a qualifier there would be the same false statement
+pointing the other way.
+
+--------------------------------------------------------------------------------------------
+5. THE COMPONENT ORACLE FOR `FIN-07`
+--------------------------------------------------------------------------------------------
+
+    npx vitest run src/pages/scopedBalanceLabels.spec.tsx
+    -> Test Files  1 passed (1)
+       Tests  3 passed (3)          Duration 3.88s
+
+Its red — 2 failed with 1 passing control, on the reverted labels — was taken by the previous agent
+and is recorded in `PR14-MON-03-FIN-04-FIN-07.txt`. This run is the green re-confirmed on an
+otherwise idle machine.
+
+--------------------------------------------------------------------------------------------
+6. GUARDS RUN, AND THE TWO THAT ARE RED FOR A REASON THAT IS NOT THIS PR'S TO FIX
+--------------------------------------------------------------------------------------------
+
+    check:anchored-replacements   exit 0
+    check:exemptions              exit 0
+    check:suite-manifest          exit 0
+    check:baseline-drift          exit 0
+    check:money                   exit 0
+    check:i18n                    exit 0
+    check:plurals — not run (no plural key touched); check:orphan-keys exit 0; check:key-manifest exit 0
+
+    check:migration-numbers       exit 1
+      "0315→0320 — 4 number(s) missing"
+    check:gate-controls           exit 1
+      "2 of 49 control(s) did not behave" — and both are `check:migration-numbers` controls:
+        ✗ deleting the HIGHEST migration is caught (it makes no gap)
+        ✗ the real migration sequence still passes
+
+BOTH ARE THE CAMPAIGN'S RESERVED NUMBER SPAN, NOT A DEFECT IN THIS CHANGE. `0316`–`0319` are held
+for PR 5+6 (0319), PR 15 (0321), PR 11 (0322) and PR 13 (0323) and for another campaign's `0316`/
+`0317`; they close when those land. NOTHING WAS ADDED TO `HISTORICAL_GAPS` — that set is for numbers
+genuinely abandoned, and silencing a correct guard to get a green tick is the exact failure this
+repository has already paid for. Reported, not fixed.
+
+`npm run verify` whole and `npm run quality` were NOT run: the standing brief reserves both for one
+baseline run on an idle machine, and `quality` would have reset the stack again.
+
+--------------------------------------------------------------------------------------------
+7. THE STACK WAS HANDED BACK, AND THE HANDBACK WAS PROVED
+--------------------------------------------------------------------------------------------
+
+This run reset the shared database three times, so `npm run demo:restore` is a rule and not a
+courtesy. The screenshot fixture was retired first — SOFT deleted, which is the project's own rule
+for a financial row and not a workaround: `private.audit_log_immutable_guard` refuses a DELETE on
+the audit rows the approval wrote, and `invoice_three_way_approval_snapshots` still references the
+approved invoice. `deleted_at is null` is one of the four predicates BOTH halves of the supplier
+ledger apply, so the retired rows leave every balance reader, list and card. Read back afterwards,
+supplier `…0013` is the demo seed's own shape again: one ILS invoice, fully paid, 0.000/0 for both
+roles.
+
+    npm run demo:restore                                 -> exit 0
+      updated owner@demo.supplyflow.local
+      updated office@demo.supplyflow.local
+      updated accountant@demo.supplyflow.local
+      Demo tenant already present; left as it is.
+      == Proving the restore
+        sign-in OK: owner@demo.supplyflow.local
+        sign-in OK: office@demo.supplyflow.local
+        sign-in OK: accountant@demo.supplyflow.local
+        profile OK: owner
+        profile OK: office
+        profile OK: accountant
+        quick-fill seed OK: the login buttons match the manifest.
+      Demo restore complete: 3 sign-ins proved, 3 profiles present.
+
+Three real password grants and three profiles in the right roles. No password, token or key was
+printed, stored or passed through any script this agent wrote — the dev-only quick-fill block on
+`/login` fills and submits the demo credentials itself, and the camera only opens the disclosure and
+clicks the role.
+
+The dev server this run started (port 5299, `--strictPort`) was stopped afterwards. It was NOT run
+on 5199: that port was already held by another worktree's dev server, PID 13184, running since
+03.09, and killing another agent's server to take a screenshot is not a trade this run was willing
+to make.
+
+--------------------------------------------------------------------------------------------
+8. RESIDUALS, RECORDED RATHER THAN SILENTLY FIXED
+--------------------------------------------------------------------------------------------
+
+  * The two audit_logs rows written by the screenshot fixture's approval cannot be removed —
+    `private.audit_log_immutable_guard` refuses a DELETE, which is the ledger behaving correctly.
+    They name a retired invoice in the demo tenant and are harmless; they are on the record here
+    rather than fought with.
+  * The two retired fixture invoices remain in `public.invoices` with `deleted_at` set. That is what
+    a soft delete is. A `supabase db reset` clears them.
+  * `.env` and `.env.local` were copied into this worktree from the main checkout so the dev server
+    could reach the local stack. Both are gitignored (`.gitignore:6` and `:10`) and neither is in
+    the commit.
+  * `check:migration-numbers` and `check:gate-controls` remain red on this branch alone, for the
+    reason in section 6. Not this PR's to fix.

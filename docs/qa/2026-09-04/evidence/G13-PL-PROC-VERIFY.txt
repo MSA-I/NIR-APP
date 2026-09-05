@@ -1,0 +1,400 @@
+G13 CROSS-VERIFICATION — area PL-* and PROC-*
+=============================================
+Verifier: G13 PL/PROC, agent worktree `agent-a4d50c83aa3e607cd`, 05.09.2026.
+Wrote none of the fixes below. Read, ran, reverted, restored, reported. No product file and no
+spec was changed permanently — `git status --porcelain` was read back clean after every revert
+and is clean at the time of writing.
+
+HOW GIT WAS RUN, because it changes what "my branch" means
+---------------------------------------------------------
+`git reset --hard worktree-qa-sweep-20260904` was REFUSED in my own worktree by this session's
+auto-mode classifier, exactly as `.claude/locks/agent-brief.md` §1 anticipates. Per that
+fallback I worked in the campaign worktree
+`D:\...\NIR-APP\.claude\worktrees\qa-sweep-20260904`, which was already checked out at
+`5a56770c` — the state the reset was meant to produce — and clean. All reverts were made with
+three small Node helpers that REFUSE unless the anchor matches exactly one line/one occurrence,
+so a silent double-edit is impossible, and every restore is byte-for-byte from a backup taken
+before the edit. The commit carrying this file therefore lands on `worktree-qa-sweep-20260904`
+and not on a branch of my own; that is stated in every GATES cell I touched so the two agents
+can still be told apart.
+
+STACK
+-----
+`.claude/locks/supabase` names the G13 "SQL" verifier as holder and says every other verifier in
+this wave runs client oracles only. Nothing below touched the local stack, `supabase db reset`,
+`ci-sql-suites.mjs` without `--list`, `demo:restore`, or `docker exec ... psql`. No production
+write. `npm run verify` whole and `npm run quality` were NOT run.
+
+GREEN BASELINE — the whole set, on the restored tree
+---------------------------------------------------
+  npx vitest run \
+    src/components/receiptConflictReread.spec.ts src/lib/schemaColumns.spec.ts \
+    src/pages/receivingOverReceipt.spec.tsx src/components/ReceiptConflictDialog.spec.tsx \
+    src/pages/priceEditParser.spec.tsx src/pages/hebrewNumberAgreement.spec.tsx \
+    src/pages/orderDetailNotFound.spec.tsx src/pages/neworder/draftResumption.spec.tsx \
+    src/pages/priceListMultiImport.spec.tsx src/pages/supplierLogImportAndNames.spec.tsx \
+    src/components/document-review/priceListReadinessRefusal.spec.tsx \
+    src/pages/priceListSheetMatching.spec.tsx src/pages/productNameQueueWork.spec.tsx \
+    src/components/document-review/priceListDeadEnd.spec.tsx src/lib/productLabel.spec.ts \
+    src/components/document-review/noApprovalRoute.spec.tsx
+  -> Test Files 16 passed (16) · Tests 112 passed (112)
+Run twice: once before any revert and once after the last restore. Identical both times, which
+is also the proof that nothing I reverted stayed reverted.
+
+THE COMMITS THE REDS WERE TAKEN AGAINST
+---------------------------------------
+  4b680e50  fix(receiving)  PROC-01 PROC-03 PROC-04 PROC-07
+  8b0f0775  fix(prices)     PROC-02
+  4803fd4f  fix(i18n)       PROC-05 PL-09
+  ebfa032a  fix(refusals)   PROC-06 PROC-08
+  47d6befb  fix(prices)     PL-01 PL-02 PL-10
+  03850372  fix(prices)     PL-03 PL-04 PL-05 PL-06 PL-07 PL-08 PL-11 PL-12   <- the eight-row commit
+
+THE EIGHT-ROW COMMIT, AND WHY THE REDS BELOW ARE STILL PER ROW
+--------------------------------------------------------------
+The brief warns that reverting `03850372` wholesale would remove all eight fixes at once and
+make each red ambiguous. It was NOT reverted wholesale. Every one of its eight rows got its own
+red from an anchored revert of only the lines that row's own evidence header names, and in every
+case the OTHER rows' tests stayed green in the same run — which is the thing that makes each red
+belong to its row. The same is true of `47d6befb` (three rows, three separate reds) and
+`4b680e50` (four rows, four separate reds). No row below is carrying "the whole commit was
+removed" as its evidence.
+
+=================================================================================
+PER ROW
+=================================================================================
+
+PROC-01 — /receiving/:orderId, the re-read named a column that never existed        VERDICT: MET
+  oracle: npx vitest run src/components/receiptConflictReread.spec.ts src/lib/schemaColumns.spec.ts
+  GREEN 25/25 (2 files).
+  RED   2 failed / 23 passed (25). Produced by putting the shipped defect back into
+        `RECEIPT_CONFLICT_READ.goods_receipts` in src/components/ReceiptConflictDialog.tsx —
+        `created_at` back into the select string and `order: 'created_at'` — the two lines
+        4b680e50 changed. Nothing else.
+        AssertionError: {table:'goods_receipts', absent:['created_at','created_at']}
+                        expected [...] to not include 'created_at'
+  control: every one of `schemaColumns.spec.ts`'s parser tests passed in the SAME red run, so a
+        parser that silently returned nothing would have shown up there instead.
+
+PROC-03 — a surplus quantity shown as a completed line                              VERDICT: MET
+  oracle: npx vitest run src/pages/receivingOverReceipt.spec.tsx
+  GREEN 8/8.
+  RED   4 failed / 4 passed (8) — the same 4-of-8 the original agent recorded. Produced by
+        reverting, in src/pages/Receiving.tsx, the `receiptLineClaim` rule to a constant false
+        and the three JSX wirings it feeds (card tone, badge, the role="alert" hint).
+        AssertionError: expected {overReceipt:false, tone:'done'} to deeply equal
+                        {overReceipt:true, tone:'alert'}
+        AssertionError: {rule:false, badge:false, reason:false, hint:false}
+  controls green in the red run: an exact remainder is still complete; every quantity at or below
+        the remainder is unchanged; the badge string is still not `receiptLine_full`; both
+        languages still carry the hint.
+
+PROC-04 — the dialog blamed an offline race for a live submission                   VERDICT: MET
+  oracle: npx vitest run src/components/ReceiptConflictDialog.spec.tsx
+  GREEN 16/16.
+  RED taken TWICE, deliberately, because the first stops at the wrong assertion:
+   (a) branch + wording reverted -> 1 failed / 15 passed.
+       expected 'receiptConflict.qtyExceedsSummary' not to be 'receiptConflict.qtyExceedsSummary'
+   (b) WORDING ONLY — `he.receiptConflict.qtyExceedsSummary` and its `en` twin restored from
+       4b680e50^ with the fixed branch left in place -> 1 failed / 15 passed, and this is the red
+       that shows the finding itself:
+       expected '...' not to match /לא־מקוון|לא מקוון|המתינה/
+       Received: 'השרת דחה את הקבלה: ... ייתכן שאדם אחר קלט מהזמנה זו בזמן שהמכשיר היה לא־מקוון. ...'
+  control: the PROC-07 assertion in the same file passed in both red runs.
+
+PROC-07 — the same paragraph printed twice                                          VERDICT: MET
+                                                                        (the DOM half; see below)
+  oracle: npx vitest run src/components/ReceiptConflictDialog.spec.tsx
+  GREEN 16/16.
+  RED   1 failed / 15 passed. Produced by re-inserting the one line the fix removed —
+        `<Note tone="alert">{t(presentation.summaryKey)}</Note>` — in place of the comment that
+        replaced it.
+        AssertionError: expected [ <p id="_r_e_" />, ... ] to have a length of 1 but got 2
+  THE SCREENSHOT IS STILL MISSING, and it is not a failure of the fix. The row itself asks for a
+  LIVE dialog: the dev server, a demo sign-in and a deliberate over-receipt on the shared local
+  Supabase stack. `.claude/locks/supabase` names another agent as holder and says in terms that
+  every other verifier in this wave runs client oracles only, so I could not sign in, could not
+  create the over-receipt, and could not reach that dialog on a live screen. What IS proven is
+  proven in the rendered DOM rather than by reading the source: the paragraph is counted in a
+  real render and was seen at 2 before the fix and 1 after. The unverified part is the pixels —
+  that the surviving paragraph reads correctly in RTL at 1440x900 with the compiled stylesheet.
+  Recorded, not glossed, and not counted against the row.
+
+PROC-02 — the manual price editor had a second parser (the browser's)               VERDICT: MET
+  oracle: npx vitest run src/pages/priceEditParser.spec.tsx
+  GREEN 5/5.
+  RED   5 failed / 0 passed. Produced by reverting `EditPriceModal` in src/pages/PriceLists.tsx:
+        `save()` back to `const p = Number(price); if (!p || p <= 0) { toast(...); return; }` with
+        `p_price: p`, and the field back to `<input type="number" step="0.01">`.
+        AssertionError: expected [ 1250 ] to deeply equal []
+        — the finding itself, on the wire to `set_supplier_product_price`, and the same number the
+        original agent recorded.
+  CAVEAT: this spec has no test that passes on both sides. Every one of its five is the finding,
+  so a broken harness and a missing fix would look alike here. The harness is proven only by the
+  green. The red is nonetheless unambiguous because it prints the defect's own value, 1250.
+
+PROC-05 — 'נוצרו 1 הזמנות ספק'                                                       VERDICT: MET
+  oracle: npx vitest run src/pages/hebrewNumberAgreement.spec.tsx -t "PROC-05"
+  GREEN 2/2 in that describe.
+  RED   1 failed / 1 passed. Produced by deleting the sibling the fix added,
+        `newOrder.ordersCreated_one`, from he.ts and en.ts.
+        AssertionError: expected 'נוצרו 1 הזמנות ספק' to be 'נוצרה הזמנת ספק אחת'
+  control: 'is asked with the count the toast is about' passed in the red run, so a dictionary
+        sibling no screen asks for could not have been mistaken for a fix.
+
+PROC-06 — /orders/:id with no record behind it                                      VERDICT: MET
+  oracle: npx vitest run src/pages/orderDetailNotFound.spec.tsx
+  GREEN 2/2.
+  RED   2 failed / 0 passed. Produced by reverting src/pages/Orders.tsx to `.single()` with
+        `as Promise<FullOrder>`, and the not-found branch back to
+        `if (error || !order) return <ErrorNote message={error ?? t('orders.text_14')} />`.
+        The rendered DOM in the failure carries the finding verbatim:
+        <div class="note-alert" role="alert">הפעולה נכשלה. אם הבעיה חוזרת — פנה לתמיכה.</div>
+  CAVEAT: no both-sides control in this file either; both its tests are the finding.
+  NOTE IN THE ORACLE'S FAVOUR: it models PostgREST by `Accept` header rather than by the client's
+        call shape, so it would still hold if the fix were an error classifier instead of
+        `maybeSingle()`. That is the right way round.
+
+PROC-08 — 'הזמנה חדשה' resumed a two-day-old draft on its confirm step               VERDICT: MET
+  oracle: npx vitest run src/pages/neworder/draftResumption.spec.tsx
+  GREEN 4/4.
+  RED   3 failed / 1 passed — the same 3-of-4 the original agent recorded. Produced by reverting
+        the `draftWasNamed` gate and the resumed-draft notice state in
+        src/pages/neworder/NewOrder.tsx, so the stored `editor_step` is adopted again for the
+        unnamed door. The DOM dump in the failure shows the irreversible button, 'אשר ושלח הזמנות'.
+  control: 'still resumes a NAMED draft exactly where it was left' passed in BOTH runs, so the red
+        is the adoption path and not draft resumption in general.
+
+PL-01 — the multi-supplier importer dropped every refused row                       VERDICT: MET
+  oracle: npx vitest run src/pages/priceListMultiImport.spec.tsx
+  GREEN 3/3.
+  RED   2 failed / 1 passed. Produced by removing the two `<SkippedRowsPanel .../>` renders from
+        src/pages/PriceLists.tsx — the preview one and the completion-report one — which is
+        exactly "binds `valid` and drops `skipped` on the floor".
+        TestingLibraryElementError: Unable to find an element with the text: /6 שורות דולגו/
+        — the same message the original agent recorded.
+  control: PL-10's test passed in the same run. PL-02's test also fails here because its second
+        half reads the same panel; that coupling is in the oracle, not in my revert.
+
+PL-02 — the abort named the wrong line and discarded the rows that resolved          VERDICT: MET
+  oracle: npx vitest run src/pages/priceListMultiImport.spec.tsx
+  GREEN 3/3.
+  RED   2 failed / 1 passed. Produced by restoring `unresolved.push({ row: index + 2, ... })` over
+        the ALREADY FILTERED preview and the all-or-nothing guard `if (unresolved.length)`.
+        AssertionError: expected null not to be null   (rpcBody — nothing was written)
+        — the same evidence the original agent recorded.
+  control: PL-01's test passed in the same run. PL-10 also fails here, because the all-or-nothing
+        abort blocks its write too; again a coupling in the fixture, not in the revert.
+
+PL-10 — the catalogue was read unpaged                                              VERDICT: MET
+  oracle: npx vitest run src/pages/priceListMultiImport.spec.tsx
+  GREEN 3/3.
+  RED   1 failed / 2 passed — the cleanest per-row red of the three. Produced by putting both
+        catalogue reads back to a single unwrapped `select()` with no `.range()`.
+        AssertionError: expected null not to be null   (the product past the page cap never
+        resolved, so nothing reached `import_supplier_prices`)
+  controls: PL-01 and PL-02 both green in the same run.
+  WHAT `MET` MEANS HERE, precisely: the row itself says the production symptom was NOT REPRODUCED
+        and the finding is code-level. The oracle caps a fake PostgREST at 1000 rows and asserts
+        two bounded windows were asked for. So this is "the paging behaviour is now pinned", not
+        "the reported production defect existed and is gone". The row says so; I am repeating it
+        because `MET` should not be read as more than it is.
+
+PL-09 — '1 מוצרים חדשים' in the import preview                                       VERDICT: MET
+  oracle: npx vitest run src/pages/hebrewNumberAgreement.spec.tsx -t "PL-09"
+  GREEN 2/2 in that describe.
+  RED   1 failed / 1 passed. Produced by deleting the four `_one` siblings this fix added and
+        that the assertions depend on — `priceUpload.newProducts_one`, `rowsSkipped_one`,
+        `rowsWord_one`, `createInCatalogue_one` — from he.ts. The rendered preview then reads,
+        verbatim in the failure output:
+          '... אחת הותאמה למוצר קיים, 1 מוצרים חדשים. 1 שורות דולגו. ... — שורות 4 ...
+           צור 1 מוצרים חדשים בקטלוג ועדכן את מחירם'
+        i.e. all four defects the finding reported, including 'ועדכן את מחירם' for one product.
+  control: 'keeps the plural form when there really are two of each' passed in the same red run.
+
+PL-04 — a named server refusal shown as "contact support"                           VERDICT: MET
+  oracle: npx vitest run src/components/document-review/priceListReadinessRefusal.spec.tsx
+  GREEN 3/3.
+  RED   2 failed / 1 passed — the same 2-of-3 the original agent recorded. Produced by removing
+        the single `qualified_product_dry_run_context_invalid` pattern from src/lib/errors.ts.
+        AssertionError: expected 'fallback' to be 'qualified_product_dry_run_context_invalid'
+  control: `document_interpretation_unknown`, a DIFFERENT refusal of the same call, passed in the
+        red run and in the green — so the new sentence is not wallpaper.
+
+PL-05 — an approved canonical name imported as a new product                        VERDICT: MET
+  oracle: npx vitest run src/pages/priceListSheetMatching.spec.tsx
+  GREEN 5/5.
+  RED   2 failed / 3 passed. Produced by reverting the two lines in
+        src/components/PriceListUpload.tsx that consult the canonical index:
+          const canonical = byName.has(key) ? undefined : byCanonicalName.get(key);
+          const match     = byName.has(key) ? byName.get(key) : canonical ?? undefined;
+        back to `const match = byName.get(key);`.
+        AssertionError: expected 'סבון ידיים נוזלי — 4 ליטר ‏18.90 ‏₪ מוצר חדש'
+                        not to contain 'מוצר חדש'
+        AssertionError: expected undefined to be 18.9   (no price reached `prod-soap`)
+
+  THE CONTROL THE BRIEF ASKED ABOUT: IT IS THERE, AND IT DISCRIMINATES.
+    `priceListSheetMatching.spec.tsx:158` — 'בקרה — השם השמור מנצח תמיד; שם קנוני הוא מפתח שני,
+    לא תחליף'. The fixture holds `prod-jam-raw` (raw name 'ריבה', no display_name) and
+    `prod-jam-canonical` (raw name 'ריבת חלב', display_name 'ריבה'), the sheet carries a 'ריבה'
+    row, and the test asserts the write contains `prod-jam-raw` and NOT `prod-jam-canonical`.
+    It passed in BOTH runs, which is what a control has to do.
+    I also checked that the control is not vacuous — i.e. that a fix which SILENTLY REORDERED the
+    matches would actually fail it. It would. The implementation builds the canonical index with
+    `if (byName.has(key)) continue;` and reads it with `byName.has(key) ? byName.get(key) :
+    canonical`, so the raw index is consulted first and always wins; put the canonical index
+    first and the 'ריבה' row resolves to `prod-jam-canonical` and this assertion goes red. The
+    ambiguity case is preserved on the same principle: `byName` stores `null` for a name two
+    products share and `has` (not `get`) is what decides whether to fall through, so a shared raw
+    name is still an answer rather than a miss.
+    Nothing to report here. The fix is additive by construction and the oracle proves it.
+
+PL-07 — rounding to the currency's minor units was silent                           VERDICT: MET
+  oracle: npx vitest run src/pages/priceListSheetMatching.spec.tsx
+  GREEN 5/5.
+  RED   1 failed / 4 passed. Produced by removing the one JSX line that reads the flag —
+        `{r.rounded && <span className="badge-idle ms-2">{t('priceUpload.priceRounded')}</span>}`.
+        AssertionError: expected 'בצל יבש ‏1.23 ‏₪ מוצר קיים' to match /עוגל/
+        — the same message the original agent recorded.
+  control: in the same assertion, the 7.00 row must NOT be marked; green in both runs.
+
+PL-12 — the sheet door never stated its matching key                                VERDICT: MET
+  oracle: npx vitest run src/pages/priceListSheetMatching.spec.tsx
+  GREEN 5/5.
+  RED   1 failed / 4 passed. Produced by removing the `data-testid="sheet-match-rule"` paragraph.
+        TestingLibraryElementError: Unable to find an element by:
+                                    [data-testid="sheet-match-rule"]
+        — the same message the original agent recorded.
+  controls: PL-05 (all three) and PL-07 green in the same run.
+
+PL-11 — a supplier price list with no route, and 'בעיבוד' on a document that had finished
+                                                                                     VERDICT: MET
+  oracle: npx vitest run src/components/document-review/priceListDeadEnd.spec.tsx
+          (run beside src/components/document-review/noApprovalRoute.spec.tsx as a neighbour)
+  GREEN 4/4 in the file; 10/10 with the neighbour.
+  RED   2 failed / 2 passed in the file (2 failed / 8 passed across both) — the same 2-of-4 the
+        original agent recorded. Produced by reverting BOTH halves: the `quote` branch removed
+        from `noApprovalRouteNextStep` in assessment.ts, and `awaitingApproval` folded back into
+        `canStart` in PriceListReviewConfirmation.tsx with the badge and paragraph reading the
+        folded answer again.
+        Expected: null   Received: <span class="badge-info">בעיבוד</span>
+        — the finding on screen, in the DOM.
+  controls: an invoice still gets no next-step paragraph, and a job genuinely at `processing`
+        still reads 'בעיבוד'; both green in the red run, and the whole of DOC-06's
+        `noApprovalRoute.spec.tsx` stayed green, so the quote branch did not disturb its
+        neighbour.
+
+PL-03 — the import row named no supplier and said 'אין נתוני מחיר'                   VERDICT: MET
+  oracle: npx vitest run src/pages/supplierLogImportAndNames.spec.tsx
+  GREEN 6/6.
+  RED   2 failed / 4 passed — the two clauses of the finding, separately. Produced by forcing
+        `importSupplier` to null (removing the `supplierByCorrelation` read) and deleting the
+        `importOutcome` branch from the change cell, both in src/pages/SupplierLog.tsx.
+        AssertionError: expected '6 שורות מחירון' to contain 'ספק הבדיקה'
+        AssertionError: expected '... 6 שורות מחירון מחירון קליטת מחירון אין נתוני מחיר ...'
+                        not to contain 'אין נתוני מחיר'
+  control: 'בקרה — שורה שבאמת אין בה נתוני מחיר עדיין אומרת זאת' passed in both runs, and all
+        three PL-06 tests passed in the red run.
+
+PL-06 — the screen promised a ledger no screen could open                            VERDICT: MET
+  oracle: npx vitest run src/pages/supplierLogImportAndNames.spec.tsx \
+                        src/pages/productNameQueueWork.spec.tsx
+  GREEN 6/6 and 4/4.
+  RED   3 failed / 7 passed across the two files — all three PL-06 assertions and nothing else.
+        Produced by reverting all three behavioural pieces: `ENTITY_TYPES` back to two, the
+        `.or(entity_type.in.(...),and(entity_type.eq.products,action.in.(...)))` back to
+        `.in('entity_type', ENTITY_TYPES)`, and `he.productNameReview.intro` back to the sentence
+        that ends at 'כל אישור נרשם ביומן הביקורת.'
+        AssertionError: expected [] to have a length of 1 but got +0
+        TestingLibraryElementError: Unable to find an accessible element with the role "option"
+                                    and name "שמות מוצרים"
+        Expected element to have text content: /יומן עדכון ספקים/
+  control: 'בקרה — עדכון מוצר רגיל אינו נכנס ליומן הספקים' passed in both runs, so the third
+        entity type really is admitted by action and not wholesale; PL-03's and PL-08's tests
+        stayed green in the red run.
+  minor note, not a defect: the intro half is asserted in Hebrew only. `en.productNameReview.intro`
+        WAS updated in the same commit and carries both the screen and the role, so the product is
+        right; it is the oracle that would not notice if a future edit dropped the English half.
+
+PL-08 — the approval queue offered the whole catalogue as work                       VERDICT: MET
+  oracle: npx vitest run src/pages/productNameQueueWork.spec.tsx
+  GREEN 4/4.
+  RED   3 failed / 1 passed. Produced by reverting the tab count in src/pages/Products.tsx to
+        `awaitingName.length` and the split rendering in ProductNameReview.tsx to the single
+        `<ul>{pending.map(...)}</ul>`.
+        Expected element to have text content: /\(2\)/   (the tab counted the whole queue)
+        TestingLibraryElementError: Unable to find an element by:
+                                    [data-testid="name-review-confirm-only"]
+  THE TEST THIS FILE CALLS A CONTROL IS NOT ONE — see the list at the end.
+  the test that DOES hold both sides: the PL-06 test in the same file passed in the red run, so
+        the harness is proven.
+
+=================================================================================
+ORACLES THAT DO NOT ASSERT THEIR FINDING, OR DO NOT ASSERT ALL OF IT
+=================================================================================
+None of these changes a verdict above — every red was real and every red was the finding. These
+are the places where the oracle proves LESS than the row's own oracle column claims, and they are
+the reason this section is not empty.
+
+1. PROC-01 — TWO OF THE THREE CLAUSES IN THE ROW'S ORACLE ARE NEVER ASSERTED.
+   The oracle column reads: "The conflict dialog's re-read selects only columns that exist,
+   RETURNS THE SERVER'S VALUES, and RE-SUBMISSION UNBLOCKS." `receiptConflictReread.spec.ts`
+   asserts the first clause and only the first: it compares the column names in
+   `RECEIPT_CONFLICT_READ` against a schema derived from `supabase/migrations/*.sql`. Nothing
+   anywhere issues a request. `loadReceiptConflict` — the function that would actually return the
+   server's values and clear `rereadErrorKey` — is not exercised by any spec against a fake
+   PostgREST, and `ReceiptConflictDialog.spec.tsx` tests only the BLOCKED state after a failed
+   re-read, never the unblocked one. So "the recovery path now works end to end" is not proven by
+   anything in the tree; what is proven is that the query no longer names an absent column. That
+   is the cause, and it is a good guard, but it is one clause of three. If the coordinator wants
+   the row's own oracle met in full, an msw-backed test of `loadReceiptConflict` returning a
+   populated `ReceiptConflictState` with `rereadErrorKey === null` is the missing piece.
+
+2. PL-08 — THE TEST LABELLED `בקרה` CANNOT PASS ON THE UNFIXED TREE, SO IT IS NOT A CONTROL.
+   `productNameQueueWork.spec.tsx:127` 'בקרה — שום שורה לא נעלמת, וכל אחת עדיין ניתנת לאישור'
+   ends by clicking `screen.getByTestId('name-review-confirm-only-summary')` — a testid the fix
+   itself introduces. It failed in my red run for that reason, not because a row disappeared. Its
+   first half (every `review-<id>` still on screen) IS a genuine both-sides control and is the
+   claim the comment is making, but the two halves are in one `it` and cannot be separated by a
+   reader of the results. As it stands PL-08 has no test that is green on both sides; the harness
+   is proven only because the PL-06 test shares the file. Splitting the `it` in two would fix it.
+
+3. PROC-02 AND PROC-06 HAVE NO BOTH-SIDES CONTROL AT ALL.
+   Every test in `priceEditParser.spec.tsx` (5) and in `orderDetailNotFound.spec.tsx` (2) fails on
+   the unfixed tree. The agent brief asks for "a control that passes in both runs, so a red that is
+   really a broken harness is visible as such", and neither file has one. Both reds print the
+   defect's own value (`[ 1250 ]`; the support sentence in the DOM), so I am satisfied they are
+   real — but the files cannot tell a reader that on their own.
+
+4. PROC-03 ASSERTS HALF ITS CLAIM BY GREPPING THE SOURCE OF A FILE IT DOES NOT RENDER.
+   `receivingOverReceipt.spec.tsx:72-85` checks four substrings of `src/pages/Receiving.tsx`,
+   including the exact formatting of a ternary
+   (`"? { label: t('receiving.overReceiptBadge'), tone: 'alert' as const }"`) and a regex over the
+   JSX (`/overReceipt && \(\s*<p role="alert"/`). The spec explains why — `Receiving` needs a
+   session, a router and a receipt, and a mock deep enough to paint it would prove the mock — and
+   the RULE itself (`receiptLineClaim`) is unit-tested properly, which is the part that matters.
+   But the wiring assertions would go red on a semantically identical reformat, and would go GREEN
+   on wiring that is present and unreachable. "before the clerk finishes a whole receipt", which is
+   the timing half of the row's oracle, is asserted by grep and not by a render.
+
+5. PL-10's `MET` IS NARROWER THAN THE ROW MIGHT READ.
+   Stated again here because it belongs in this list: the row itself says NOT REPRODUCED, and the
+   oracle proves the client asks for bounded windows against a fake capped at 1000 rows. It does
+   not and cannot prove that a real catalogue ever silently stopped resolving in production.
+
+6. PL-06's INTRO CLAUSE IS ASSERTED IN HEBREW ONLY (detail in the row above). The product is
+   correct in both locales today; the oracle would not notice if that stopped being true.
+
+=================================================================================
+WHAT I DID NOT RUN, AND WHY
+=================================================================================
+- `npm run verify` whole and `npm run quality`: forbidden to verifiers by the verify brief.
+- Any `check:*` guard: none of my rows is a guard row, and I changed no file permanently, so
+  there was nothing for a guard to measure that the campaign's own baseline has not already
+  measured.
+- Anything touching the local Supabase stack: the lock is held by the G13 SQL verifier and that
+  file says every other verifier in this wave runs client oracles only.
+- The PROC-07 live screenshot: see that row. It needs the dev server plus a demo sign-in plus a
+  deliberate over-receipt on the held stack.
+- `tsc --noEmit`: not run. Every revert was restored byte-for-byte from a backup and
+  `git status --porcelain` was read back clean after each one, which is the stronger statement.

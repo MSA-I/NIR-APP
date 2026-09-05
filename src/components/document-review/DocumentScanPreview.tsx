@@ -236,7 +236,7 @@ export function DocumentScanPreview({
             <ScanLine size={ICON.lg} className="text-action" aria-hidden="true" />
             <h2 id="document-scan-title" className="section-title">{t('scanPreview.text_7')}</h2>
           </div>
-          <p className="mt-1 break-words text-sm text-ink-muted"><bdi>{fileName}</bdi></p>
+          <p className="mt-1 break-words text-sm text-ink-muted"><bdi dir="ltr">{fileName}</bdi></p>
         </div>
         <span className={state.status === 'accepted' ? 'badge-done' : state.status === 'failed' ? 'badge-alert' : 'badge-await'}>
           {state.status === 'queued' ? t('scanPreview.text_8')

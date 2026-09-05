@@ -1,0 +1,528 @@
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-aeb936e34818cc2b1
+
+stderr | src/pages/hebrewNumberAgreement.spec.tsx > ENTRY-08 — the public pricing page agrees in number > says «1 משתמש פעיל» on the rung capped at one, and «15 משתמשים פעילים» on the rung that is not
+In HTML, <div> cannot be a descendant of <p>.
+This will cause a hydration error.
+
+  ...
+    <OrgScopeProvider org="org-test">
+      <ToastProvider>
+        <MemoryRouter>
+          <Router basename={undefined} location={{pathname:"/", ...}} navigationType="POP" navigator={{index:0, ...}} ...>
+            <Pricing>
+              <main className="mx-auto ma...">
+                <header>
+                <Note>
+                <PlanTicketSkeleton rows={4} action={false} testId="pricing-sk...">
+                  <div role="status" aria-busy="true" className="space-y-4" data-testid="pricing-sk...">
+                    <span>
+                    <ul className="plan-tray">
+                      <li className="plan-slot ...">
+                        <span>
+                        <div className="plan-card ...">
+                          <div>
+                          <div>
+                          <div>
+>                         <p className="plan-card__billed">
+                            <Skeleton className="h-3 w-32">
+>                             <div className="skeleton h-3 w-32" aria-hidden={true}>
+                          ...
+                      ...
+        ...
+
+<p> cannot contain a nested <div>.
+See this log for the ancestor stack trace.
+
+ ❯ src/pages/hebrewNumberAgreement.spec.tsx (8 tests | 6 failed) 3606ms
+     × says «1 משתמש פעיל» on the rung capped at one, and «15 משתמשים פעילים» on the rung that is not 166ms
+     × says «1 סניף» on the rung capped at one, and «10 סניפים» on the rung that is not 70ms
+     × counts one new product, one skipped row and one source line in the singular 214ms
+     × confirms one order in the singular and three in the plural, in both locales 2ms
+     × prints «החזרת סחורה» in the table and in the credit card, never the key 3020ms
+     × has no door left that renders the map without resolving it 68ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/hebrewNumberAgreement.spec.tsx > ENTRY-08 — the public pricing page agrees in number > says «1 משתמש פעיל» on the rung capped at one, and «15 משתמשים פעילים» on the rung that is not
+AssertionError: expected 'חינםבתקופת שימוש חודשיתמכסת מסמכים בח…' to contain '1 משתמש פעיל'
+
+Expected: "1 משתמש פעיל"
+Received: "חינםבתקופת שימוש חודשיתמכסת מסמכים בחודש: 2525מסמכים בחודשמכסת מסמכים בחודש: 2525מסמכים בחודשבתקופת שימוש חודשיתעבודה ואוטומציהמה שהמערכת עושה על המסמכיםכלול1 משתמשים פעיליםכלול1 סניפים"
+
+ ❯ src/pages/hebrewNumberAgreement.spec.tsx:122:30
+    120|     await screen.findByTestId('plan-cards');
+    121|
+    122|     expect(planCard('free')).toContain('1 משתמש פעיל');
+       |                              ^
+    123|     expect(planCard('free')).not.toContain('משתמשים פעילים');
+    124|     expect(planCard('pro')).toContain('15 משתמשים פעילים');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/6]⎯
+
+ FAIL  src/pages/hebrewNumberAgreement.spec.tsx > ENTRY-08 — the public pricing page agrees in number > says «1 סניף» on the rung capped at one, and «10 סניפים» on the rung that is not
+AssertionError: expected 'חינםבתקופת שימוש חודשיתמכסת מסמכים בח…' to contain '1 סניף'
+
+Expected: "1 סניף"
+Received: "חינםבתקופת שימוש חודשיתמכסת מסמכים בחודש: 2525מסמכים בחודשמכסת מסמכים בחודש: 2525מסמכים בחודשבתקופת שימוש חודשיתעבודה ואוטומציהמה שהמערכת עושה על המסמכיםכלול1 משתמשים פעיליםכלול1 סניפים"
+
+ ❯ src/pages/hebrewNumberAgreement.spec.tsx:131:30
+    129|     await screen.findByTestId('plan-cards');
+    130|
+    131|     expect(planCard('free')).toContain('1 סניף');
+       |                              ^
+    132|     expect(planCard('free')).not.toContain('סניפים');
+    133|     expect(planCard('pro')).toContain('10 סניפים');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/6]⎯
+
+ FAIL  src/pages/hebrewNumberAgreement.spec.tsx > PL-09 — the price-list import preview agrees in number > counts one new product, one skipped row and one source line in the singular
+AssertionError: expected 'העלאת מחירון — ספק אלפאזוהו 2 שורות ע…' not to contain '1 מוצרים חדשים'
+
+Expected: "1 מוצרים חדשים"
+Received: "העלאת מחירון — ספק אלפאזוהו 2 שורות עבור ספק אלפא: 1 הותאמו למוצרים קיימים, 1 מוצרים חדשים. 1 שורות דולגו.פירוט השורות שדולגולא ניתן לקרוא את המחיר בתא — שורות 4מוצרמחירהתאמהעגבניות‏9.50 ‏₪מוצר קייםמוצר חדש‏7.00 ‏₪מוצר חדשצור מוצר חדש אחד בקטלוג ועדכן את מחירםסיבת העדכון (רשות)חזרהאישור ועדכון מחיריםמעבד את הקובץ"
+
+ ❯ src/pages/hebrewNumberAgreement.spec.tsx:196:28
+    194|     // The summary sentence. «1 מוצרים חדשים» is the wording the sweep…
+    195|     expect(screenText).toContain('מוצר חדש אחד');
+    196|     expect(screenText).not.toContain('1 מוצרים חדשים');
+       |                            ^
+    197|     // The skipped-rows note, and the line list inside its disclosure …
+    198|     expect(screenText).not.toContain('1 שורות דולגו');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/6]⎯
+
+ FAIL  src/pages/hebrewNumberAgreement.spec.tsx > PROC-05 — the supplier-order confirmation agrees in number > confirms one order in the singular and three in the plural, in both locales
+AssertionError: expected 'נוצרו 1 הזמנות ספק' to be 'נוצרה הזמנת ספק אחת' // Object.is equality
+
+Expected: "נוצרה הזמנת ספק אחת"
+Received: "נוצרו 1 הזמנות ספק"
+
+ ❯ src/pages/hebrewNumberAgreement.spec.tsx:225:71
+    223| describe('PROC-05 — the supplier-order confirmation agrees in number',…
+    224|   it('confirms one order in the singular and three in the plural, in b…
+    225|     expect(translateIn('he', 'newOrder.ordersCreated', { count: 1 })).…
+       |                                                                       ^
+    226|     expect(translateIn('he', 'newOrder.ordersCreated', { count: 3 })).…
+    227|     expect(translateIn('en', 'newOrder.ordersCreated', { count: 1 })).…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/6]⎯
+
+ FAIL  src/pages/hebrewNumberAgreement.spec.tsx > FIN-05 — the credit reason reaches the screen as words > prints «החזרת סחורה» in the table and in the credit card, never the key
+TestingLibraryElementError: Unable to find an element with the text: החזרת סחורה. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+<body
+  style=""
+>
+  <div>
+    <div
+      class="space-y-4"
+    >
+      <header
+        class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between "
+      >
+        <div
+          class="min-w-0 space-y-1"
+        >
+          <h1
+            class="page-title break-words"
+          >
+            <span
+              class="flex items-center gap-2"
+            >
+              <svg
+                aria-hidden="true"
+                class="lucide lucide-rotate-ccw"
+                fill="none"
+                height="22"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                viewBox="0 0 24 24"
+                width="22"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"
+                />
+                <path
+                  d="M3 3v5h5"
+                />
+              </svg>
+               
+              זיכויים
+            </span>
+          </h1>
+          <span
+            aria-hidden="true"
+            class="section-mark"
+          />
+          <div
+            class="text-sm text-ink-soft"
+          >
+            סה״כ זיכויים פתוחים:
+             
+            <b
+              class="text-await-fg"
+            >
+              <span
+                class="num"
+              >
+                ‏120.50 ‏₪
+              </span>
+            </b>
+          </div>
+        </div>
+      </header>
+      <div
+        class="card overflow-hidden"
+      >
+        <div
+          class="flex flex-wrap items-center gap-2 p-3 border-b border-line-soft"
+        >
+          <div
+            class="relative flex-1 min-w-44 max-w-xs"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-search absolute top-1/2 -translate-y-1/2 start-3 text-ink-faint"
+              fill="none"
+              height="15"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="15"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="m21 21-4.34-4.34"
+              />
+              <circle
+                cx="11"
+                cy="11"
+                r="8"
+              />
+            </svg>
+            <input
+              aria-label="חיפוש בדרישות זיכוי"
+              class="input ps-9!"
+              placeholder="חיפוש..."
+              value=""
+            />
+          </div>
+          <select
+            aria-label="סינון דרישות זיכוי לפי סטטוס"
+            class="input w-auto!"
+          >
+            <option
+              value="active"
+            >
+              זיכויים פעילים
+            </option>
+            <option
+              value="all"
+            >
+              הכל
+            </option>
+          </select>
+          <div
+            aria-label="סינון דרישות זיכוי לפי חודש"
+            class="flex items-center gap-2 "
+            role="group"
+          >
+            <select
+              aria-label="חודש — סינון דרישות זיכוי לפי חודש"
+              class="input w-auto!"
+              id="_r_4_-month"
+            >
+              <option
+                value=""
+              >
+                כל החודשים
+              </option>
+              <option
+                value="01"
+              >
+                ינואר
+              </option>
+              <option
+                value="02"
+              >
+                פברואר
+              </option>
+              <option
+                value="03"
+              >
+                מרץ
+              </option>
+              <option
+                value="04"
+              >
+                אפריל
+              </option>
+              <option
+                value="05"
+              >
+                מאי
+              </option>
+              <option
+                value="06"
+              >
+                יוני
+              </option>
+              <option
+                value="07"
+              >
+                יולי
+              </option>
+              <option
+                value="08"
+              >
+                אוגוסט
+              </option>
+              <option
+                value="09"
+              >
+                ספטמבר
+              </option>
+              <option
+                value="10"
+              >
+                אוקטובר
+              </option>
+          ...
+
+Ignored nodes: comments, script, style
+<body
+  style=""
+>
+  <div>
+    <div
+      class="space-y-4"
+    >
+      <header
+        class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between "
+      >
+        <div
+          class="min-w-0 space-y-1"
+        >
+          <h1
+            class="page-title break-words"
+          >
+            <span
+              class="flex items-center gap-2"
+            >
+              <svg
+                aria-hidden="true"
+                class="lucide lucide-rotate-ccw"
+                fill="none"
+                height="22"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                viewBox="0 0 24 24"
+                width="22"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"
+                />
+                <path
+                  d="M3 3v5h5"
+                />
+              </svg>
+               
+              זיכויים
+            </span>
+          </h1>
+          <span
+            aria-hidden="true"
+            class="section-mark"
+          />
+          <div
+            class="text-sm text-ink-soft"
+          >
+            סה״כ זיכויים פתוחים:
+             
+            <b
+              class="text-await-fg"
+            >
+              <span
+                class="num"
+              >
+                ‏120.50 ‏₪
+              </span>
+            </b>
+          </div>
+        </div>
+      </header>
+      <div
+        class="card overflow-hidden"
+      >
+        <div
+          class="flex flex-wrap items-center gap-2 p-3 border-b border-line-soft"
+        >
+          <div
+            class="relative flex-1 min-w-44 max-w-xs"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-search absolute top-1/2 -translate-y-1/2 start-3 text-ink-faint"
+              fill="none"
+              height="15"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="15"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="m21 21-4.34-4.34"
+              />
+              <circle
+                cx="11"
+                cy="11"
+                r="8"
+              />
+            </svg>
+            <input
+              aria-label="חיפוש בדרישות זיכוי"
+              class="input ps-9!"
+              placeholder="חיפוש..."
+              value=""
+            />
+          </div>
+          <select
+            aria-label="סינון דרישות זיכוי לפי סטטוס"
+            class="input w-auto!"
+          >
+            <option
+              value="active"
+            >
+              זיכויים פעילים
+            </option>
+            <option
+              value="all"
+            >
+              הכל
+            </option>
+          </select>
+          <div
+            aria-label="סינון דרישות זיכוי לפי חודש"
+            class="flex items-center gap-2 "
+            role="group"
+          >
+            <select
+              aria-label="חודש — סינון דרישות זיכוי לפי חודש"
+              class="input w-auto!"
+              id="_r_4_-month"
+            >
+              <option
+                value=""
+              >
+                כל החודשים
+              </option>
+              <option
+                value="01"
+              >
+                ינואר
+              </option>
+              <option
+                value="02"
+              >
+                פברואר
+              </option>
+              <option
+                value="03"
+              >
+                מרץ
+              </option>
+              <option
+                value="04"
+              >
+                אפריל
+              </option>
+              <option
+                value="05"
+              >
+                מאי
+              </option>
+              <option
+                value="06"
+              >
+                יוני
+              </option>
+              <option
+                value="07"
+              >
+                יולי
+              </option>
+              <option
+                value="08"
+              >
+                אוגוסט
+              </option>
+              <option
+                value="09"
+              >
+                ספטמבר
+              </option>
+              <option
+                value="10"
+              >
+                אוקטובר
+              </option>
+          ...
+ ❯ waitForWrapper ../../../node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ src/pages/hebrewNumberAgreement.spec.tsx:276:31
+    274|     wrap(<Credits />);
+    275|
+    276|     const cell = await screen.findByText('החזרת סחורה');
+       |                               ^
+    277|     expect(cell).toBeInTheDocument();
+    278|     expect(document.body.textContent).not.toContain('creditReason_');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/6]⎯
+
+ FAIL  src/pages/hebrewNumberAgreement.spec.tsx > FIN-05 — the credit reason reaches the screen as words > has no door left that renders the map without resolving it
+AssertionError: expected [ 'src\pages\Credits.tsx:67', …(2) ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   "src\\pages\\Credits.tsx:67",
++   "src\\pages\\Credits.tsx:154",
++   "src\\pages\\Suppliers.tsx:927",
++ ]
+
+ ❯ src/pages/hebrewNumberAgreement.spec.tsx:300:23
+    298|       });
+    299|     }
+    300|     expect(offenders).toEqual([]);
+       |                       ^
+    301|   });
+    302| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/6]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  6 failed | 2 passed (8)
+   Start at  14:10:03
+   Duration  6.71s (transform 849ms, setup 504ms, import 1.31s, tests 3.61s, environment 1.04s)
+
+
+> inplace@0.1.0 check:plurals
+> node scripts/check-plurals.mjs
+
+check:plurals passed: 75 counted phrase(s), 27 with a singular sibling, 48 pinned.

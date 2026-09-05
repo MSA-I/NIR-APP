@@ -9,7 +9,7 @@ import { useAuth } from '../auth/AuthContext';
 import { Breadcrumbs, Card, DataTable, StatusBadge, useToast, Modal, ErrorNote, Note, ConfirmDialog, PageHeader, RecordHeader, RecordSkeleton, SkeletonTable, SubPanel, Tabs, TabPanel, ToggleGroup, ICON, type Column } from '../components/ui';
 import { ReauthModal } from '../components/ReauthModal';
 import { PriceListUploadModal, SUBMISSION_STATUS, submissionMonthLabel } from '../components/PriceListUpload';
-import { Scorecard, RatingStars, PriceSparkline, fmtPct, fmtLeadDays, type SupplierMetrics, type ScoreItem, type ScoreTone } from '../components/supplier-metrics';
+import { Scorecard, RatingStars, PriceSparkline, fmtOtdPct, hasReportableOtd, OTD_MIN_SAMPLES, fmtLeadDays, type SupplierMetrics, type ScoreItem, type ScoreTone } from '../components/supplier-metrics';
 import { canStartSupplierCommerce, SUPPLIER_STATUS, PO_STATUS, INVOICE_REVIEW_STATUS, INVOICE_PAYMENT_STATUS, CREDIT_STATUS, CREDIT_REASON } from '../lib/status';
 import { fmtMoneyExact, fmtNum, fmtDate, fmtDays, productLabel } from '../lib/format';
 import type { Supplier, Category, PurchaseOrder, Invoice, Payment, CreditRequest, SupplierStatus, SupplierProduct, PriceHistory, SupplierPriceSubmission, SupplierBankDetails, SupplierBankMigrationItem, MoneyAmount } from '../lib/types';
@@ -45,10 +45,13 @@ interface SupplierWithBalance extends SupplierRow {
   metrics?: SupplierMetrics;
 }
 
-// On-time tone: green ≥90 / amber ≥75 / red <75 — but slate below 5 samples. A red tag drawn
-// from 3 deliveries is a confident lie; a null pct (no promised dates at all) is slate too.
+// On-time tone: green ≥90 / amber ≥75 / red <75 — but slate below the reportable sample size. A
+// red tag drawn from 3 deliveries is a confident lie; a null pct (no promised dates at all) is
+// slate too. The sample threshold itself is `hasReportableOtd` in supplier-metrics.tsx and is
+// shared with /analytics (ruling #356) — this file used to spell it out a second time, and the
+// tile below it gated the same word at `otd_samples > 0`.
 function otdTone(m: SupplierMetrics | null | undefined): ScoreTone {
-  if (!m || m.on_time_pct == null || m.otd_samples < 5) return 'idle';
+  if (!hasReportableOtd(m)) return 'idle';
   if (m.on_time_pct >= 90) return 'done';
   if (m.on_time_pct >= 75) return 'await';
   return 'alert';
@@ -59,7 +62,7 @@ function RiskCell({ m }: { m?: SupplierMetrics }) {
   const { t } = useT();
   const ex = m?.open_exceptions ?? 0;
   const cr = m?.open_credits ?? 0;
-  if (!ex && !cr) return <span className="text-ink-ghost">—</span>;
+  if (!ex && !cr) return <span className="text-ink-muted">—</span>;
   return (
     <span className="flex items-center gap-1">
       {/* Singular is not a rounding error in Hebrew: the plural form read "1 חריגים" on every
@@ -205,12 +208,16 @@ export function SuppliersList() {
     ) },
     { key: 'rating', header: t('suppliers.text_7'), priority: 3, className: 'num', sortValue: (r) => r.rating ?? 0, render: (r) => r.rating != null
         ? <span className="inline-flex items-center gap-1"><Star size={ICON.xs} className="fill-star text-star" aria-hidden="true" />{r.rating}</span>
-        : <span className="text-ink-ghost">—</span> },
+        : <span className="text-ink-muted">—</span> },
     { key: 'cats', header: t('suppliers.join'), priority: 3, render: (r) => <span className="text-ink-muted">{r.categories?.join(', ') || '—'}</span> },
     { key: 'contact', header: t('suppliers.text_8'), priority: 3, render: (r) => r.contact_name || '—' },
     { key: 'phone', header: t('suppliers.text_9'), render: (r) => <span dir="ltr">{r.phone || '—'}</span> },
     { key: 'min', header: t('suppliers.fmtMoneyExact'), priority: 3, className: 'num', sortValue: (r) => r.min_order_amount ?? 0, render: (r) => fmtMoneyExact(r.min_order_amount, r.default_currency) },
-    { key: 'risk', header: t('suppliers.text_10'), mobileLabel: null, render: (r) => <RiskCell m={r.metrics} /> },
+    /* `mobileLabel: null` is for a value that names itself, and this one does not. Two of its
+       three states are a bare number — an em dash when nothing is open, `1 חריג` when something
+       is — sitting on the phone card between `טלפון:` and `יתרה פתוחה:` with nothing saying what
+       it counts. It carries its header like every other field on that card. */
+    { key: 'risk', header: t('suppliers.text_10'), render: (r) => <RiskCell m={r.metrics} /> },
     {
       key: 'balance', header: t('suppliers.balanceHeader'), className: 'num',
       /* Sorted on the organisation's own currency: a column holding two currencies has no single
@@ -241,6 +248,7 @@ export function SuppliersList() {
       <DataTable rows={rows} columns={columns} searchable
         searchFn={(r, q) => r.name.toLowerCase().includes(q) || (r.contact_name ?? '').toLowerCase().includes(q) || (r.tax_id ?? '').toLowerCase().includes(q)}
         searchLabel={t('suppliers.searchLabel')}
+        columnPicker="suppliers"
         rowLabel={(r) => t('suppliers.rowLabel', { name: r.name })}
         onRowClick={(r) => navigate(`/suppliers/${r.id}`)}
         mobile="cards"
@@ -683,7 +691,7 @@ export function SupplierForm({ supplier, onClose, onSaved, focus }: {
 
 /* ================= Supplier card ================= */
 export function SupplierCard() {
-  const { locale, t } = useT();
+  const { locale, statusLabel, t } = useT();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { profile, organizationAccess } = useAuth();
@@ -801,8 +809,16 @@ export function SupplierCard() {
       },
     {
       label: t('suppliers.text_39'),
-      value: m && m.otd_samples > 0 ? fmtPct(m.on_time_pct) : '—',
-      sub: m && m.otd_samples > 0 ? t('suppliers.otdSamples', { count: m.otd_samples }) : t('suppliers.noDeliveryDate'),
+      /* RULING #356. This read `otd_samples > 0`, so one delivery was enough to print a
+         percentage on a supplier's card — while /analytics claimed five and the tone here
+         already used five. Two screens, two rules, one word. */
+      value: fmtOtdPct(m),
+      /* Three states, not two. The sub-line used to say "no delivery date was entered" for every
+         supplier it would not rate, which is false for the ones that have four receipts: they
+         have dates, just not enough of them to answer the question. */
+      sub: hasReportableOtd(m) ? t('suppliers.otdSamples', { count: m.otd_samples })
+        : m && m.otd_samples > 0 ? t('suppliers.otdBelowMinimum', { min: OTD_MIN_SAMPLES })
+          : t('suppliers.noDeliveryDate'),
       tone: otdTone(m),
     },
     { label: t('suppliers.fmtLeadDays'), value: fmtLeadDays(m?.avg_lead_days ?? null, locale), sub: t('suppliers.fmtLeadDays_2'), tone: 'idle' },
@@ -913,7 +929,9 @@ export function SupplierCard() {
         <TabPanel idPrefix="supplier" tabKey="credits">
         <DataTable rows={data.credits} columns={[
           { key: 'num', header: t('suppliers.numberHeader'), className: 'num', render: (r: CreditRequest) => `#${r.number}` },
-          { key: 'reason', header: t('suppliers.statusLabel'), render: (r: CreditRequest) => CREDIT_REASON[r.reason] },
+          // Resolved, not printed raw: this tab reads the same map `/credits` does, and it had
+          // the same defect (`FIN-05`).
+          { key: 'reason', header: t('suppliers.statusLabel'), render: (r: CreditRequest) => statusLabel(CREDIT_REASON[r.reason]) },
           { key: 'amount', header: t('suppliers.fmtMoneyExact_6'), className: 'num', sortValue: (r: CreditRequest) => r.amount, render: (r: CreditRequest) => fmtMoneyExact(r.amount, r.currency) },
           { key: 'status', header: t('suppliers.text_51'), render: (r: CreditRequest) => <StatusBadge meta={CREDIT_STATUS[r.status]} /> },
           { key: 'date', header: t('suppliers.fmtDate_5'), sortValue: (r: CreditRequest) => r.created_at, render: (r: CreditRequest) => fmtDate(r.created_at) },
@@ -986,7 +1004,7 @@ function SupplierPricesTab({ rows, history, submissions }: {
       key: 'change', header: t('suppliers.text_52'), sortValue: changePct,
       render: (r) => {
         const pct = changePct(r);
-        if (!r.previous_price || pct === 0) return <span className="text-ink-faint">—</span>;
+        if (!r.previous_price || pct === 0) return <span className="text-ink-muted">—</span>;
         // Same treatment as PriceLists.tsx:50-56 (LRM keeps the sign on the correct side in RTL),
         // and the same TOKENS: this is a direction of change, not a status claim, so it speaks
         // trend-*. It used to say alert-solid/done-fg — identical values today, which is exactly
@@ -1000,7 +1018,7 @@ function SupplierPricesTab({ rows, history, submissions }: {
       key: 'trend', header: t('suppliers.text_53'),
       render: (r) => {
         const pts = histBySp.get(r.id) ?? [];
-        return pts.length >= 2 ? <PriceSparkline points={pts} /> : <span className="text-ink-ghost">—</span>;
+        return pts.length >= 2 ? <PriceSparkline points={pts} /> : <span className="text-ink-muted">—</span>;
       },
     },
     { key: 'date', header: t('suppliers.fmtDate_6'), sortValue: (r) => r.price_effective_date, render: (r) => fmtDate(r.price_effective_date) },
@@ -1030,7 +1048,7 @@ function SupplierPricesTab({ rows, history, submissions }: {
                     <StatusBadge meta={SUBMISSION_STATUS[submission.status]} />
                   </div>
                   <div className="mt-1 text-sm text-ink-muted break-words">
-                    <bdi>{submission.file_name ?? t('suppliers.text_57')}</bdi> · {t('suppliers.acceptedWord')} <span className="num">{submission.accepted_count}</span> {t('suppliers.text_58')} <span className="num">{submission.unchanged_count}</span> {t('suppliers.text_59')} <span className="num">{submission.rejected_count}</span>
+                    <bdi dir="ltr">{submission.file_name ?? t('suppliers.text_57')}</bdi> · {t('suppliers.acceptedWord')} <span className="num">{submission.accepted_count}</span> {t('suppliers.text_58')} <span className="num">{submission.unchanged_count}</span> {t('suppliers.text_59')} <span className="num">{submission.rejected_count}</span>
                   </div>
                 </div>
               ))}

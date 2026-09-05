@@ -1,0 +1,22 @@
+# PR25 · DASH-09 · physical measurement, GREEN
+#
+# Same instrument as the RED file beside this one: Microsoft Edge via playwright-core, RTL
+# document, per-character client rects. Two halves — the source no longer ships a second bidi
+# context, and the one context it does ship puts the marker at the same end for every currency.
+# The 6.03px gap is a second thing the forced dir="ltr" had been costing: it reordered the
+# separator space to the far side of the figure, so the marker sat glued to the last digit.
+#
+# script: measure-green.cjs (scratchpad) — exit 0.
+--- source: money figures carrying dir="ltr"
+    src/pages/Dashboard.tsx: 0
+    src/components/Money.tsx: 0
+
+--- layout: the one shipped shape (span.num, no dir), RTL document, Edge
+    ILS | marker LEADS | gap to digits 6.03px
+    USD | marker LEADS | gap to digits 6.03px
+    EUR | marker LEADS | gap to digits 6.03px
+    GBP | marker LEADS | gap to digits 6.03px
+    JPY | marker LEADS | gap to digits 6.03px
+
+DISTINCT MARKER POSITIONS: 1 -> LEADS
+ORACLE HOLDS — one marker position for every currency, one context on the surface

@@ -1,0 +1,159 @@
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a183f8959614045c8
+
+ ❯ src/components/document-review/priceListDeadEnd.spec.tsx (4 tests | 2 failed) 3298ms
+     × נותן את הפעולה האחת שפותחת אותו — תיקון הסוג למחירון 199ms
+     × מסמך שהקריאה שלו הסתיימה אינו מוצג כמעובד רק מפני שהקורא אינו מעלה המסמך 3034ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/components/document-review/priceListDeadEnd.spec.tsx > PL-11 · מחירון ספק שסווג „הצעת מחיר" > נותן את הפעולה האחת שפותחת אותו — תיקון הסוג למחירון
+Error: [2mexpect([22m[31melement[39m[2m).toHaveTextContent()[22m
+
+Expected element to have text content:
+[32m  /מחירון/[39m
+Received:
+[31m  אין פקודת כתיבה בטוחה לסוג הזה, גם בזיהוי מלא. אם הסוג שגוי אפשר לתקן אותו למעלה; אחרת המסמך שמור, ואפשר לשייך אותו לחשבונית או לקבלת סחורה מתוך תיקיית המסמכים.[39m
+ ❯ src/components/document-review/priceListDeadEnd.spec.tsx:132:22
+    130|     const nextStep = screen.getByTestId('no-approval-route-next-step');
+    131|     // The word the reader has to reach for in the type selector, and …
+    132|     expect(nextStep).toHaveTextContent(/מחירון/);
+       |                      ^
+    133|     // And it stays a step, not a state: the action is named, on this …
+    134|     expect(nextStep).toHaveTextContent(/אם הסוג שגוי אפשר לתקן אותו/);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/components/document-review/priceListDeadEnd.spec.tsx > PL-11 · „בעיבוד" שאינו בעיבוד > מסמך שהקריאה שלו הסתיימה אינו מוצג כמעובד רק מפני שהקורא אינו מעלה המסמך
+AssertionError: expected <span class="badge-info"></span> to be null
+
+Ignored nodes: comments, script, style
+[36m<html>[39m
+  [36m<head />[39m
+  [36m<body>[39m
+    [36m<div>[39m
+      [36m<section[39m
+        [33maria-labelledby[39m=[32m"price-list-review-title"[39m
+        [33mclass[39m=[32m"card card-pad min-w-0"[39m
+        [33mdata-testid[39m=[32m"price-list-review-confirmation"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex flex-wrap items-start justify-between gap-3"[39m
+        [36m>[39m
+          [36m<div>[39m
+            [36m<h2[39m
+              [33mclass[39m=[32m"section-title"[39m
+              [33mid[39m=[32m"price-list-review-title"[39m
+            [36m>[39m
+              [0mתוצאות העלאת המחירון האחרונה[0m
+            [36m</h2>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"mt-1 text-sm text-ink-muted"[39m
+            [36m>[39m
+              [0mהמערכת קוראת את המחירון ומתאימה את השורות. התוצאה תופיע כאן בסיום.[0m
+            [36m</p>[39m
+          [36m</div>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"badge-info"[39m
+          [36m>[39m
+            [0mבעיבוד[0m
+          [36m</span>[39m
+        [36m</div>[39m
+        [36m<dl[39m
+          [33mclass[39m=[32m"mt-4 grid gap-3 sm:grid-cols-3"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"rounded-lg bg-surface-sunken p-3"[39m
+          [36m>[39m
+            [36m<dt[39m
+              [33mclass[39m=[32m"text-sm font-medium text-ink-soft"[39m
+            [36m>[39m
+              [0mהספק שהוצע בפירוש[0m
+            [36m</dt>[39m
+            [36m<dd[39m
+              [33mclass[39m=[32m"mt-1 break-words text-ink-body"[39m
+            [36m>[39m
+              [0mפעמית[0m
+            [36m</dd>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"rounded-lg bg-surface-sunken p-3"[39m
+          [36m>[39m
+            [36m<dt[39m
+              [33mclass[39m=[32m"text-sm font-medium text-ink-soft"[39m
+            [36m>[39m
+              [0mמספר שורות שזוהו[0m
+            [36m</dt>[39m
+            [36m<dd[39m
+              [33mclass[39m=[32m"num mt-1 text-ink-body"[39m
+            [36m>[39m
+              [0m1[0m
+            [36m</dd>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"rounded-lg bg-surface-sunken p-3"[39m
+          [36m>[39m
+            [36m<dt[39m
+              [33mclass[39m=[32m"text-sm font-medium text-ink-soft"[39m
+            [36m>[39m
+              [0mעמודים שנקראו[0m
+            [36m</dt>[39m
+            [36m<dd[39m
+              [33mclass[39m=[32m"num mt-1 text-ink-body"[39m
+            [36m>[39m
+              [0m—[0m
+            [36m</dd>[39m
+          [36m</div>[39m
+        [36m</dl>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"mt-4 flex justify-start"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33maria-controls[39m=[32m"price-list-line-details"[39m
+            [33maria-expanded[39m=[32m"false"[39m
+            [33mclass[39m=[32m"btn-secondary"[39m
+            [33mdata-testid[39m=[32m"price-list-details-toggle"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [0mפרטים נוספים[0m
+          [36m</button>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"note-idle mt-4"[39m
+        [36m>[39m
+          [0mהאישור זמין רק למעלה המסמך בתפקיד בעלים, משרד או ספק.[0m
+        [36m</div>[39m
+      [36m</section>[39m
+    [36m</div>[39m
+  [36m</body>[39m
+[36m</html>[39m
+
+- Expected:
+null
+
++ Received:
+<span
+  class="badge-info"
+>
+  בעיבוד
+</span>
+
+ ❯ waitFor.timeout src/components/document-review/priceListDeadEnd.spec.tsx:153:62
+    151|     // The document is at the review gate. It is not being read, and n…
+    152|     // it finishes" — it is waiting for a person.
+    153|     await waitFor(() => expect(screen.queryByText('בעיבוד')).toBeNull(…
+       |                                                              ^
+    154|     expect(screen.queryByText('המערכת קוראת את המחירון ומתאימה את השור…
+    155|       .toBeNull();
+ ❯ runWithExpensiveErrorDiagnosticsDisabled ../../../node_modules/@testing-library/dom/dist/config.js:47:12
+ ❯ checkCallback ../../../node_modules/@testing-library/dom/dist/wait-for.js:124:77
+ ❯ Timeout.checkRealTimersCallback ../../../node_modules/@testing-library/dom/dist/wait-for.js:118:16
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 2 passed (4)
+   Start at  17:21:34
+   Duration  6.94s (transform 1.03s, setup 585ms, import 1.42s, tests 3.30s, environment 1.34s)
+

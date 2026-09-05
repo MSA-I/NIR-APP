@@ -1,0 +1,30 @@
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a266499e2ee47690a
+
+ ❯ src/pages/invoiceBalanceZero.spec.tsx (1 test | 1 failed) 400ms
+     × prints 0.00 for an invoice measured at zero, and — only where no balance was returned 392ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/invoiceBalanceZero.spec.tsx > /invoices — the balance column tells a measured zero from an unknown balance > prints 0.00 for an invoice measured at zero, and — only where no balance was returned
+AssertionError: expected 'N-ZEROאריזות הדרום10.05.2026\u200f900…' to contain '\u200f0.00 \u200f₪'
+
+Expected: "‏0.00 ‏₪"
+Received: "N-ZEROאריזות הדרום10.05.2026‏900.00 ‏₪—מאושרתשולמהטרם הועברה לרו״ח"
+
+ ❯ src/pages/invoiceBalanceZero.spec.tsx:136:37
+    134|     // FIN-09/MON-09: the defect is exactly this line. A measured 0.00…
+    135|     // which is the same glyph the unknown row gets.
+    136|     expect(await rowText('N-ZERO')).toContain(money(0));
+       |                                     ^
+    137|     expect(await rowText('N-ZERO')).not.toContain('—');
+    138|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed (1)
+   Start at  16:06:40
+   Duration  3.69s (transform 906ms, setup 484ms, import 1.34s, tests 400ms, environment 1.18s)
+

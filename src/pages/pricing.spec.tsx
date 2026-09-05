@@ -181,7 +181,9 @@ describe('דף המסלולים הציבורי', () => {
     await settle();
     // One card per plan now, so the four cells of the old «משתמשים» row are one row in each card.
     for (const planKey of ['free', 'basic', 'pro', 'premium']) {
-      const users = within(card(planKey)).getByText(/משתמשים/);
+      // `/משתמש/`, not `/משתמשים/`: the free rung is capped at ONE user and its label now agrees
+      // with that number (`ENTRY-08`). Matching only the plural would pin the defect.
+      const users = within(card(planKey)).getByText(/משתמש/);
       expect(users.textContent).toMatch(/\d/);
     }
   });
@@ -198,7 +200,17 @@ describe('דף המסלולים הציבורי', () => {
   it('מציג את מדרגות היכולת וחלון ההיכרות מתוך חוזה השרת', async () => {
     renderPage();
     await settle();
-    expect(card('free').textContent).toMatch(/קריאה אוטומטית.*30 הימים/);
+    /* The window is still stated on the free rung — but ONCE, in the badge the card reserves for
+       it, and the label beside it is the capability's own name. This used to read
+       `/קריאה אוטומטית.*30 הימים/`, which passed only while the page appended the whole sentence
+       to the label as well: three statements of one fact in a 209px column, and the chip pushed
+       out through the card's border (`ENTRY-06`). Asserting the ROW's state and its badge is the
+       same claim without pinning the defect. */
+    const introRow = card('free').querySelector('[data-row-state="intro"]') as HTMLElement;
+    expect(introRow).not.toBeNull();
+    expect(introRow.querySelector('.plan-row__label')?.textContent?.trim())
+      .toBe('קריאה אוטומטית של מסמכים');
+    expect(introRow.querySelector('.plan-row__tag')?.textContent).toMatch(/30/);
     expect(within(card('basic')).getByText('קריאה אוטומטית של מסמכים')).toBeInTheDocument();
     expect(within(card('pro')).getByText('התאמות בנק')).toBeInTheDocument();
     expect(within(card('premium')).getByText('חיבור למערכות אחרות')).toBeInTheDocument();
@@ -285,7 +297,7 @@ describe('דף המסלולים הציבורי', () => {
     expect(document.querySelectorAll('.overflow-x-auto')).toHaveLength(0);
     expect(screen.queryByRole('region', { name: /השוואת המסלולים/ })).not.toBeInTheDocument();
     // Every rung is reachable by reading, not by scrolling: each card holds its own quota rows.
-    expect(cards.querySelector('[data-plan="free"]')?.textContent).toMatch(/משתמשים/);
+    expect(cards.querySelector('[data-plan="free"]')?.textContent).toMatch(/משתמש/);
     expect(cards.querySelector('[data-plan="free"]')?.textContent).toMatch(/עמודי סריקה/);
   });
 

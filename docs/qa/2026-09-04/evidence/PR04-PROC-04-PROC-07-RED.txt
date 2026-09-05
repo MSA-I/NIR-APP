@@ -1,0 +1,46 @@
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/pr04-receipt-conflict
+
+ ❯ src/components/ReceiptConflictDialog.spec.tsx (16 tests | 2 failed) 435ms
+     × blames an offline race only where one could have happened (PROC-04) 7ms
+     × states the problem once, not twice (PROC-07) 39ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/components/ReceiptConflictDialog.spec.tsx > conflictPresentation — one decision per rejection code > blames an offline race only where one could have happened (PROC-04)
+AssertionError: expected 'receiptConflict.qtyExceedsSummary' not to be 'receiptConflict.qtyExceedsSummary' // Object.is equality
+ ❯ src/components/ReceiptConflictDialog.spec.tsx:76:33
+     74|     const live = conflictPresentation('receipt_qty_exceeds_order', { q…
+     75|     const queued = conflictPresentation('receipt_qty_exceeds_order', {…
+     76|     expect(live.summaryKey).not.toBe(queued.summaryKey);
+       |                                 ^
+     77|
+     78|     // The reported defect: a quantity typed and sent online, on a con…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/components/ReceiptConflictDialog.spec.tsx > the dialog > states the problem once, not twice (PROC-07)
+AssertionError: expected [ <p id="_r_e_" …(1)></p>, …(1) ] to have a length of 1 but got 2
+
+- Expected
++ Received
+
+- 1
++ 2
+
+ ❯ src/components/ReceiptConflictDialog.spec.tsx:206:42
+    204|     // It used to appear twice, word for word — once as the dialog's d…
+    205|     // red box beneath it — which pushed the comparison table off a ph…
+    206|     expect(screen.getAllByText(summary)).toHaveLength(1);
+       |                                          ^
+    207|   });
+    208|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 14 passed (16)
+   Start at  13:30:54
+   Duration  3.56s (transform 816ms, setup 644ms, import 1.22s, tests 435ms, environment 1.04s)
+

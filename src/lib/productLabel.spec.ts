@@ -53,11 +53,35 @@ describe('productLabel', () => {
 const NEITHER_LABEL_NOR_COLUMN: ReadonlyArray<readonly [string, string]> = [
   ['lib/share.ts', 'the WhatsApp order text is read by the supplier'],
   ['lib/orderImage.ts', 'the order image is sent to the supplier'],
-  ['components/PriceListUpload.tsx', 'nameKey(product.name) decides which catalogue row a sheet row is'],
   ['components/QuickCreateProduct.tsx', 'nameKey(product.name) decides whether this is a duplicate'],
   ['pages/Onboarding.tsx', 'the import indexes the catalogue by nameKey(product.name)'],
   ['pages/SupplierLog.tsx', 'the log says what the record said'],
 ];
+
+/**
+ * ONE MATCHING SURFACE READS THE COLUMN, AND THE RULE IS NARROWER THAN THE OLD BAN, NOT WEAKER.
+ *
+ * The rule this file states is that a name WE COMPOSED must never replace the name a supplier
+ * wrote. `PL-04`..`PL-12` of the 2026-09-04 sweep found the cost of stating it as "the identifier
+ * `display_name` may not appear here": `/products` and `/prices` both DISPLAY the canonical name
+ * once a person has approved one, so it is the name a manager copies into a price sheet — and the
+ * sheet importer, indexing the catalogue by the stored name alone, offered that row as a new
+ * product. Ticking the box would have created a second product for the item the approval queue
+ * exists to stop duplicating.
+ *
+ * So `PriceListUpload.tsx` reads the column as a SECOND KEY. The distinction the assertions below
+ * hold is the one that matters:
+ *
+ *   - the helper stays banned, import and call, because substituting a composed label for the raw
+ *     name is still the hazard;
+ *   - the raw index is still built from `nameKey(product.name)` and is still consulted first, so
+ *     no row that resolved before can start resolving to a different product.
+ *
+ * The behaviour behind the second clause is asserted where behaviour belongs — a fixture in
+ * `pages/priceListSheetMatching.spec.tsx` holds a product whose RAW name is the CANONICAL name of
+ * another, and the sheet row must still resolve to the raw one.
+ */
+const LABEL_BANNED_COLUMN_IS_A_SECOND_KEY = 'components/PriceListUpload.tsx';
 
 /**
  * `ProductNameReview.tsx` is the one file that both handles `display_name` and must never render
@@ -90,6 +114,16 @@ describe('the display-only rule', () => {
     expect(source).not.toMatch(/\bdisplay_name\b/);
   });
 
+  it('the sheet importer reads the column as a second key and never as a label', () => {
+    const source = read(LABEL_BANNED_COLUMN_IS_A_SECOND_KEY);
+    expect(source).not.toMatch(IMPORTS_IT);
+    expect(source).not.toMatch(CALLS_IT);
+    // The raw name is still the index a sheet row is matched against first. If this disappears the
+    // exemption above has lost the very thing that made it narrow.
+    expect(source).toMatch(/nameKey\(product\.name\)/);
+    expect(source).toMatch(/\bdisplay_name\b/);
+  });
+
   it('the proposal screen handles the column but never labels a row with it', () => {
     const source = read(HANDLES_THE_COLUMN_BUT_NOT_THE_LABEL);
     expect(source).not.toMatch(IMPORTS_IT);
@@ -113,5 +147,6 @@ describe('the display-only rule', () => {
       expect(existsSync(join(srcRoot, relative))).toBe(true);
     }
     expect(existsSync(join(srcRoot, HANDLES_THE_COLUMN_BUT_NOT_THE_LABEL))).toBe(true);
+    expect(existsSync(join(srcRoot, LABEL_BANNED_COLUMN_IS_A_SECOND_KEY))).toBe(true);
   });
 });

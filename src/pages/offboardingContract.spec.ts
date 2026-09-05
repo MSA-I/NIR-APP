@@ -35,6 +35,29 @@ describe('tenant offboarding UI contract', () => {
     expect(settings).not.toContain('{!offboardingOpen && canWrite && (');
   });
 
+  /**
+   * The step-up prop, pinned in source as well as measured.
+   *
+   * `src/pages/offboardingStepUp.spec.tsx` is the oracle — it mounts the screen and watches the
+   * wire. This is the cheap second lock beside it: one `ReauthModal` serves all three actions, so
+   * the correct value is a conditional, and both mistakes it guards against are one keystroke
+   * away. Dropping the prop restores `skipWhenFresh`'s `true` default and with it `OWN-01` — the
+   * effect in `ReauthModal` that fires `onConfirm` before paint on a fresh `password` AMR. Writing
+   * `skipWhenFresh={false}` instead would start re-prompting for the export link, which the
+   * offboarding ruling never asked for.
+   */
+  it('gates the closure request and its cancellation on a step-up the fresh-JWT skip cannot bypass', () => {
+    expect(settings).toContain("skipWhenFresh={offboardingAction === 'download'}");
+    // The step-up is the only confirmation these two actions get, so it carries what changes.
+    expect(settings).toContain("t('settings.offboardingRequestDetails')");
+    expect(settings).toContain("t('settings.offboardingCancelDetails')");
+    expect(he.settings.offboardingRequestDetails).toContain('קריאה בלבד');
+    expect(he.settings.offboardingCancelDetails).toContain('קריאה בלבד');
+    // The ruling gives neither action a reason field — the sweep's "audited with no reason" half
+    // is the product working as decided, and this keeps a later edit from "helpfully" adding one.
+    expect(settings).not.toContain('reasonLabel={offboardingAction');
+  });
+
   it('requires platform step-up for approve/build/reactivate and keeps export asynchronous in the UI', () => {
     expect(admin).toContain("supabase.rpc('approve_organization_offboarding'");
     expect(admin).toContain("supabase.rpc('reactivate_organization_from_offboarding'");

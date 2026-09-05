@@ -198,6 +198,13 @@ const PATTERNS: [RegExp, string][] = [
     new RegExp(code, 'i'),
     text,
   ]),
+  // MON-04 (`0322`). Ahead of the generic allocation family for the same reason the credit
+  // refusals above are: this one is about a BANK STATEMENT LINE, not about an invoice balance,
+  // and `allocation_exceeds_balance` would send the reader to "the open balance" — a number that
+  // has nothing to do with why the write was refused. `REQ-01` in this same sweep was exactly that
+  // failure: a refusal falling through to a sentence naming a cause that had not happened.
+  [/bank_allocation_exceeds_statement_line/i,
+    'bank_allocation_exceeds_statement_line'],
   [/allocation_exceeds_balance|payment_request_allocation_invalid/i,
     'allocation_exceeds_balance'],
   [/allocation_total_mismatch|bank_allocation_total_mismatch/i,
@@ -231,11 +238,23 @@ const PATTERNS: [RegExp, string][] = [
     'definite_duplicate_invoice_cannot_be_overridden'],
   /* 0315, decision #350. Its own sentence, ahead of nothing and behind nothing that could swallow
      it — no pattern above matches this name. The generic `payment_request_checks_failed` below is
-     the reason it needed one: that sentence tells the reader an invoice was paid or a balance
-     moved, and neither happened here. What happened is that somebody else's approval got to this
-     invoice first, and the money is spoken for until that request is cancelled or executed. */
+     the reason it needed one: a reservation is not a failed check, and folding it into that
+     sentence would describe somebody else's approval as this request's own problem. What happened
+     is that another approval got to this invoice first, and the money is spoken for until that
+     request is cancelled or executed. */
   [/payment_request_invoice_reserved/i,
     'payment_request_invoice_reserved'],
+  /* REQ-01. The barrier behind this name (`0031:895-915`, and the same one re-run at `0073:639`)
+     is a DISJUNCTION — no invoices linked, an invoice that is not this org's or this supplier's or
+     is deleted, an invoice not `approved` for payment, or an allocation above what the invoice
+     still owes. Its sentence used to name one disjunct as fact ("an invoice was paid, or a balance
+     changed") and end in "refresh". On the request the sweep pressed, `paid_invoice_count` was 0,
+     no balance had moved, and refreshing redisplayed the same screen: a cause that did not happen
+     and an instruction that changed nothing. The sentence now names the two disjuncts a person can
+     actually reach and the step for each, and the panel above the button names WHICH invoice
+     (REQ-02) — so between them the reader gets the specific cause without the client guessing at
+     one. Reaching this refusal from the approve button is itself now closed on the unapproved-invoice
+     arm (`PaymentRequests.tsx`, `invoiceUnapproved`); this stays for the race. */
   [/payment_request_checks_failed/i,
     'payment_request_checks_failed'],
   [/payment_request_checks_mismatch/i,
@@ -332,6 +351,23 @@ const PATTERNS: [RegExp, string][] = [
     'invoice_order_invalid'],
   [/invoice_review_transition_invalid/i,
     'invoice_review_transition_invalid'],
+  /* REQ-07. The two refusals behind "אישור לתשלום", raised by the TRIGGER
+     `invoice_three_way_approval_guard` (0099) rather than by an RPC — which is why they were
+     missed: the button calls no function whose name a reader would grep for. Neither string
+     appeared anywhere under `src/`, so both collapsed into FALLBACK, "the action failed — contact
+     support", for a rule the product enforces on purpose and the person can act on. Support is
+     the wrong destination for "the goods have not been receipted against this invoice yet".
+
+     Two lines, not one: the next action is different. One says go and receive the goods (or
+     record an override); the other says this invoice is already in the system and entering it
+     again would pay twice. Collapsing them would restore the defect in a quieter form.
+
+     The 500 they arrive as is NOT fixed here — `using errcode = '55000'` is a migration against
+     that trigger. `docs/GATES.md` carries REQ-07 as blocked on exactly that half. */
+  [/invoice_approval_blocked_three_way_review/i,
+    'invoice_approval_blocked_three_way_review'],
+  [/invoice_approval_blocked_definite_duplicate/i,
+    'invoice_approval_blocked_definite_duplicate'],
   [/invoice_has_financial_references/i,
     'invoice_has_financial_references'],
   [/invoice_not_found/i,
@@ -528,6 +564,11 @@ const PATTERNS: [RegExp, string][] = [
   [/price_list_confirm_forbidden/i, 'price_list_confirm_forbidden'],
   [/price_list_confirm_conflict/i, 'price_list_confirm_conflict'],
   [/price_list_confirm_unavailable/i, 'price_list_confirm_unavailable'],
+  // 0182's readiness dry run refuses ONE context and names it: the document is not a price list,
+  // or it carries no supplier. `PL-04` — no client mapping existed, so a condition the reader can
+  // clear in a single action arrived as `fallback`, "contact support", on a screen that was
+  // already printing „הספק שהוצע בפירוש: לא זוהה" one line above it.
+  [/qualified_product_dry_run_context_invalid/i, 'qualified_product_dry_run_context_invalid'],
   [/monthly_report_snapshot_unattributed_bank_transactions/i, 'monthly_report_snapshot_unattributed_bank'],
   [/monthly_report_snapshot_unattributed_(invoices|payments|credits|exceptions)/i, 'monthly_report_snapshot_unattributed'],
   [/monthly_report_snapshot_legal_entity_invalid|unit_out_of_scope/i, 'monthly_report_snapshot_legal_entity_invalid'],

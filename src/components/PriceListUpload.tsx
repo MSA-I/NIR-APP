@@ -169,6 +169,22 @@ interface SheetPreviewRow {
   productId: string | null;
   /** null productId + ambiguous=true: catalog holds two products with this normalized name. */
   ambiguous: boolean;
+  /**
+   * The row resolved through the product's APPROVED CANONICAL NAME rather than its stored one.
+   *
+   * Worth its own flag because the reader is entitled to know which of the two names matched: the
+   * sheet says one thing, the catalogue stores another, and „מוצר קיים" alone would leave a person
+   * comparing the two columns with no explanation of why they differ.
+   */
+  matchedCanonical: boolean;
+  /**
+   * Rounding to the currency's minor units changed the number the supplier wrote (`PL-07`).
+   *
+   * `parsePrice` has always reported this and its docblock states the contract as "says so when
+   * rounding changed it"; neither consumer read it, so 1.2345 became 1.23 with nothing anywhere
+   * recording that the figure moved.
+   */
+  rounded: boolean;
 }
 
 interface SheetPreview {
@@ -243,12 +259,35 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
     if (!cols.product || !cols.price) {
       throw new PriceDocumentError(t('priceUpload.columnsRequired'));
     }
-    const products = await fetchAll<{ id: string; name: string; active: boolean }>((from, to) =>
-      supabase.from('products').select('id, name, active').order('id').range(from, to));
-    const byName = new Map<string, { id: string; active: boolean } | null>();
+    type CatalogueRow = { id: string; name: string; display_name: string | null; active: boolean };
+    const products = await fetchAll<CatalogueRow>((from, to) =>
+      supabase.from('products').select('id, name, display_name, active').order('id').range(from, to));
+    const byName = new Map<string, CatalogueRow | null>();
     for (const product of products) {
       const key = nameKey(product.name);
       byName.set(key, byName.has(key) ? null : product);
+    }
+    /**
+     * THE APPROVED CANONICAL NAME, AS A SECOND KEY (`PL-05`).
+     *
+     * `/products` and `/prices` both render the canonical name once a person has approved one, so
+     * it is the name a manager copies into a sheet — and this door indexed the catalogue by the
+     * STORED name alone, previewed the row as „מוצר חדש", and would have created a second product
+     * for the item the approval queue exists to stop duplicating.
+     *
+     * Additive, and deliberately so. The stored name is consulted first and always wins: a key the
+     * raw index already holds is skipped here, so no row that resolved before this existed can
+     * start resolving to anything else, and the "two products share a name" refusal keeps its
+     * meaning. This is not `productLabel` — nothing here composes a name or displays one; the
+     * catalogue's own approved alias is being read as an alias.
+     */
+    const byCanonicalName = new Map<string, CatalogueRow | null>();
+    for (const product of products) {
+      const canonical = product.display_name?.trim();
+      if (!canonical) continue;
+      const key = nameKey(canonical);
+      if (byName.has(key)) continue;
+      byCanonicalName.set(key, byCanonicalName.has(key) ? null : product);
     }
     // Every rejection rule of import_supplier_prices is mirrored here per-row, so one bad line is
     // skipped with its reason instead of poisoning the whole batch server-side: in-file duplicates
@@ -278,7 +317,11 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
       const key = nameKey(name);
       if (seenKeys.has(key)) return skipRow(t('priceUpload.has'));
       seenKeys.add(key);
-      const match = byName.get(key);
+      // `has`, not `get`: the raw index stores `null` for a name two products share, and that
+      // ambiguity is an answer. Only a key the raw index never heard of falls through to the
+      // canonical one.
+      const canonical = byName.has(key) ? undefined : byCanonicalName.get(key);
+      const match = byName.has(key) ? byName.get(key) : canonical ?? undefined;
       if (match && !match.active) return skipRow(t('priceUpload.skipRow_3'));
       return {
         name,
@@ -286,7 +329,9 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
         currency,
         unit: normalizeUnitInput(cellText(row, cols.unit) || 'יחידה'),
         productId: match?.id ?? null,
-        ambiguous: match === null,
+        ambiguous: byName.has(key) ? byName.get(key) === null : canonical === null,
+        matchedCanonical: Boolean(canonical),
+        rounded: parsed.rounded,
       } satisfies SheetPreviewRow;
     }, t('importSheet.invalidRow'));
     if (!valid.length) throw new PriceDocumentError(t('priceUpload.PriceDocumentError_5'));
@@ -438,18 +483,33 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
         <div className="space-y-4">
           <Note tone={newRows.length || ambiguousRows.length ? 'await' : 'info'}>
             <span className="min-w-0 flex-1">
-              {t('priceUpload.detectedBefore')}<span className="num">{preview.rows.length}</span>{t('priceUpload.rowsForSupplier')} {supplierName}: <span className="num">{matchedRows.length}</span>{t('priceUpload.existingProducts')}
-              {' '}<span className="num">{newRows.length}</span>{t('priceUpload.newProductsWord')}{ambiguousRows.length ? <>, <span className="num">{ambiguousRows.length}</span>{t('priceUpload.duplicateNamesWord')}</> : null}.
+              {/* Four counted CLAUSES, not six fragments glued to three counters. The old shape
+                  froze every noun in the plural — a one-row file read «1 מוצרים חדשים» — because a
+                  fragment cannot agree with a number it never receives. Each clause now carries its
+                  own `count`, and `t()` picks the `_one` sibling through `Intl.PluralRules`. */}
+              {t('priceUpload.detected', { count: preview.rows.length, supplier: supplierName ?? '' })}{' '}
+              {t('priceUpload.matchedExisting', { count: matchedRows.length })}, {t('priceUpload.newProducts', { count: newRows.length })}{ambiguousRows.length ? <>, {t('priceUpload.duplicateNames', { count: ambiguousRows.length })}</> : null}.
               {preview.skipped.length ? <> {t('priceUpload.rowsSkipped', { count: preview.skipped.length })}</> : null}
             </span>
           </Note>
+          {/* PL-12. The other intake door — the document reviewer — prints its rule outright:
+              „…לפי מק״ט או ברקוד; שם מוצר לעולם אינו מפתח התאמה". This one printed nothing, so the
+              same file read 6 of 16 here and 0 of 16 there and the two screens looked like they
+              disagreed about the file rather than about the key. Two rules are allowed; two silent
+              rules are not. */}
+          <p className="text-xs text-ink-muted" data-testid="sheet-match-rule">
+            {t('priceUpload.matchRule')}
+          </p>
           {preview.skipped.length > 0 && (
             <details className="text-sm">
               <summary className="link flex min-h-11 cursor-pointer items-center">{t('priceUpload.text_8')}</summary>
               <ul className="mt-2 space-y-1 text-ink-soft">
                 {groupSkipped(preview.skipped).map(({ reason: skipReason, rows: skipRows }) => (
                   <li key={skipReason}>
-                    {skipReason}{t('priceUpload.rowsWord')}<span className="num">{skipRows.slice(0, 12).join(', ')}</span>
+                    {/* «שורות» / «שורה» — the noun agrees with how many lines this reason names,
+                        which is what `count` is for. The list itself stays outside the sentence so
+                        the digits keep their own direction (`num`). */}
+                    {skipReason}{t('priceUpload.rowsWord', { count: skipRows.length })}<span className="num">{skipRows.slice(0, 12).join(', ')}</span>
                     {skipRows.length > 12 ? t('priceUpload.andMore', { more: skipRows.length - 12 }) : ''}
                   </li>
                 ))}
@@ -464,8 +524,14 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
                 {preview.rows.slice(0, 100).map((r, i) => (
                   <tr key={i}>
                     <td className="td">{r.name}</td>
-                    <td className="td num">{fmtMoneyExact(r.price, r.currency || supplierCurrency)}</td>
-                    <td className="td">{r.productId ? <span className="badge-done">{t('priceUpload.text_12')}</span>
+                    <td className="td num">
+                      {fmtMoneyExact(r.price, r.currency || supplierCurrency)}
+                      {/* PL-07. The supplier wrote one number and the catalogue will hold another.
+                          `parsePrice` reports it; until now nothing did. */}
+                      {r.rounded && <span className="badge-idle ms-2">{t('priceUpload.priceRounded')}</span>}
+                    </td>
+                    <td className="td">{r.productId
+                      ? <span className="badge-done">{t(r.matchedCanonical ? 'priceUpload.matchedCanonical' : 'priceUpload.text_12')}</span>
                       : r.ambiguous ? <span className="badge-alert">{t('priceUpload.text_13')}</span>
                         : <span className="badge-await">{t('priceUpload.text_14')}</span>}</td>
                   </tr>
@@ -476,7 +542,10 @@ export function PriceListUploadModal({ supplier, onClose, onImported }: {
           {newRows.length > 0 && (
             <label className="flex min-h-11 items-center gap-2 text-sm text-ink-mid">
               <input type="checkbox" className="rounded shrink-0" checked={createNew} onChange={(e) => setCreateNew(e.target.checked)} />
-              {t('priceUpload.createWord')} {newRows.length === 1 ? t('priceUpload.text_15') : <>‏<span className="num">{newRows.length}</span> {t('priceUpload.text_16')}</>}{t('priceUpload.inCatalogueAndUpdate')}
+              {/* One sentence, one key. The hand-rolled `=== 1` got the NOUN right and left the
+                  pronoun behind it plural — «צור מוצר חדש אחד … ועדכן את מחירם», their price, for
+                  one product — because only half the sentence knew the count. */}
+              {t('priceUpload.createInCatalogue', { count: newRows.length })}
             </label>
           )}
           <div><label className="label" htmlFor="price-upload-reason">{t('priceUpload.setReason')}</label><input id="price-upload-reason" className="input" value={reason} onChange={(e) => setReason(e.target.value)} placeholder={t('priceUpload.placeholder')} /></div>

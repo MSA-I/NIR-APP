@@ -1,0 +1,34 @@
+PR 02 — ENTRY-10 / PERM-04, the 404 screen, looked at rather than assumed
+=========================================================================
+
+Harness: local vite (this worktree) on port 5211, signed out, in-app browser.
+Route requested: /no-such-screen
+Date: 2026-09-04
+
+WHAT THE PAGE SAID (read back off the live DOM, not from the source):
+
+    הכתובת הזו לא קיימת
+    ייתכן שהקישור הועתק חלקית או שהמסך הוסר. אפשר לחזור למסך הראשי ולהמשיך משם.
+    למסך הראשי
+
+That is the finding closed at the surface it was reported on: a signed-out visitor asking for a
+path that does not exist is TOLD SO, rather than silently delivered to /login with HTTP 200.
+
+DESKTOP — 1440x900
+  A single centred card on the page ground, no app shell (correct: the shell is mounted behind a
+  session and this visitor has none). Title in the page-title class, body in text-ink-soft, one
+  secondary button. RTL throughout; the button sits under the body, centred.
+  Same card shape as the two refusal screens already in App.tsx, which is the point -- a visitor
+  who has seen one recognises the other.
+
+PHONE — 390x844
+  The card goes full width inside the page padding. The title stays on one line; the body wraps
+  to two. The button keeps its own line and its full tap target. No horizontal overflow, and no
+  text is clipped at either edge.
+
+NOT MEASURED HERE
+  The role-refusal screen (PERM-04's second state) needs a signed-in identity whose role is
+  refused, which is a seeded session rather than a page load. Its content and its DISTINCTNESS
+  from this screen are pinned by src/routeNotFound.spec.tsx, which asserts the two alerts do not
+  carry the same text -- that assertion is the one that would fail if the two screens ever
+  collapsed back into one message.

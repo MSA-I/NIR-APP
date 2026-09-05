@@ -1,0 +1,25 @@
+PR05 - PERM-01 - RED - the static guard on the unfixed tree
+============================================================
+Tree: branch worktree-agent-a3bfa1394780d727a at d9393233 (campaign branch head).
+No product file edited yet: only scripts/check-profile-columns.ts and src/lib/accountColumns.ts
+exist, and the four reads are exactly as the campaign branch has them.
+
+Command: node scripts/check-profile-columns.ts
+Exit code: 1  (0 = pass, 1 = fail)
+
+---- output ----
+check:profile-columns FAILED — `select('*')` on profiles/organizations returns columns no screen renders, and HTTP 403 once 0319 lands.
+
+  auth\AuthContext.tsx:147  await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle(),
+  auth\AuthContext.tsx:154  await supabase.from('organizations').select('*').eq('id', p.org_id).maybeSingle(),
+  auth\AuthContext.tsx:258  await supabase.from('organizations').select('*').eq('id', profile.org_id).maybeSingle(),
+  pages\Settings.tsx:124  unwrap(await supabase.from('profiles').select('*').order('full_name')));
+
+  `*` asks PostgREST for every column the table has, so a profiles read hands every member
+  of the tenant each colleague's phone and backup_email, and an organizations read hands
+  them the commercial columns no tenant screen draws. Migration 0319 revokes those column
+  privileges, after which the `*` expansion asks for a column the client role cannot read
+  and PostgreSQL refuses the whole statement.
+
+  Use PROFILE_COLUMNS / ORGANIZATION_COLUMNS from src/lib/accountColumns.ts.
+  A colleague's phone is read by the owner through organization_people_directory.

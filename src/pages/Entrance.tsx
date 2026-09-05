@@ -562,8 +562,14 @@ export default function Entrance({ initialMode }: { initialMode: EntranceMode })
                   {showPassword ? <EyeOff size={ICON.md} aria-hidden="true" /> : <Eye size={ICON.md} aria-hidden="true" />}
                 </button>
               </div>
+              {/* `min-h-11` for the same reason the consent control above carries it, and it is
+                  the same 44px: this is the door out of a screen somebody is stuck on. Measured
+                  04.09.2026 at 390x844 it was 20px tall (`ENTRY-12`) — the recovery link on a
+                  phone, drawn at a third of the floor the rest of the product holds to.
+                  `inline-flex` and not `inline-block`, so the box grows around the text instead of
+                  the text sitting at the top of a taller box. */}
               <Link to="/forgot-password"
-                className="mt-2 inline-block text-sm text-action underline-offset-2 hover:underline">
+                className="mt-2 inline-flex min-h-11 items-center text-sm text-action underline-offset-2 hover:underline">
                 {t('login.text_13')}
               </Link>
             </div>
@@ -644,11 +650,16 @@ export default function Entrance({ initialMode }: { initialMode: EntranceMode })
         </form>
 
         {/* The switch. A button and not a Link, because the whole point is that nothing navigates:
-            the address and password already typed stay exactly where they are. */}
+            the address and password already typed stay exactly where they are.
+            It sits inside a sentence and it is still a 44px target (`ENTRY-12`): `inline-flex`
+            with the floor keeps it in the line's flow while giving the thumb the box the rest of
+            the product promises, and `align-middle` keeps the two halves of the sentence on one
+            baseline instead of pinning the taller box to the bottom of the line. */}
         {!federated && (
           <p className="mt-6 text-center text-sm text-ink-muted">
             {creating ? t('signup.alreadyHaveAccount') : t('login.noAccountYet')}{' '}
-            <button type="button" className="link font-medium text-action underline-offset-2 hover:underline"
+            <button type="button"
+              className="link inline-flex min-h-11 items-center align-middle font-medium text-action underline-offset-2 hover:underline"
               onClick={() => { setMode(creating ? 'signIn' : 'createBusiness'); setError(null); }}>
               {creating ? t('signup.text_18') : t('login.text_7')}
             </button>
@@ -699,11 +710,15 @@ export default function Entrance({ initialMode }: { initialMode: EntranceMode })
         </div>
       </Card>
       {/* Outside the card, on the page canvas — flex+gap rather than space-x-3, because the app is
-          RTL and space-x uses the physical axis. */}
-      <div className="mt-5 flex justify-center gap-3 text-xs text-ink-muted">
-        <Link to="/terms" className="hover:underline">{t('login.text_21')}</Link>
+          RTL and space-x uses the physical axis.
+          The two links were the smallest targets on the public entrance: 16px tall at 390x844
+          (`ENTRY-12`), on the two documents a visitor is expected to read BEFORE agreeing to
+          anything. They keep their type size — the floor is about the thumb, not about the ink —
+          and `items-center` on the row keeps the separator on their baseline. */}
+      <div className="mt-5 flex items-center justify-center gap-3 text-xs text-ink-muted">
+        <Link to="/terms" className="inline-flex min-h-11 items-center hover:underline">{t('login.text_21')}</Link>
         <span aria-hidden>·</span>
-        <Link to="/privacy" className="hover:underline">{t('login.text_22')}</Link>
+        <Link to="/privacy" className="inline-flex min-h-11 items-center hover:underline">{t('login.text_22')}</Link>
       </div>
     </main>
   );

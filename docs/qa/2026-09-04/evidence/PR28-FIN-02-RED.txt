@@ -1,0 +1,46 @@
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a266499e2ee47690a
+
+ ❯ src/pages/supplierCreditLedger.spec.tsx (2 tests | 2 failed) 299ms
+     × nets its activity ledger to the headline it prints above it 242ms
+     × does show a credit in the ledger for the amount an allocation actually applied 49ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/supplierCreditLedger.spec.tsx > /finance/suppliers/:id — one rule for what a credit took off the debt > nets its activity ledger to the headline it prints above it
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ src/pages/supplierCreditLedger.spec.tsx:160:61
+    158|     // FIN-02: the ledger claims −150 for a credit whose allocated amo…
+    159|     // while the headline says 150. After the fix there is no credit l…
+    160|     expect(lines.some((line) => line.label.includes('#4'))).toBe(false…
+       |                                                             ^
+    161|     expect(lines.reduce((total, line) => total + line.value, 0)).toBe(…
+    162|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/pages/supplierCreditLedger.spec.tsx > /finance/suppliers/:id — one rule for what a credit took off the debt > does show a credit in the ledger for the amount an allocation actually applied
+AssertionError: expected undefined to be defined
+ ❯ src/pages/supplierCreditLedger.spec.tsx:196:20
+    194|
+    195|     const credit = lines.find((line) => line.label.includes('#4'));
+    196|     expect(credit).toBeDefined();
+       |                    ^
+    197|     // Not −150. The lifecycle label is `received` and the money appli…
+    198|     expect(credit?.value).toBe(-60);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed (2)
+   Start at  16:06:46
+   Duration  3.70s (transform 798ms, setup 580ms, import 1.20s, tests 299ms, environment 1.35s)
+

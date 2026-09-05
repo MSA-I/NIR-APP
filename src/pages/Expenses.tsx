@@ -263,7 +263,12 @@ export default function Expenses() {
       const templated = await renderConfiguredReportTemplate({
         exportKey: 'owner_expense_summary', orgId: org.id, values,
       });
-      const fileName = `expenses-${todayISO()}.xlsx`;
+      // Named for the WINDOW, the way the PDF button beside it always was and the way every other
+      // workbook in the product is (`EXP-07`). `todayISO()` here meant two exports of different
+      // periods on the same day landed on one filename, and the second silently replaced the first
+      // in the reader's Downloads folder. The date the file was produced is still inside it, on
+      // row 2 of every sheet, where it says `הופק` and cannot be mistaken for the period.
+      const fileName = `expenses-${from}-${to}.xlsx`;
       if (templated) {
         downloadRenderedWorkbook(templated, fileName);
         toast(t('expenses.toast'));
@@ -297,7 +302,8 @@ export default function Expenses() {
               currency: r.currency,
               count: r.count,
               total: r.total,
-              // A share of an empty total is not 0% — it is unmeasured, so the cell stays empty.
+              // A share of an empty total is not 0% — it is unmeasured, so the cell carries the
+              // one absence marker `workbook.ts` owns (`EXP-03`), the same one the screen shows.
               share: sheetTotalFor(r.currency) > 0 ? r.total / sheetTotalFor(r.currency) : null,
             })),
           },
@@ -472,6 +478,45 @@ export default function Expenses() {
             value={<MoneyByCurrency amounts={data.averages} baseCurrency={baseCurrency} shape="rounded" />}
             context={hasInvoices ? t('expenses.text_22') : t('expenses.text_21')} />
         </div>
+
+        {/* ASSIST-06. This screen has ALWAYS called `get_purchase_metrics(from, to)` — the same
+            RPC, on the same window — and then showed the result to nobody: it went into the Excel
+            export and nowhere else. So the workbook produced by the button above carried one set
+            of figures while the strip above it printed another, and the assistant, which quotes
+            the canonical figures and cites THIS screen as the place to check them, sent the reader
+            to a page where none of its three numbers appeared.
+
+            The strip's own total is not touched and must not be: "every supplier invoice in the
+            range" is a true answer to a different question, and replacing it would be the same
+            defect facing the other way. Both populations are printed, each beside the definition
+            that separates them. No query is added and no scope is widened — this renders a value
+            the screen already held in hand.
+
+            A metric with no rows renders "—" through `MoneyByCurrency`'s own empty, never 0. */}
+        <section className="border-b border-line-strong bg-surface px-4 py-4 sm:px-5" aria-labelledby="canonical-metrics-title">
+          <h2 id="canonical-metrics-title" className="section-title">{t('expenses.canonicalTitle')}</h2>
+          <p className="mt-0.5 text-xs text-ink-muted">{t('expenses.canonicalNote')}</p>
+          <dl className="mt-3 grid grid-cols-1 gap-3 text-sm sm:grid-cols-3">
+            <div>
+              <dt className="text-ink-muted">{t('expenses.canonicalCommitted')}</dt>
+              <dd className="mt-0.5 font-medium text-ink-body">
+                <MoneyByCurrency amounts={data.metrics.committed_by_currency} baseCurrency={baseCurrency} />
+              </dd>
+            </div>
+            <div>
+              <dt className="text-ink-muted">{t('expenses.canonicalGross')}</dt>
+              <dd className="mt-0.5 font-medium text-ink-body">
+                <MoneyByCurrency amounts={data.metrics.gross_expense_by_currency} baseCurrency={baseCurrency} />
+              </dd>
+            </div>
+            <div>
+              <dt className="text-ink-muted">{t('expenses.canonicalNet')}</dt>
+              <dd className="mt-0.5 font-medium text-ink-body">
+                <MoneyByCurrency amounts={data.metrics.net_expense_by_currency} baseCurrency={baseCurrency} />
+              </dd>
+            </div>
+          </dl>
+        </section>
 
         {!hasInvoices ? (
           <div className="border-y border-line-soft bg-surface">

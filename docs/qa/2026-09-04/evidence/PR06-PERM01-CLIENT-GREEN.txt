@@ -1,0 +1,76 @@
+PR06 - PERM-01 - GREEN - the client half of the second commit
+==============================================================
+Same tree as PR06-PERM01-CLIENT-RED.txt plus the behavioural change:
+
+  src/lib/accountColumns.ts   PROFILE_COLUMNS loses `phone`; ORGANIZATION_PEOPLE_COLUMNS added
+  src/lib/types.ts            Profile loses `phone`; OrganizationPerson added
+  src/auth/AuthContext.tsx    the offline synthetic profile stops carrying `phone: null`
+  src/pages/Settings.tsx      a second read of public.organization_people_directory, and BOTH
+                              phone columns -- the roster's and the archived table's -- exist only
+                              when that read answered
+
+Command: npx vitest run src/pages/accountColumnBoundary.spec.tsx
+Result:  6 passed (6)          [ RED was 4 failed | 2 passed ]
+
+  + reads profiles by name, and never asks for a column 0319 revokes
+  + reads the organisation by name, and never asks for the commercial columns   (control)
+  + reads profiles by name rather than with a star
+  + control: the invitations read was already named and is unchanged            (control)
+  + asks the directory for the two columns it needs and draws the number it returns
+  + drops the column, not the roster, when the directory is not there yet
+
+WHY THE LAST ONE IS IN HERE. The bundle ships before the migration is applied, and for those
+minutes `organization_people_directory` does not exist -- PostgREST answers 404 / 42P01. A roster
+that depended on the view would be EMPTY rather than one column short, so the directory is an
+enrichment and its error is deliberately not surfaced. The column is then ABSENT rather than a
+dash in every cell, because a dash is a claim that nobody has a number on file, and that claim
+would be false. Measured both ways: with the view present the colleague's 050-7654321 is drawn and
+the column header exists; with the view absent the header is gone, the number appears nowhere, and
+both people are still listed.
+
+Nothing else moved:
+  npm run typecheck                 clean
+  npx vitest run                    290 files, 2780 passed (2780)   [ 2778 before these two cases ]
+  npm run check:profile-columns     zero select('*') across 580 files
+  npm run check:suite-manifest      128 entries, 124 suites, identical to the baseline in identity
+                                    and order, and in agreement with ci-sql-suites.mjs
+  npm run check:baseline-drift      baselines moved only in the allowed direction
+  npm run check:renumber-closure    307 migrations, 460 numbered dollar tags, 751 filename refs
+  npm run check:exemptions          243 migrations re-assert A1/A3/A5; pin 96 matches
+  npm run check:anchored-replacements  307 scanned, 0 new unnormalised readers
+  npm run check:decision-numbers    333 rulings, 1863 code citations resolve
+  npm run check:exception-labels    12 exception_type values, all mapped
+  npm run check:i18n / plurals / orphan-keys / key-manifest / jsx-space   all pass
+  npm run check:dead-code           knip clean (5 pre-existing config hints)
+
+ONE GUARD IS RED, DELIBERATELY, AND IT MUST NOT BE SILENCED
+  npm run check:migration-numbers
+    check:migration-numbers FAILED - a NEW gap opened in the sequence:
+        0315 -> 0319 - 3 number(s) missing
+
+  This is the campaign's documented merge-order dependency, written down in the coordinator's
+  number lock before any of these migrations existed. origin/main is at 0314; 0316 and 0317 belong
+  to the `docs/ux-remediation-documents-assistant` campaign and 0318 to PR 17 of this one, neither
+  of which is on this branch. The guard is telling the truth -- a lower number landing after a
+  higher one gives production and a fresh reset two different schemas -- and the resolution is
+  merge order, not HISTORICAL_GAPS. Adding the span there would silence a correct guard, which is
+  the "a map that says 0279 -> 0279" failure this repository has already paid for once.
+
+  It has one further consequence recorded here so it is not mistaken for carelessness:
+  `node scripts/check-migration-numbers.mjs --write` exits at the gap check and never reaches the
+  set-baseline writer, so the new row in scripts/migration-set.baseline.json was appended by hand.
+  It is byte-identical to what --write emits once the gap closes: the same sorted list, two-space
+  indent, trailing newline.
+
+NOT RUN HERE: migration 0319 and suite p112 have not been executed. The local Supabase stack is
+single-occupancy and was held by another agent while this was written; their red and green are in
+PR06-PERM01-SQL-RED.txt / PR06-PERM01-SQL-GREEN.txt.
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a3bfa1394780d727a
+
+
+ Test Files  1 passed (1)
+      Tests  6 passed (6)
+   Start at  06:47:48
+   Duration  4.65s (transform 1.17s, setup 556ms, import 1.73s, tests 793ms, environment 1.27s)
+

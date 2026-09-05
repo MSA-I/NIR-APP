@@ -1,5 +1,3 @@
-import { neutralizeSpreadsheetString } from './documentExport';
-
 /**
  * The one styled .xlsx writer in the product.
  *
@@ -41,6 +39,24 @@ const HEADER_ROW = 4;
 
 export type WorkbookCellType = 'text' | 'number' | 'money' | 'percent' | 'date';
 
+/**
+ * THE ONE REPRESENTATION OF "NOT MEASURED" IN AN EXPORTED CELL (`EXP-03`, 04.09.2026).
+ *
+ * The sweep found the same fact spelled three ways inside ONE workbook, sometimes one row apart:
+ * a blank cell where a quantity was never counted, a literal `0` where a sum was taken over an
+ * empty set, and the em dash where the value happened to pass through `fmtMoneyExact` on its way
+ * in. Which one the accountant got depended on which builder wrote the column.
+ *
+ * A blank cell is the worst of the three because it is invisible. `SUM()` over a column of them
+ * returns 0 and looks reconciled, which is precisely the claim the em dash exists to refuse — and
+ * an accountant cannot tell "nobody measured this" from "the export dropped it". So the marker the
+ * SCREEN uses is the marker the file uses, and it is decided HERE rather than by each builder:
+ * every caller writes `null` for an absence and cannot pick a second spelling for it.
+ *
+ * A MEASURED zero is not this. It stays the number `0`, because it is a measurement.
+ */
+export const ABSENT_CELL = '—';
+
 export interface WorkbookColumn {
   header: string;
   key: string;
@@ -49,9 +65,21 @@ export interface WorkbookColumn {
   type?: WorkbookCellType;
 }
 
-/** A grid: one header row, then one row per record. Most sheets are this. */
-export interface WorkbookTableSheet {
+interface WorkbookSheetShared {
   name: string;
+  /**
+   * This sheet's own banner line, replacing the workbook subtitle on row 2 (`EXP-06`).
+   *
+   * The subtitle is where every sheet asserts the reporting window, so a sheet holding something
+   * the window does NOT govern — the exceptions open at the moment of export — has to say so in
+   * that exact place. Nine rows dated today under a January-2020 banner is not a labelling
+   * preference; it is the banner making a false claim about the rows beneath it.
+   */
+  subtitle?: string;
+}
+
+/** A grid: one header row, then one row per record. Most sheets are this. */
+export interface WorkbookTableSheet extends WorkbookSheetShared {
   columns: WorkbookColumn[];
   rows: Record<string, unknown>[];
   /**
@@ -60,6 +88,14 @@ export interface WorkbookTableSheet {
    * that split a workbook one sheet per currency set it once here instead of per cell.
    */
   moneyFormat?: string;
+  /**
+   * What the sheet says when it has no rows at all (`EXP-05`).
+   *
+   * A header row with nothing under it does not distinguish "this month had no activity" from
+   * "the export was filtered wrong". The screen's own table already says the sentence; the file
+   * was the surface that stayed silent.
+   */
+  emptyNote?: string;
 }
 
 /**
@@ -77,8 +113,7 @@ export interface WorkbookMatrixRow {
   types?: readonly (WorkbookCellType | undefined)[];
 }
 
-export interface WorkbookMatrixSheet {
-  name: string;
+export interface WorkbookMatrixSheet extends WorkbookSheetShared {
   widths: number[];
   matrix: readonly WorkbookMatrixRow[];
   /** Sheet-wide money format; a row may still override it with its own. */
@@ -157,8 +192,8 @@ const BAND = '--color-doc-paper-sink';
  * A date written as `'2026-08-28'` is TEXT to Excel: it will not sort chronologically, will not
  * follow the reader's locale, and cannot be the argument of a date function. The accountant this
  * file is built for does all three. An unparseable date stays the original string rather than
- * becoming an Invalid Date, and `null` stays null — an empty cell is an absence, and CLAUDE.md
- * forbids the fake `0` that would otherwise fill it.
+ * becoming an Invalid Date, and an absent value becomes `ABSENT_CELL` — never the fake `0`
+ * CLAUDE.md forbids, and no longer the blank cell that hid the absence entirely (`EXP-03`).
  */
 /**
  * A date the way a spreadsheet holds one — and the off-by-one this avoids is real money.
@@ -186,19 +221,37 @@ function toSpreadsheetDate(raw: unknown): Date | null {
   return new Date(local.getTime() - local.getTimezoneOffset() * 60_000);
 }
 
-function cellValue(raw: unknown, type: WorkbookCellType): string | number | Date | null {
-  if (raw === null || raw === undefined || raw === '') return null;
+/**
+ * WHY NO NEUTRALIZER RUNS HERE, AND WHY THAT IS THE SAFE DIRECTION (`EXP-10`, 04.09.2026).
+ *
+ * `neutralizeSpreadsheetString` prefixes an apostrophe to any string opening `= + - @ TAB CR`, and
+ * on the CSV path it is load-bearing: a CSV cell is TYPED into the grid by the application that
+ * opens it, the apostrophe is consumed as the spreadsheet's own "this is text" marker, and a
+ * supplier name like `=HYPERLINK(…)` does not execute.
+ *
+ * An .xlsx cell is not typed into anything. A string arrives as `<c t="s">` pointing at the shared
+ * string table, and a cell is a formula only when it carries an `<f>` element — which this writer
+ * produces for no value it is given. So on this path the apostrophe never protected anybody: it
+ * was displayed verbatim to the reader, and the sweep found it on a product whose name legitimately
+ * begins with a hyphen, in a file sent to an accountant. That is tenant data edited on the way out.
+ *
+ * The apostrophe-as-text-prefix an .xlsx CAN express is the `quotePrefix` style attribute, which
+ * lives in the cell's format and not in the string. ExcelJS 4.4.0 does not expose it — measured,
+ * not assumed — and there is nothing to express here anyway. `documentExport.ts` still owns the
+ * rule, unchanged, for the CSV path that needs it.
+ */
+// No `null` in the return type any more: there is no cell this writer leaves empty (`EXP-03`).
+function cellValue(raw: unknown, type: WorkbookCellType): string | number | Date {
+  if (raw === null || raw === undefined || raw === '') return ABSENT_CELL;
   if (type === 'date') {
     const parsed = toSpreadsheetDate(raw);
-    return parsed ?? String(neutralizeSpreadsheetString(String(raw)));
+    return parsed ?? String(raw);
   }
   if (type === 'number' || type === 'money' || type === 'percent') {
     const parsed = typeof raw === 'number' ? raw : Number(raw);
-    return Number.isFinite(parsed) ? parsed : null;
+    return Number.isFinite(parsed) ? parsed : ABSENT_CELL;
   }
-  // Tenant text on its way into a file somebody opens in Excel: a leading `=` or `@` is a formula
-  // there whatever we meant by it. Same neutralizer as documentExport.ts, which owns the rule.
-  return String(neutralizeSpreadsheetString(String(raw)));
+  return String(raw);
 }
 
 const NUMBER_FORMAT: Partial<Record<WorkbookCellType, string>> = {
@@ -234,9 +287,12 @@ export async function buildWorkbook(spec: WorkbookSpec): Promise<Uint8Array> {
     title.getCell(1).value = spec.title;
     title.font = { bold: true, size: 14, ...(palette ? { color: { argb: palette[TITLE_INK] } } : {}) };
     worksheet.mergeCells(1, 1, 1, lastColumn);
-    if (spec.subtitle) {
+    // The sheet's own banner wins over the workbook's. A block the reporting window does not
+    // govern says so HERE — the same row every other sheet asserts the window on (`EXP-06`).
+    const subtitleText = sheet.subtitle ?? spec.subtitle;
+    if (subtitleText) {
       const subtitle = worksheet.getRow(2);
-      subtitle.getCell(1).value = spec.subtitle;
+      subtitle.getCell(1).value = subtitleText;
       subtitle.font = { size: 10, ...(palette ? { color: { argb: palette[TITLE_INK] } } : {}) };
       worksheet.mergeCells(2, 1, 2, lastColumn);
     }
@@ -290,6 +346,16 @@ export async function buildWorkbook(spec: WorkbookSpec): Promise<Uint8Array> {
         from: { row: HEADER_ROW, column: 1 },
         to: { row: HEADER_ROW + sheet.rows.length, column: lastColumn },
       };
+    } else if (sheet.emptyNote) {
+      // A header row with nothing under it says nothing. The sentence goes where the first record
+      // would have been, merged across the grid so it reads as a statement and not as a value in
+      // the first column.
+      const note = worksheet.getRow(HEADER_ROW + 1);
+      const cell = note.getCell(1);
+      cell.value = cellValue(sheet.emptyNote, 'text');
+      cell.alignment = { horizontal: 'right', vertical: 'middle' };
+      if (palette) cell.font = { italic: true, color: { argb: palette[TITLE_INK] } };
+      worksheet.mergeCells(HEADER_ROW + 1, 1, HEADER_ROW + 1, lastColumn);
     }
   }
 

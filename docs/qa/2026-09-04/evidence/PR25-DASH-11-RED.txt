@@ -1,0 +1,66 @@
+# PR25 · DASH-11 · RED
+# oracle: npx vitest run src/pages/dashboardGlanceHonesty.spec.tsx -t DASH-11
+# exit code: 1
+
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-ab86901d055337c47
+
+ ❯ src/pages/dashboardGlanceHonesty.spec.tsx (6 tests | 1 failed | 5 skipped) 436ms
+     × ₪9 מתוך ₪2,353 אינו "0%" 428ms
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 5 skipped (6)
+   Start at  15:11:38
+   Duration  4.53s (transform 993ms, setup 600ms, import 2.00s, tests 436ms, environment 1.22s)
+
+
+stderr | src/pages/dashboardGlanceHonesty.spec.tsx > DASH-11 — חיסכון אמיתי לא מדווח כאפס אחוז > ₪9 מתוך ₪2,353 אינו "0%"
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • POST http://127.0.0.1:55431/rest/v1/rpc/resolve_feature_flags
+
+  • Request body: {}
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • POST http://127.0.0.1:55431/rest/v1/rpc/scheduled_payments_outlook
+
+  • Request body: {"p_horizon_days":30}
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | src/pages/dashboardGlanceHonesty.spec.tsx > DASH-11 — חיסכון אמיתי לא מדווח כאפס אחוז > ₪9 מתוך ₪2,353 אינו "0%"
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • POST http://127.0.0.1:55431/rest/v1/rpc/my_subscription
+
+  • Request body: {}
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/dashboardGlanceHonesty.spec.tsx > DASH-11 — חיסכון אמיתי לא מדווח כאפס אחוז > ₪9 מתוך ₪2,353 אינו "0%"
+AssertionError: expected 'חיסכון משוער \u200f9 \u200f₪ · 0%' not to match /·\s*0%/
+
+- Expected:
+/·\s*0%/
+
++ Received:
+"חיסכון משוער ‏9 ‏₪ · 0%"
+
+ ❯ src/pages/dashboardGlanceHonesty.spec.tsx:214:36
+    212|     // The amount is exact; the percentage beside it must be able to e…
+    213|     expect(saving.textContent).toContain(fmtMoneyRounded(9, 'ILS'));
+    214|     expect(saving.textContent).not.toMatch(/·\s*0%/);
+       |                                    ^
+    215|     // 9 / 2353 = 0.3825…% — one decimal is the precision that can say…
+    216|     expect(saving.textContent).toMatch(/0\.4%/);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+

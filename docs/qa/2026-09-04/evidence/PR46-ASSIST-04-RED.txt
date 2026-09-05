@@ -1,0 +1,74 @@
+PR 46 · ASSIST-04 — RED. The oracle run against the UNFIXED tree.
+
+date:    2026-09-04
+branch:  worktree-agent-a0a2aac045395d268
+tree:    50188f6e + PR 45, plus (a) the oracle and (b) a pure MOVE of ROLE_EXAMPLE_KEYS
+         out of AssistantDialog.tsx into src/components/assistant/roleExamples.ts with
+         EXAMPLE_ANSWERED_BY beside it. No suggestion, dictionary string or role
+         boundary has changed yet.
+command: npx vitest run src/components/assistant/roleSuggestionsAreAnswerable.spec.tsx
+
+2 failed / 5 passed. Both failures name the same opening:
+
+    כמה חשבוניות נקלטו ב־7 הימים האחרונים?  ->  get_business_summary (owner/office)
+
+The first is the table half; the second is the RENDERED half — the accountant's panel
+was opened and all six sentences were found as buttons on screen (every getByRole
+before the failing assertion passed), so the offending opening is genuinely offered
+and not merely listed in a constant.
+
+The five that pass are the controls: the roles are read out of the Edge tool sources
+and the three named tools come back with the roles the server declares (13+ tools
+found, so an empty map cannot pass); every opening maps to a real tool; and the owner
+and office lists are already clean, which is what makes the red about the accountant
+rather than about the mapping.
+
+--------------------------------------------------------------------------------
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a0a2aac045395d268
+
+ ❯ src/components/assistant/roleSuggestionsAreAnswerable.spec.tsx (7 tests | 2 failed) 322ms
+     × offers accountant nothing but questions accountant may have answered 9ms
+     × offers only openings whose tool the accountant may run 300ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/components/assistant/roleSuggestionsAreAnswerable.spec.tsx > ASSIST-04 — the openings are answerable by the role that is offered them > offers accountant nothing but questions accountant may have answered
+AssertionError: expected [ Array(1) ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   "כמה חשבוניות נקלטו ב־7 הימים האחרונים?  ->  get_business_summary (owner/office)",
++ ]
+
+ ❯ src/components/assistant/roleSuggestionsAreAnswerable.spec.tsx:82:23
+     80|         .filter((key) => !(ROLES.get(EXAMPLE_ANSWERED_BY[key]!) ?? [])…
+     81|         .map((key) => `${translate(he, key)}  ->  ${EXAMPLE_ANSWERED_B…
+     82|       expect(refused).toEqual([]);
+       |                       ^
+     83|     });
+     84|   }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/components/assistant/roleSuggestionsAreAnswerable.spec.tsx > ASSIST-04 — the accountant's panel, rendered > offers only openings whose tool the accountant may run
+AssertionError: on screen: כמה חשבוניות נקלטו ב־7 הימים האחרונים? -> get_business_summary: expected [ 'owner', 'office' ] to include 'accountant'
+ ❯ src/components/assistant/roleSuggestionsAreAnswerable.spec.tsx:143:9
+    141|         ROLES.get(EXAMPLE_ANSWERED_BY[key]!),
+    142|         `on screen: ${translate(he, key)} -> ${EXAMPLE_ANSWERED_BY[key…
+    143|       ).toContain('accountant');
+       |         ^
+    144|     }
+    145|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 5 passed (7)
+   Start at  16:05:10
+   Duration  3.79s (transform 1.02s, setup 522ms, import 1.49s, tests 322ms, environment 1.20s)
+

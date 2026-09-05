@@ -33,6 +33,18 @@ export interface AssessmentLine {
   quantity: number | null;
   unit: string | null;
   unit_price: number | null;
+  /**
+   * Why `unit_price` is null, when it is — `private.parse_price`'s own refusal code (0298),
+   * carried onto the line by 0324. `null` here means the price was read.
+   *
+   * It exists because "no price is printed" and "a price is printed that we cannot read as money
+   * in this document's currency" are different facts with different next actions, and before 0324
+   * the line said neither: it was skipped in silence and a header comparison against a sum nobody
+   * measured spoke in its place.
+   */
+  unit_price_refusal?: string | null;
+  /** What the document actually prints in that cell, verbatim, so a refusal can quote it. */
+  unit_price_printed?: string | null;
   discount_amount: number | null;
   vat_rate: number | null;
   line_total: number | null;
@@ -79,7 +91,15 @@ export interface DocumentAssessment {
    * server was already answering a question nothing here could ask.
    */
   totals: {
+    /**
+     * The sum of the document's own line totals — `null`, never `0`, unless every line was
+     * counted. Before 0324 it was emitted as null only at ZERO rows, so a document whose 22 lines
+     * were all skipped for want of a readable unit price printed a measured `0.00` and was then
+     * blocked for disagreeing with its own header. `lines_counted` says how many it covered.
+     */
     lines_net: number | null;
+    /** How many of `lines.length` actually reached `lines_net`. Equal, or `lines_net` is null. */
+    lines_counted?: number;
     lines_discount: number | null;
     header_net: number | null;
     header_vat: number | null;
@@ -182,6 +202,12 @@ export const FINDING_LABEL_KEYS: Record<string, TKey> = {
   price_baseline_unknown: 'assessment.findingPriceBaselineUnknown',
   vat_rate_mismatch: 'assessment.findingVatRateMismatch',
   line_arithmetic_discrepancy: 'assessment.findingLineArithmeticDiscrepancy',
+  // 0324. A line the sum could not use now says so itself. `quantity_unreadable` above was the
+  // only one of the three inputs that had a voice; the unit price and the line total had none.
+  line_unit_price_missing: 'assessment.findingLineUnitPriceMissing',
+  line_unit_price_unreadable: 'assessment.findingLineUnitPriceUnreadable',
+  line_total_missing: 'assessment.findingLineTotalMissing',
+  lines_total_not_measured: 'assessment.findingLinesTotalNotMeasured',
   header_total_differs_from_lines: 'assessment.findingHeaderTotalDiffersFromLines',
   header_arithmetic_discrepancy: 'assessment.findingHeaderArithmeticDiscrepancy',
   credit_required: 'assessment.findingCreditRequired',
@@ -323,6 +349,78 @@ export interface ApprovalEffect {
    * language it is read in, never which branch it describes.
    */
   textKey: TKey;
+}
+
+/**
+ * The subtypes `apply_reviewed_document` accepts, copied from the command's own guard.
+ *
+ * `0110:326` admits `invoice`, `delivery_note` and `tax_receipt` and raises
+ * `document_review_subtype_unsupported` for everything else; `0172` widened it by one to
+ * `credit_note`. Anything outside this set has no approval route AT ALL — it is not blocked
+ * pending a fix, and no amount of correcting the document will make the button work.
+ */
+const APPROVAL_ROUTE_TYPES: ReadonlySet<string> = new Set([
+  'invoice', 'delivery_note', 'tax_receipt', 'credit_note',
+]);
+
+export function hasApprovalRoute(documentType: string | null): boolean {
+  return documentType !== null && APPROVAL_ROUTE_TYPES.has(documentType);
+}
+
+/**
+ * What to do with a document the approval command will never take — DOC-06.
+ *
+ * The screen already said, correctly, that this type has no approval route. It then stopped, and
+ * a payment confirmation read at full confidence became a permanent dead end: the sweep found a
+ * receipt whose only control was disabled and whose screen offered nothing else to press.
+ *
+ * Naming a state is not an instruction. Each sentence here names an action that exists in this
+ * product and that THIS reader can perform — never a route their role cannot open, which is why
+ * none of them points at `/payments` (owner and accountant only, and this screen is the office's).
+ */
+export interface NoApprovalRouteNextStep {
+  textKey: TKey;
+  /** An in-app destination the office role can actually reach, or null when the step is here. */
+  to: string | null;
+  linkLabelKey: TKey | null;
+}
+
+export function noApprovalRouteNextStep(documentType: string | null): NoApprovalRouteNextStep | null {
+  if (hasApprovalRoute(documentType)) return null;
+  if (documentType === 'payment_confirmation') {
+    return {
+      textKey: 'assessment.nextStepPaymentConfirmation',
+      to: '/documents',
+      linkLabelKey: 'assessment.nextStepDocumentsFolder',
+    };
+  }
+  if (documentType === 'price_list') {
+    return {
+      textKey: 'assessment.nextStepPriceList',
+      to: '/prices',
+      linkLabelKey: 'assessment.nextStepPriceScreen',
+    };
+  }
+  /**
+   * `PL-11`. Both price lists the sweep found in the tenant were dead ends, and this is the first:
+   * a supplier's price list classified „הצעת מחיר". The generic unrouted sentence below is true and
+   * points at filing the document against an invoice or a goods receipt — which for a price list is
+   * not the action. There is exactly ONE that opens it, the control for it is on this same page,
+   * and what follows it is the price-list intake further down this screen. So the quote says that
+   * instead of inheriting the catch-all.
+   */
+  if (documentType === 'quote') {
+    return {
+      textKey: 'assessment.nextStepQuote',
+      to: '/documents',
+      linkLabelKey: 'assessment.nextStepDocumentsFolder',
+    };
+  }
+  return {
+    textKey: 'assessment.nextStepUnroutedDocument',
+    to: '/documents',
+    linkLabelKey: 'assessment.nextStepDocumentsFolder',
+  };
 }
 
 /**
@@ -518,6 +616,13 @@ export function priceSeedRows(
 export function canSubmit(read: DocumentReviewRead, supplierId: string | null): boolean {
   if (!read.interpretation_id || !supplierId) return false;
   if (!read.document_type) return false;
+  // Not a guess about what the server might refuse — the command names this refusal, by a list of
+  // subtypes copied above from its own guard. Leaving it out did not err toward enabled in any
+  // useful direction: it made whether the button was live depend on something unrelated (whether
+  // the supplier resolved), so the same payment confirmation offered a dead control on one
+  // document and a live one whose only possible outcome is `document_review_subtype_unsupported`
+  // on the next. The screen now says what to do instead — `noApprovalRouteNextStep`.
+  if (!hasApprovalRoute(read.document_type)) return false;
   if (read.document_type === 'delivery_note' && !read.assessment?.order_id) return false;
   if (read.document_type === 'credit_note' && !read.credit_resolution?.resolved) return false;
   return true;

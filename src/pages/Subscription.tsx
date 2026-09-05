@@ -3,6 +3,7 @@ import { CreditCard } from 'lucide-react';
 import { ICON, PageHeader } from '../components/ui';
 import { OrgSubscriptionPanel } from '../components/OrgSubscriptionPanel';
 import { PlanLimitNote } from '../components/PlanLimitNote';
+import { PlanUsagePanel } from '../components/PlanUsagePanel';
 import { SupportContact } from '../components/SupportContact';
 
 /**
@@ -39,6 +40,15 @@ export default function Subscription() {
           cramped duplicated prose this package went out to remove. */}
       <PageHeader title={<span className="flex items-center gap-2"><CreditCard size={ICON.xl} /> {t('subscriptionPage.title')}</span>} />
       <PlanLimitNote metricKey="documents.monthly" />
+      {/* THE THIRD PROMISE IN THE HEADER, ANSWERED — and answered BEFORE the ladder.
+          `OWN-06`: the route description says this screen shows how much of the period's quota is
+          used, and the page rendered a plan badge and five cards and stopped. It is above
+          `OrgSubscriptionPanel` because §12 puts "what is my position right now" ahead of "what
+          else could I buy", and because the ladder is five cards tall — a consumption figure below
+          it is a figure nobody scrolls to. `PlanLimitNote` above it is not the same thing: that one
+          speaks only past 60% and only about documents, which is the right amount of screen for a
+          warning and no amount at all for a meter. */}
+      <PlanUsagePanel />
       <OrgSubscriptionPanel />
       {/* Last, and muted. A customer reaches this screen to see what they are on and what else
           exists; the address they need if something looks wrong belongs after that answer, not

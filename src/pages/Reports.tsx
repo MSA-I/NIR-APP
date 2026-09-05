@@ -65,6 +65,20 @@ function toSnapshotCondition(error: unknown): string {
   return raw;
 }
 
+/**
+ * The window the sibling products report should open on, carried in the address the way every
+ * other tile on this page carries its month.
+ *
+ * `monthRange` ends a month EXCLUSIVELY — the first of the next one — because that is the shape a
+ * `.lt()` predicate needs. The products screen's `to` is INCLUSIVE, and it is also what a person
+ * reads under the title, so the day before is what travels. Confusing the two would put a whole
+ * extra day of purchases inside a July report.
+ */
+function productSummaryHref(month: string): string {
+  const { start, end } = monthRange(month);
+  return `/reports/products?from=${start}&to=${addCalendarDays(end, -1)}`;
+}
+
 export default function Reports() {
   const { profile, org, organizationAccess } = useAuth();
   const baseCurrency = org?.base_currency ?? null;
@@ -439,9 +453,14 @@ export default function Reports() {
       {/* The product summary is a sibling report, reached from here rather than from the main
           navigation: it answers a different question about the same money, and a sub-report that
           earns its own top-level row makes the catalogue longer without making anything easier
-          to find. */}
+          to find.
+
+          It carries the month, like every other link on this page. It was the one that did not,
+          and the cost was not cosmetic: an accountant closing July followed it and exported a
+          SEPTEMBER file (DASH-08 / EXP-02) — migration 0312's own rule, "no link beats a link to
+          the wrong month", applied everywhere here except this line. */}
       <p className="no-print text-sm">
-        <Link className="link" to="/reports/products">{t('reports.text_11')}</Link>
+        <Link className="link" to={productSummaryHref(month)}>{t('reports.text_11')}</Link>
       </p>
 
       <ConfirmDialog open={sendSnapshot !== null} onClose={() => setSendSnapshot(null)}
@@ -668,6 +687,11 @@ export default function Reports() {
                   <div className="min-w-0">
                     <div className="break-words font-medium text-ink-body">{i.supplier.name}</div>
                     <div className="mt-0.5 text-xs text-ink-muted"><span className="num" dir="ltr">{i.invoice_number}</span> · {fmtDate(i.invoice_date)}</div>
+                    {/* תאריך קליטה decides WHICH MONTH an invoice belongs to, so it is not
+                        decoration on the accountant's phone — it was on every desktop row and on
+                        no card (RTL-A11Y-05). Labelled, because a second bare date beside the
+                        invoice date is only a second unexplained date. */}
+                    <div className="mt-0.5 text-xs text-ink-muted">{t('reports.text_31')}: <span className="num">{fmtDate(i.received_date)}</span></div>
                   </div>
                   <div className="num shrink-0 font-semibold text-ink-body">{fmtMoneyExact(i.total_amount, i.currency)}</div>
                 </div>
@@ -690,8 +714,27 @@ export default function Reports() {
             {/* A total row standing over no rows is not information — the empty sentence above
                 already said everything there is to say about this month. */}
             {totals.hasInvoices && (
-              <li className="flex min-h-11 flex-wrap items-center justify-between gap-2 bg-surface-sunken px-4 py-3 font-semibold">
-                <span>{t('reports.text_40')}</span><MoneyByCurrency amounts={orderedTotals(totals.invoices)} baseCurrency={baseCurrency} />
+              /* FIVE figures, not one. The <tfoot> below states לפני מע״מ, מע״מ, סה״כ, שולם and
+                 יתרה; this line stated only סה״כ, so the pre-VAT total an accountant reconciles a
+                 month against appeared nowhere at 390px (RTL-A11Y-05). Same order as the footer,
+                 and `allocated`/`openBalance` are passed exactly as the footer passes them —
+                 null when any invoice has no balance row, which MoneyByCurrency prints as — and
+                 never as a smaller number. */
+              <li className="bg-surface-sunken px-4 py-3 font-semibold">
+                <dl className="grid grid-cols-1 gap-y-1.5">
+                  {([
+                    [t('reports.text_32'), orderedTotals(totals.beforeVat)],
+                    [t('reports.text_33'), orderedTotals(totals.vat)],
+                    [t('reports.text_40'), orderedTotals(totals.invoices)],
+                    [t('reports.text_35'), totals.allocated],
+                    [t('reports.text_36'), totals.openBalance],
+                  ] as [string, MoneyAmount[] | null][]).map(([label, amounts]) => (
+                    <div key={label} className="flex min-h-11 flex-wrap items-center justify-between gap-2">
+                      <dt>{label}</dt>
+                      <dd><MoneyByCurrency amounts={amounts} baseCurrency={baseCurrency} /></dd>
+                    </div>
+                  ))}
+                </dl>
               </li>
             )}
           </ul>

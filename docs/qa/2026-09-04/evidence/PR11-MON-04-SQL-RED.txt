@@ -1,0 +1,131 @@
+PR 11 — MON-04 — SQL RED
+supabase/tests/p115_a_statement_line_is_spent_once.sql on a tree with the bound removed
+Measured 05.09.2026, local stack supabase_db_supplyflow-p0, campaign branch worktree-agent-aa7200391f1c9d18e
+(continuation of worktree-agent-aa933e5ca166007ba, commits 83ce038d + 02af0673).
+
+WHAT WAS REVERTED TO PRODUCE THE RED, AND WHY IT IS ONE OBJECT RATHER THAN A MIGRATION
+--------------------------------------------------------------------------------------
+Migration 0322 was APPLIED IN FULL and then exactly one object was dropped:
+
+    drop trigger bank_allocations_statement_line_guard on public.bank_allocations;
+
+Nothing else changed. The function `public.guard_bank_allocation_within_statement_line()` and the
+index `ba_transaction_idx` stayed in place; the migration set was not touched; the suite file was
+not touched. Holding 0322 back entirely would also have removed the index and the function, so a
+failure could have been read as "the migration is missing" rather than "the bound is missing".
+Dropping the trigger alone makes the red say one thing: the invariant is unasserted.
+
+The suite file is byte-identical in both runs. SHA-256 read back INSIDE the container both times:
+
+    cf42ec1758dab5058d814b8c004a8310842429d785fb52a4f701178657f25886  /var/lib/postgresql/p115.sql
+
+THE HEAD THE RED WAS MEASURED ON — READ, NOT ASSUMED
+-----------------------------------------------------
+The shared stack had been rebuilt at 04:58 local by another campaign, whose migration set predates
+PR 7, so `0315` had been dropped from it. `supabase db reset` was run FROM THIS WORKTREE first, and
+the ledger read back afterwards:
+
+    select version from supabase_migrations.schema_migrations where version >= '0310' order by version;
+    -> 0310 0311 0312 0313 0314 0315 0322
+
+`0315` is present, so PR 7's committed-amount guard is in the database and the money proofs below
+are measuring the right thing. `0316`-`0321` are reserved to other PRs in this campaign and are not
+in this branch; that gap is the known, expected `check:migration-numbers` failure and nothing was
+added to HISTORICAL_GAPS to hide it.
+
+0322's own pre-flight assertion — that no statement line is ALREADY over the bound — passed on this
+stack, as it does on production and on the demo seed. It was not weakened.
+
+Trigger state confirmed immediately before the run:
+
+    select count(*) from pg_trigger where tgname='bank_allocations_statement_line_guard';  -> 0
+
+COMMAND
+-------
+    docker exec -e PGPASSWORD=postgres -e PGTZ=Asia/Jerusalem supabase_db_supplyflow-p0 \
+      psql -U supabase_admin -d postgres -v ON_ERROR_STOP=1 -f /var/lib/postgresql/p115.sql
+
+    exit code 3
+
+THE RED, PER CASE — NOT BY COUNT
+---------------------------------
+psql:/var/lib/postgresql/p115.sql:422: ERROR:  P115 failed — a statement line is not spent once:
+  command_second_full_match: expected 'bank_allocation_exceeds_statement_line', got 'ok'  (MON-04 on the guarded path:
+matching a line that already holds its whole amount confirmed must be refused BY NAME)
+  direct_second_confirmed: expected 'bank_allocation_exceeds_statement_line', got 'ok'  (and the table itself refuses
+a second confirmed allocation whatever wrote it)
+  direct_split_one_over: expected 'bank_allocation_exceeds_statement_line', got 'ok'  (and one shekel past the line is
+refused, so the boundary is where it is claimed to be)
+  move_onto_a_full_line: expected 'bank_allocation_exceeds_statement_line', got 'ok'  (the UPDATE case: an allocation
+MOVED from another line onto a full one is refused BY NAME)
+  race that overflows: 2 insert(s) succeeded and 0 were refused by name; exactly one of each is required
+    session a: 'ok'
+    session b: 'ok'
+CONTEXT:  PL/pgSQL function inline_code_block line 42 at RAISE
+
+That is the whole failure list. Nothing else failed, which is what makes it this finding's red
+rather than a broken harness.
+
+EVERY RECORDED OUTCOME OF THE SAME RUN, READ OUT OF p115.results BEFORE THE SECOND RESET
+-----------------------------------------------------------------------------------------
+The report raises before the suite's own `drop schema`, so the table survived the failure and was
+read directly:
+
+              step              |                expected                | outcome | verdict
+--------------------------------+----------------------------------------+---------+---------
+ command_second_full_match      | bank_allocation_exceeds_statement_line | ok      | FAIL
+ direct_second_confirmed        | bank_allocation_exceeds_statement_line | ok      | FAIL
+ direct_split_first             | ok                                     | ok      | PASS
+ direct_split_one_over          | bank_allocation_exceeds_statement_line | ok      | FAIL
+ direct_split_second            | ok                                     | ok      | PASS
+ direct_suggestion_on_full_line | ok                                     | ok      | PASS
+ move_onto_a_full_line          | bank_allocation_exceeds_statement_line | ok      | FAIL
+ move_onto_a_line_with_room     | ok                                     | ok      | PASS
+ race_fits_session_a            | (race arm)                             | ok      | race
+ race_fits_session_b            | (race arm)                             | ok      | race
+ race_over_session_a            | (race arm)                             | ok      | race
+ race_over_session_b            | (race arm)                             | ok      | race
+ suggestion_beside_a_full_line  | ok                                     | ok      | PASS
+(13 rows)
+
+FIVE CONTROLS GREEN IN THE SAME RUN, plus the race that FITS: `suggestion_beside_a_full_line`,
+`direct_suggestion_on_full_line`, `direct_split_first`, `direct_split_second`,
+`move_onto_a_line_with_room`, and both sessions of `race_fits`. A red in which every case fails is
+a red that proves the harness is broken; these say the harness works and the bound is what is
+missing.
+
+THE MONEY, NOT ONLY THE REFUSALS — WHAT THE UNBOUNDED TABLE ACTUALLY ACCEPTED
+------------------------------------------------------------------------------
+Read from `public.bank_transactions` / `public.bank_allocations` after the failed run:
+
+     reference      | line_amount | currency | confirmed_claimed | suggested
+--------------------+-------------+----------+-------------------+-----------
+ P115-CMD-FULL      |    2950.000 | ILS      |          5900.000 |         0
+ P115-CMD-SUGGESTED |    2950.000 | ILS      |          2950.000 |  2950.000
+ P115-DIRECT        |    2950.000 | ILS      |          5900.000 |  2950.000
+ P115-RACE-FITS     |    2950.000 | ILS      |          2000.000 |         0
+ P115-RACE-OVER     |    2950.000 | ILS      |          4000.000 |         0
+ P115-ROOM          |    5000.000 | ILS      |          2950.000 |         0
+ P115-SOURCE        |    5000.000 | ILS      |                 0 |         0
+ P115-SPLIT         |    2950.000 | ILS      |          2951.000 |         0
+(8 rows)
+
+  * P115-CMD-FULL holds 5,900.00 confirmed against a 2,950.00 line, and it got there through
+    `public.match_bank_transaction` called as an authenticated owner with a real JWT subject —
+    the product's own door, past RLS, `auth_role()` and `p1_financial_command_guard`. The command
+    compares only the payload it was handed (`v_sum` vs `v_tx.amount`, 0023:951) and never what
+    the line already holds.
+  * P115-DIRECT holds 5,900.00 confirmed against 2,950.00 — the same overspend from a direct
+    write, i.e. from the privilege level at which every real write to this table happens, since
+    0023:166 revokes insert/update/delete from `authenticated`.
+  * P115-SPLIT holds 2,951.00 against 2,950.00 — one shekel past the line, accepted.
+  * P115-RACE-OVER holds 4,000.00 against 2,950.00 — two sessions each saw room and both stood.
+  * P115-CMD-SUGGESTED is production's actual shape: one confirmed 2,950.00 beside an unconfirmed
+    2,950.00 suggestion. It is legal in both runs and stays legal.
+
+WHAT THE RED DOES NOT CLAIM
+----------------------------
+The finding's wording — "two CONFIRMED allocations of 2,950.00 each" — is not what production
+holds; see PR11-MON-04-PRODUCTION-MEASUREMENT.txt. Zero lines anywhere have confirmed allocations
+exceeding the line. The defect proved above is the larger one the oracle names: `bank_allocations`
+has carried no bound of any kind since `0001`.

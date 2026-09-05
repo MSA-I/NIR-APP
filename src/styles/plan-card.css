@@ -808,8 +808,17 @@
 .plan-block--none .plan-block__title { color: var(--pc-ink-soft); }
 
 /* ---- one capability row -------------------------------------------------- */
+/* `flex-wrap: wrap` is the one property that makes `ENTRY-06` structurally
+   impossible rather than impossible for today's strings. `.plan-row__tag` is
+   `white-space: nowrap` and `flex: none` — both the reference's, both right, and
+   between them the badge can neither shrink nor break. In a row that may not
+   wrap, a 110px badge in a 209px card therefore leaves the card: measured
+   04.09.2026 at 1440x900, all five of the free rung's intro badges crossed their
+   own card's border, and the label beside them was starved to about 50px and
+   wrapped one word per line, making a 138px row where every other plan's is 17. */
 .plan-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   gap: 0.45rem;
   font-size: 0.8rem;
@@ -832,11 +841,26 @@
    a tick and louder than a cross, because that is what it is. */
 .plan-row--intro { color: var(--pc-ink-soft); }
 .plan-row--intro .plan-row__mark { color: var(--pc-ink-dim); }
-.plan-row__label { flex: 1 1 auto; }
+/* A BASIS, not `auto`, and it is what decides where the badge goes.
+   With `auto` the label's hypothetical size is its whole text, so it is the
+   LABEL that gets pushed onto a line of its own — under the mark — while the
+   badge keeps the first line. 8rem is the width below which a capability name
+   stops being readable at this type size: a badge that would leave the label
+   less than that drops under it instead, and above that width the two share the
+   line exactly as the reference draws them.
+   The `min()` is not decoration. The narrowest card this tray produces is 209px
+   (five tracks inside `max-w-6xl`), which leaves the row 151px, and a flat 8rem
+   basis is one pixel too wide for it — so the label itself wrapped below the
+   mark and every row in every card grew by a line. Clamping the basis to the
+   room actually left keeps the label on the first line at that width and changes
+   nothing at any wider one. */
+.plan-row__label { flex: 1 1 min(8rem, calc(100% - 1.6rem)); }
 /* The reference's chip at the far edge of a row — `7-day unlimited` there, the
-   free plan's thirty-day introduction here. */
+   free plan's thirty-day introduction here. `margin-inline-start: auto` keeps it
+   at that far edge on whichever line it lands on. */
 .plan-row__tag {
   flex: none;
+  margin-inline-start: auto;
   white-space: nowrap;
   border-radius: 6px;
   padding: 0.1rem 0.35rem;
@@ -1044,9 +1068,22 @@
      cards is the spacing the owner asked to get back. */
   .plan-slot__strip--blank { min-block-size: 0; }
 
-  /* The two blocks close. Their rows are still in the DOM and still read by
-     anything that does not lay the page out. */
-  .plan-block { display: none; }
+  /* THE TWO BLOCKS CLOSE ONLY ON A CARD THAT OPENS THEM AGAIN (`ENTRY-02`).
+     This rule used to be unconditional, and it and `PlanTicket` contradicted
+     each other while both were right on their own terms. The reference closes
+     the blocks BECAUSE it draws `.plan-card__more`, a `details` holding the
+     whole ladder for one plan; this product's card lists every row it received
+     inline at every width and therefore refuses to draw that expander, which its
+     own note records among the four parts it does not own.
+     Measured 04.09.2026 at 390x844 on /pricing: 52 entitlement rows in the DOM,
+     ZERO laid out, no control to open them — four plan names and four document
+     counts on the only public page that says what the product does. The rows
+     stayed readable by a screen reader, which is exactly why nothing that reads
+     markup had ever noticed.
+     `:has()` keeps the transcription intact instead of deleting the reference's
+     rule: a card that offers the ladder still closes into it, and a card that
+     offers nothing keeps its rows. */
+  .plan-card:has(.plan-card__more) .plan-block { display: none; }
 
   .plan-card__more { display: block; margin-block-start: 0.6rem; }
 

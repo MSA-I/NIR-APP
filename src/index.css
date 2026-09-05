@@ -1908,6 +1908,24 @@ html[dir='rtl'] { --knob: -1; }
     radial-gradient(46rem circle at var(--glow-x) var(--glow-y),
       color-mix(in oklab, var(--color-action) 17%, transparent), transparent 68%);
 }
+
+/* THE ORB IS OFF IN THE DARK THEME (owner ruling #354, 04.09.2026).
+   The 17% ceiling above is a real measurement and it is a LIGHT-PALETTE measurement. There
+   `--color-action` is deep oceanic ink, so the mix DARKENS the canvas and the table reads the way
+   a table about darkening reads. The dark theme redefines that same token as light paper — see the
+   action block in `:root[data-theme='dark']`, and the reason it gives — so the identical
+   `color-mix` LIFTS the ground instead. Measured on composited pixels, worst position, 1440x900:
+   the ground under the page description rose off the dark canvas into a mid band and `ink-muted`
+   on it read 2.88-3.27:1 across every route that renders, against the 4.5 PRODUCT.md targets. The
+   orb was not painting atmosphere in this theme; it was painting a light band under the type.
+   OFF, AND NOT A NEW TOKEN. Off is the safe shape for reading: it does not touch the approved 17%,
+   it does not move the light theme by a pixel, and it costs the dark theme only the atmosphere. It
+   deliberately does NOT touch `--color-ink-muted` — the defect was in the ground, not in the
+   typography, and deepening the ink would repaint secondary text on every screen in the product.
+   Unlayered on purpose, the same reason the dark `.link` rule above is: `.app-glow` is unlayered
+   too, and this has to outrank it without reaching for `!important`. */
+:root[data-theme='dark'] .app-glow { display: none; }
+
 @media (prefers-reduced-motion: reduce) { html { transition: none; } }
 /* Phone and tablet: flat canvas, no atmosphere at all (owner, 19.08.2026). The orb exists to
    follow a pointer, and a touch device has none — it degrades to a static blob parked at its

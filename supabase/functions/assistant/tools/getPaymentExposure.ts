@@ -22,7 +22,12 @@ const inputSchema = z.object({}).strict();
 export const getPaymentExposure: AssistantTool = {
   name: "get_payment_exposure",
   description:
-    "חשיפת תשלומים לפי תאריכי יעד: כמה כסף בדרישות תשלום פעילות שמועדן כבר עבר, וכמה נופל " +
+    "חשיפת תשלומים לפי תאריכי יעד. השאלה „מה החשיפה בשבוע הקרוב?” נענית במדד אחד — " +
+    "„לתשלום בשבוע הקרוב, כולל מה שכבר באיחור” — שהוא בדיוק מה שמרכז הבקרה מציג באותה שאלה, " +
+    "והוא הכסף שצריך לזוז. שני חצאיו מוחזרים גם בנפרד כדי לומר כמה מתוכו כבר באיחור, ואין " +
+    "לענות על „השבוע הקרוב” בחצי שאינו כולל את האיחור: סכום שכבר עבר את מועדו הוא חשיפה " +
+    "דחופה יותר, לא פחות. " +
+    "כמה כסף בדרישות תשלום פעילות שמועדן כבר עבר, וכמה נופל " +
     "בשבעת הימים הקרובים — נמדד אך ורק על דרישות שהוזן להן תאריך יעד. חלק ניכר מהדרישות ללא " +
     "תאריך, ולכן זו אינה החשיפה הכוללת: הכיסוי (כמה מהדרישות הפעילות מתוארכות) מוחזר תמיד לצד " +
     "הסכומים. null פירושו שאין אף דרישה מתוארכת למדוד — לא אפס. " +
@@ -91,6 +96,67 @@ export const getPaymentExposure: AssistantTool = {
         }));
       }
     };
+
+    /**
+     * THE FIGURE THE PRODUCT ITSELF PUBLISHES FOR "THE COMING WEEK" (ASSIST-07).
+     *
+     * `Dashboard.tsx` prints `overdueAmount + dueWithin7Amount` under the title "לתשלום בשבוע
+     * הקרוב" and the subtitle "דרישות תשלום פעילות, כולל מה שכבר באיחור". This tool emitted the
+     * two halves and never that figure, so asked the tile's question the model answered with the
+     * half whose label matched the words most literally: the assistant said the coming week's
+     * exposure was 0 while the tile beside it read 4,236, and the assistant's was the one that
+     * reads "nothing to worry about". Every fact it held was correct; the ONE claim that agrees
+     * with the screen could not be built out of them.
+     *
+     * The sum is RELAYED, not invented. The two buckets are disjoint by construction --
+     * `0218:395-404` counts `due_date < p_today` as overdue and `due_date between p_today and
+     * p_today + 6` as the week -- and `/payment-requests?status=active&due=soon`, already cited
+     * below, is exactly their union on screen (`due_date <= today + 6`).
+     *
+     * It is composed INSIDE one currency and only where BOTH halves were measured in it. Two
+     * currencies are two exposures; a currency present on one side alone means the snapshot's
+     * shape changed under us, and that is named as a failure rather than completed with a zero.
+     */
+    const overdueRows = moneyByCurrency(block.overdueAmountByCurrency);
+    const dueSoonRows = moneyByCurrency(block.dueWithin7AmountByCurrency);
+    const weekAheadLabel = readerText(ctx.locale, "assistantTools.exposureWeekAheadAmount");
+    if (
+      overdueRows === null || dueSoonRows === null ||
+      overdueRows.rows.length === 0 || dueSoonRows.rows.length === 0
+    ) {
+      failures.push({ code: "weekAheadAmountByCurrency:not_measured", label: weekAheadLabel });
+    } else {
+      const dueSoonByCurrency = new Map(dueSoonRows.rows.map((row) => [row.currency, row.amount]));
+      for (const row of overdueRows.rows) {
+        const soon = dueSoonByCurrency.get(row.currency);
+        // A half that is absent, or present and NOT MEASURED, cannot be added: treating either as
+        // zero would state a total that is smaller than the truth, which is the one direction a
+        // figure about money owed must never be wrong in.
+        if (soon === undefined || soon === null || row.amount === null) {
+          failures.push({
+            code: `weekAheadAmountByCurrency:${row.currency}:half_missing`,
+            label: `${weekAheadLabel} (${row.currency})`,
+          });
+          continue;
+        }
+        facts.push(ctx.evidence.fact({
+          kind: "metric.money",
+          subject: null,
+          label: `${weekAheadLabel} (${row.currency})`,
+          value: row.amount + soon,
+          unit: currencyUnit(row.currency),
+          tool: getPaymentExposure.name,
+          as_of: asOf,
+          classification: "financial_sensitive",
+        }));
+      }
+    }
+    count(
+      readerText(ctx.locale, "assistantTools.exposureWeekAheadCount"),
+      values.overdue === null || values.dueWithin7Count === null
+        ? null
+        : values.overdue + values.dueWithin7Count,
+    );
 
     count(readerText(ctx.locale, "assistantTools.exposureActiveRequests"), values.activeCount);
     count(

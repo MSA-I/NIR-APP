@@ -1,0 +1,126 @@
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a8a6bac8cbdd30611
+
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+ ❯ src/pages/exportProvenanceAndNaming.spec.tsx (7 tests | 6 failed) 1901ms
+     × gives the caveat a column of its own, naming the source of every quantity 952ms
+     × never states a purchased quantity of zero for a row nothing was measured on 181ms
+     × says the same thing on the screen the file was exported from 73ms
+     × leaves a product name beginning with a hyphen exactly as the tenant typed it 175ms
+     × names the period it covers, not the day it was produced 142ms
+     × agrees with the PDF button beside it, which was always right 210ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/exportProvenanceAndNaming.spec.tsx > EXP-04 — the provenance the screen states rides the file > gives the caveat a column of its own, naming the source of every quantity
+AssertionError: column "מקור הכמות": expected -1 to be greater than or equal to 0
+ ❯ Object.at src/pages/exportProvenanceAndNaming.spec.tsx:239:47
+    237|   const at = (columnHeader: string) => {
+    238|     const index = header!.findIndex((cell) => String(cell ?? '') === c…
+    239|     expect(index, `column "${columnHeader}"`).toBeGreaterThanOrEqual(0…
+       |                                               ^
+    240|     return row![index];
+    241|   };
+ ❯ src/pages/exportProvenanceAndNaming.spec.tsx:269:41
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/6]⎯
+
+ FAIL  src/pages/exportProvenanceAndNaming.spec.tsx > EXP-04 — the provenance the screen states rides the file > never states a purchased quantity of zero for a row nothing was measured on
+AssertionError: expected +0 to be '—' // Object.is equality
+
+- Expected:
+"—"
+
++ Received:
+0
+
+ ❯ src/pages/exportProvenanceAndNaming.spec.tsx:280:42
+    278|     // The row the sweep counted 74 of: ordered 25, received blank, in…
+    279|     // canonical column claiming a measurement of 0. All three now rea…
+    280|     expect(unevidenced.at('נרכש בפועל')).toBe('—');
+       |                                          ^
+    281|     expect(unevidenced.at('התקבל')).toBe('—');
+    282|     expect(unevidenced.at('חויב')).toBe('—');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/6]⎯
+
+ FAIL  src/pages/exportProvenanceAndNaming.spec.tsx > EXP-04 — the provenance the screen states rides the file > says the same thing on the screen the file was exported from
+AssertionError: expected '0' to be '—' // Object.is equality
+
+Expected: "—"
+Received: "0"
+
+ ❯ src/pages/exportProvenanceAndNaming.spec.tsx:303:36
+    301|     // beside a file that says — would be the same defect wearing new …
+    302|     const canonical = row!.querySelector('.num.font-semibold');
+    303|     expect(canonical?.textContent).toBe('—');
+       |                                    ^
+    304|   });
+    305| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/6]⎯
+
+ FAIL  src/pages/exportProvenanceAndNaming.spec.tsx > EXP-10 — the exported name is the name > leaves a product name beginning with a hyphen exactly as the tenant typed it
+AssertionError: expected [ Array(1) ] to deeply equal [ '- ס 10מזלג ורסאי ניצוצות כסף -אר' ]
+
+- Expected
++ Received
+
+  [
+-   "- ס 10מזלג ורסאי ניצוצות כסף -אר",
++   "'- ס 10מזלג ורסאי ניצוצות כסף -אר",
+  ]
+
+ ❯ src/pages/exportProvenanceAndNaming.spec.tsx:318:21
+    316|       .filter((value) => value.includes('מזלג ורסאי'));
+    317|
+    318|     expect(written).toEqual([name]);
+       |                     ^
+    319|     expect(written[0]!.startsWith("'")).toBe(false);
+    320|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/6]⎯
+
+ FAIL  src/pages/exportProvenanceAndNaming.spec.tsx > EXP-07 — the expenses workbook is named for its window > names the period it covers, not the day it was produced
+AssertionError: expected 'expenses-2026-09-04.xlsx' to be 'expenses-2025-01-01-2026-12-31.xlsx' // Object.is equality
+
+Expected: "expenses-2025-01-01-2026-12-31.xlsx"
+Received: "expenses-2026-09-04.xlsx"
+
+ ❯ src/pages/exportProvenanceAndNaming.spec.tsx:345:22
+    343|     const { fileName, book } = await exportedWorkbook();
+    344|
+    345|     expect(fileName).toBe(`expenses-${WINDOW.from}-${WINDOW.to}.xlsx`);
+       |                      ^
+    346|     // Every sheet still states the window inside the file, which was …
+    347|     for (const name of book.SheetNames) {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/6]⎯
+
+ FAIL  src/pages/exportProvenanceAndNaming.spec.tsx > EXP-07 — the expenses workbook is named for its window > agrees with the PDF button beside it, which was always right
+AssertionError: expected 'expenses-2026-09-04' to be 'expenses-2025-01-01-2026-12-31' // Object.is equality
+
+Expected: "expenses-2025-01-01-2026-12-31"
+Received: "expenses-2026-09-04"
+
+ ❯ src/pages/exportProvenanceAndNaming.spec.tsx:365:28
+    363|
+    364|     const stem = (name: string) => name.replace(/\.(xlsx|pdf)$/, '');
+    365|     expect(stem(fileName)).toBe(stem(pdfDownloads[0]!));
+       |                            ^
+    366|   });
+    367| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/6]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  6 failed | 1 passed (7)
+   Start at  17:05:40
+   Duration  5.16s (transform 877ms, setup 472ms, import 1.40s, tests 1.90s, environment 1.15s)
+

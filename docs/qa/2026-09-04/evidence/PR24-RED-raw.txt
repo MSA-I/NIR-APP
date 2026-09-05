@@ -1,0 +1,204 @@
+﻿
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a73266a5292c4fb5f
+
+ ✓ src/pages/dashboardTileDestinations.spec.ts > DASH-03 — the open-invoice-balance tile opens the balance it counted > the tile is the ₪11,581.60 across eight invoices the sweep measured 3ms
+ × src/pages/dashboardTileDestinations.spec.ts > DASH-03 — the open-invoice-balance tile opens the balance it counted > and the list its link opens holds exactly those invoices 10ms
+   → expected [ 'i-1', 'i-2', 'i-3', 'i-4', …(4) ] to deeply equal [ 'i-1', 'i-2', 'i-3', 'i-3377', …(4) ]
+ × src/pages/dashboardTileDestinations.spec.ts > DASH-03 — the open-invoice-balance tile opens the balance it counted > the dollar invoice is not in the shekel figure and must not be in the shekel list 2ms
+   → expected [ 'i-1', 'i-2', 'i-3', 'i-4', …(4) ] to not include 'i-usd'
+ × src/pages/dashboardTileDestinations.spec.ts > DASH-03 — the open-invoice-balance tile opens the balance it counted > and switching the picker moves the list with it 1ms
+   → expected [ 'i-1', 'i-2', 'i-3', 'i-4', …(4) ] to deeply equal [ 'i-usd' ]
+ ✓ src/pages/dashboardTileDestinations.spec.ts > DASH-04 — "N הזמנות באיחור באספקה" opens those N > two of the nine orders awaiting receipt are late 1ms
+ × src/pages/dashboardTileDestinations.spec.ts > DASH-04 — "N הזמנות באיחור באספקה" opens those N > and the list its link opens holds exactly those two 1ms
+   → expected [ 'o-late-11', 'o-late-12', …(7) ] to deeply equal [ 'o-late-11', 'o-late-12' ]
+ ✓ src/pages/dashboardTileDestinations.spec.ts > DASH-04 — "N הזמנות באיחור באספקה" opens those N > "דורש פעולה" is not that set — it is five, and that is why it could not carry the link 0ms
+ ✓ src/pages/dashboardTileDestinations.spec.ts > DASH-04 — "N הזמנות באיחור באספקה" opens those N > a delivery promised for today is not late, though it does need action 0ms
+ ✓ src/pages/dashboardTileDestinations.spec.ts > DASH-05 — "N הזמנות פתוחות ללא תאריך אספקה" opens those N > seven open orders carry no delivery date 0ms
+ × src/pages/dashboardTileDestinations.spec.ts > DASH-05 — "N הזמנות פתוחות ללא תאריך אספקה" opens those N > and the list its link opens holds exactly those seven 1ms
+   → expected [ 'o-draft', 'o-late-11', …(9) ] to deeply equal [ 'o-undated-1', 'o-undated-2', …(5) ]
+ ✓ src/pages/dashboardTileDestinations.spec.ts > DASH-05 — "N הזמנות פתוחות ללא תאריך אספקה" opens those N > the count is of things, so its link carries no currency 0ms
+ ✓ src/pages/dashboardTileDestinations.spec.ts > DASH-06 — "נרכש החודש" opens the orders that make it up > the month figure is neither every order nor every order this month 1ms
+ × src/pages/dashboardTileDestinations.spec.ts > DASH-06 — "נרכש החודש" opens the orders that make it up > and the list its link opens holds exactly those orders 1ms
+   → expected [ 'o-cancelled', 'o-draft', …(13) ] to deeply equal [ 'o-late-11', 'o-late-12', …(6) ]
+ ✓ src/pages/dashboardTileDestinations.spec.ts > no link promises a narrowing its destination will ignore > /invoices?pay=unpaid 0ms
+ ✓ src/pages/dashboardTileDestinations.spec.ts > no link promises a narrowing its destination will ignore > /receiving 0ms
+ ✓ src/pages/dashboardTileDestinations.spec.ts > no link promises a narrowing its destination will ignore > /orders 0ms
+ ✓ src/pages/dashboardTileDestinations.spec.ts > no link promises a narrowing its destination will ignore > /orders?status=all 0ms
+node.exe : 
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/dashboardTileDestinations.spec.ts > DASH-03 — the open-invoice-balance tile opens the balance it 
+counted > and the list its link opens holds exactly those invoices
+AssertionError: expected [ 'i-1', 'i-2', 'i-3', 'i-4', …(4) ] to deeply equal [ 'i-1', 'i-2', 'i-3', 'i-3377', …(4) ]
+
+- Expected
++ Received
+
+  [
+    "i-1",
+    "i-2",
+    "i-3",
+-   "i-3377",
+    "i-4",
+    "i-5",
+    "i-6",
+    "i-7",
++   "i-usd",
+  ]
+
+ ❯ src/pages/dashboardTileDestinations.spec.ts:204:68
+    202|
+    203|   it('and the list its link opens holds exactly those invoices', () =>…
+    204|     expect(ids(invoiceDestination(openInvoiceBalanceLink('ILS')))).toE…
+       |                                                                    ^
+    205|   });
+    206|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/6]⎯
+
+ FAIL  src/pages/dashboardTileDestinations.spec.ts > DASH-03 — the open-invoice-balance tile opens the balance it 
+counted > the dollar invoice is not in the shekel figure and must not be in the shekel list
+AssertionError: expected [ 'i-1', 'i-2', 'i-3', 'i-4', …(4) ] to not include 'i-usd'
+ ❯ src/pages/dashboardTileDestinations.spec.ts:208:72
+    206|
+    207|   it('the dollar invoice is not in the shekel figure and must not be i…
+    208|     expect(ids(invoiceDestination(openInvoiceBalanceLink('ILS')))).not…
+       |                                                                        ^
+    209|   });
+    210|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/6]⎯
+
+ FAIL  src/pages/dashboardTileDestinations.spec.ts > DASH-03 — the open-invoice-balance tile opens the balance it 
+counted > and switching the picker moves the list with it
+AssertionError: expected [ 'i-1', 'i-2', 'i-3', 'i-4', …(4) ] to deeply equal [ 'i-usd' ]
+
+- Expected
++ Received
+
+  [
++   "i-1",
++   "i-2",
++   "i-3",
++   "i-4",
++   "i-5",
++   "i-6",
++   "i-7",
+    "i-usd",
+  ]
+
+ ❯ src/pages/dashboardTileDestinations.spec.ts:212:68
+    210|
+    211|   it('and switching the picker moves the list with it', () => {
+    212|     expect(ids(invoiceDestination(openInvoiceBalanceLink('USD')))).toE…
+       |                                                                    ^
+    213|   });
+    214| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/6]⎯
+
+ FAIL  src/pages/dashboardTileDestinations.spec.ts > DASH-04 — "N הזמנות באיחור באספקה" opens those N > and the list 
+its link opens holds exactly those two
+AssertionError: expected [ 'o-late-11', 'o-late-12', …(7) ] to deeply equal [ 'o-late-11', 'o-late-12' ]
+
+- Expected
++ Received
+
+  [
+    "o-late-11",
+    "o-late-12",
++   "o-undated-1",
++   "o-undated-2",
++   "o-undated-3",
++   "o-undated-4",
++   "o-undated-5",
++   "o-undated-6",
++   "o-undated-7",
+  ]
+
+ ❯ src/pages/dashboardTileDestinations.spec.ts:231:25
+    229|       .filter((order) => OPEN_STATUSES.includes(order.status))
+    230|       .filter((order) => receivingMatchesStatus(order, filter, TODAY));
+    231|     expect(ids(landed)).toEqual(ids(counted));
+       |                         ^
+    232|   });
+    233|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/6]⎯
+
+ FAIL  src/pages/dashboardTileDestinations.spec.ts > DASH-05 — "N הזמנות פתוחות ללא תאריך אספקה" opens those N > and 
+the list its link opens holds exactly those seven
+AssertionError: expected [ 'o-draft', 'o-late-11', …(9) ] to deeply equal [ 'o-undated-1', 'o-undated-2', …(5) ]
+
+- Expected
++ Received
+
+@@ -1,6 +1,10 @@
+  [
++   "o-draft",
++   "o-late-11",
++   "o-late-12",
++   "o-ready",
+    "o-undated-1",
+    "o-undated-2",
+
+ Test Files  1 failed (1)
+      Tests  6 failed | 11 passed (17)
+   Start at  14:08:05
+   Duration  4.26s (transform 1.36s, setup 511ms, import 2.20s, tests 28ms, environment 1.26s)
+
+    "o-undated-3",
+    "o-undated-4",
+    "o-undated-5",
+
+ ❯ src/pages/dashboardTileDestinations.spec.ts:259:25
+    257|   it('and the list its link opens holds exactly those seven', () => {
+    258|     const landed = ORDERS.filter((order) => orderMatchesListFilters(or…
+    259|     expect(ids(landed)).toEqual(ids(counted));
+       |                         ^
+    260|   });
+    261|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/6]⎯
+
+ FAIL  src/pages/dashboardTileDestinations.spec.ts > DASH-06 — "נרכש החודש" opens the orders that make it up > and the 
+list its link opens holds exactly those orders
+AssertionError: expected [ 'o-cancelled', 'o-draft', …(13) ] to deeply equal [ 'o-late-11', 'o-late-12', …(6) ]
+
+- Expected
++ Received
+
+  [
++   "o-cancelled",
++   "o-draft",
++   "o-last-month",
+    "o-late-11",
+    "o-late-12",
+    "o-ready",
+    "o-received",
+    "o-undated-1",
++   "o-undated-2",
+    "o-undated-3",
+    "o-undated-4",
++   "o-undated-5",
+    "o-undated-6",
++   "o-undated-7",
++   "o-usd-month",
+  ]
+
+ ❯ src/pages/dashboardTileDestinations.spec.ts:290:25
+    288|   it('and the list its link opens holds exactly those orders', () => {
+    289|     const landed = ORDERS.filter((order) => orderMatchesListFilters(or…
+    290|     expect(ids(landed)).toEqual(ids(counted));
+       |                         ^
+    291|   });
+    292| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/6]⎯
+

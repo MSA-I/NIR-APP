@@ -79,7 +79,17 @@ if (duplicates.length) {
 // abandoned long ago and no file will ever fill them, so they are harmless — a hole is only
 // dangerous when something is still expected to land IN it. They are pinned by value rather
 // than tolerated by a count, so that a NEW hole cannot hide inside a tolerance.
-const HISTORICAL_GAPS = new Set(['0071→0073', '0182→0184', '0191→0195', '0212→0217']);
+// 0321 joins them for the same reason, and only after the distinction was made explicit.
+// The 2026-09-04 QA sweep reserved it for MON-06, then MEASURED that the finding needed no
+// database change at all — the definer it named cannot be called by the role in question, and the
+// figures differ by population under a ruling already in force. The agent returned the number
+// unused. Nothing will ever fill it, which is the test this set applies.
+//
+// The span 0315→0319 is NOT in this set and must not be added: 0316, 0317 and 0318 are claimed
+// and pending on `docs/ux-remediation-documents-assistant`. They are exactly the danger the guard
+// describes — a lower number expected to land LATER — and silencing that is the "map that says
+// 0279 → 0279" failure this repository has already paid for once. It closes by merge order.
+const HISTORICAL_GAPS = new Set(['0071→0073', '0182→0184', '0191→0195', '0212→0217', '0320→0322']);
 
 const numbers = [...byNumber.keys()].sort((a, b) => a - b);
 const gaps = [];

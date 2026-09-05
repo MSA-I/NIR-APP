@@ -1,0 +1,149 @@
+PR06 - PERM-01 - SQL GREEN - the same suite, the same bytes, one migration later
+===============================================================================
+Local stack, exclusive hold of the campaign's Supabase lock, 05.09.2026.
+
+THE HEAD WAS ASSERTED AGAIN. 0319 was moved back into supabase/migrations and the database was
+reset a second time from THIS worktree:
+
+  supabase db reset
+  Applying migration 0315_one_balance_one_approval.sql...
+  Applying migration 0319_the_settings_refusal_stops_being_cosmetic.sql...
+
+  select version from supabase_migrations.schema_migrations where version >= '0310'
+  -> 0310 0311 0312 0313 0314 0315 0319     max(version) = 0319
+
+  0319 HAD NEVER BEEN EXECUTED BEFORE THIS MOMENT. Its author said so and it was true: this reset
+  is the first time its syntax, its five anchor blocks and its A1/A3/A5 scope re-assertion were
+  run at all. All of them passed on the first application, with no edit to the migration.
+
+COMMAND -- byte-identical to the RED run
+  docker cp  supabase/tests/p112_the_settings_boundary_is_not_cosmetic.sql
+             supabase_db_supplyflow-p0:/var/lib/postgresql/p112.sql
+  docker exec -e PGPASSWORD=postgres -e PGTZ=Asia/Jerusalem supabase_db_supplyflow-p0 \
+    psql -U postgres -d postgres -v ON_ERROR_STOP=1 -f /var/lib/postgresql/p112.sql
+
+  Suite file SHA-256, verified on the host AND inside the container, both runs:
+    578c9bc104d2a7d017640070adc3b696e3561e2a96ad2b36e30796b8e22fd68d
+  The container copy was re-taken because `supabase db reset` restarts the container and the file
+  under /var/lib/postgresql does not survive it; the hash was read back after the copy to prove
+  the same bytes were executed.
+
+RESULT
+  47 passed | 0 failed | 47 total           controls 11 green of 11
+  psql exit 0, ROLLBACK.
+
+  RED was 32 failed | 15 passed | 47 total, controls 11 green of 11.
+  Every one of the 32 moved; not one of the 11 controls moved.
+
+WHAT CHANGED, CASE BY CASE
+  catalogue, 12 cases     the four columns are `revoked` for `authenticated` AND for `anon`; the
+                          owner's directory exists, is SELECT-only for the browser role and closed
+                          to anon, is not a security_invoker view, keeps security_barrier, and
+                          carries both auth_role()/'owner' and auth_org() in its definition; both
+                          configuration read policies now name auth_role().
+  live, 20 cases          office and accountant receive `(none)` from all four narrowed surfaces.
+                          The direct path is now `refused (42501)` for all four actors INCLUDING
+                          the owner -- the view is the owner's only route, not a convenience
+                          beside a door still open. The owner and the second tenant's owner read
+                          their own roster, phones, backup addresses, flags and autonomy policies
+                          in full, per row, by name.
+
+  The refusal is a column ACL denial (42501) raised by the ordinary executor check. It is NOT the
+  function-EXECUTE denial that segfaults this Postgres image; the container log's
+  "was terminated by signal" count was 0 before this campaign step and 0 after it.
+
+WHAT THIS DOES NOT CLAIM
+  Nothing here was measured against production. The finding's production numbers are in
+  PERM01-DIAGNOSIS-PRODUCTION.txt and were read read-only; 0319 has not been applied anywhere but
+  this local stack.
+
+FULL OUTPUT
+BEGIN
+CREATE TABLE
+CREATE FUNCTION
+ set_config 
+------------
+ 
+(1 row)
+
+ set_config 
+------------
+ 
+(1 row)
+
+INSERT 0 2
+INSERT 0 4
+INSERT 0 4
+INSERT 0 2
+INSERT 0 2
+DO
+DO
+RESET
+ set_config 
+------------
+ 
+(1 row)
+
+ set_config 
+------------
+ 
+(1 row)
+
+ seq | verdict |  kind   |                            case_id                            |                                                  expected                                                   |                                                  observed                                                   
+-----+---------+---------+---------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------
+   1 | PASS    | case    | catalogue/profiles.phone as authenticated                     | revoked                                                                                                     | revoked
+   2 | PASS    | case    | catalogue/profiles.backup_email as authenticated              | revoked                                                                                                     | revoked
+   3 | PASS    | case    | catalogue/profiles.phone as anon                              | revoked                                                                                                     | revoked
+   4 | PASS    | case    | catalogue/profiles.backup_email as anon                       | revoked                                                                                                     | revoked
+   5 | PASS    | case    | catalogue/organizations.trial_ends_at as authenticated        | revoked                                                                                                     | revoked
+   6 | PASS    | case    | catalogue/organizations.created_at as authenticated           | revoked                                                                                                     | revoked
+   7 | PASS    | case    | catalogue/organizations.trial_ends_at as anon                 | revoked                                                                                                     | revoked
+   8 | PASS    | case    | catalogue/organizations.created_at as anon                    | revoked                                                                                                     | revoked
+   9 | PASS    | control | catalogue/other-columns-still-readable                        | (none unreadable)                                                                                           | (none unreadable)
+  10 | PASS    | control | catalogue/self-service-update-kept                            | phone+backup_email updatable                                                                                | phone+backup_email updatable
+  11 | PASS    | case    | catalogue/directory is a read-only browser surface            | select only, anon none                                                                                      | select only, anon none
+  12 | PASS    | case    | catalogue/directory is not security_invoker and keeps barrier | definer-privileged, security_barrier=true                                                                   | definer-privileged, security_barrier=true
+  13 | PASS    | case    | catalogue/directory carries role and tenant predicates        | auth_role()+owner+auth_org()                                                                                | auth_role()+owner+auth_org()
+  14 | PASS    | control | catalogue/config-tables-keep-grant                            | both granted                                                                                                | both granted
+  15 | PASS    | case    | catalogue/config-read-policies name the role                  | both name auth_role()                                                                                       | both name auth_role()
+  16 | PASS    | case    | owner / live/directory.phone                                  | P112 accountant=-, P112 office=050-1000002, P112 owner=050-1000001                                          | P112 accountant=-, P112 office=050-1000002, P112 owner=050-1000001
+  17 | PASS    | case    | owner / live/directory.backup                                 | P112 accountant=-, P112 office=office-p112@example.test, P112 owner=owner-p112@example.test                 | P112 accountant=-, P112 office=office-p112@example.test, P112 owner=owner-p112@example.test
+  18 | PASS    | case    | owner / live/direct.profiles.phone                            | refused (42501)                                                                                             | refused (42501)
+  19 | PASS    | case    | owner / live/direct.organizations.trial_ends_at               | refused (42501)                                                                                             | refused (42501)
+  20 | PASS    | case    | owner / live/flag_configurations                              | assistant.history, assistant.ui, p112.tenant-a                                                              | assistant.history, assistant.ui, p112.tenant-a
+  21 | PASS    | case    | owner / live/autonomy_policies                                | delivery_note.receiving, document.interpretation, document.packet_split, p112.autonomy-a, price_list.intake | delivery_note.receiving, document.interpretation, document.packet_split, p112.autonomy-a, price_list.intake
+  22 | PASS    | control | owner / live/roster                                           | P112 accountant, P112 office, P112 owner                                                                    | P112 accountant, P112 office, P112 owner
+  23 | PASS    | control | owner / live/organizations                                    | P112 tenant A                                                                                               | P112 tenant A
+  24 | PASS    | case    | office / live/directory.phone                                 | (none)                                                                                                      | (none)
+  25 | PASS    | case    | office / live/directory.backup                                | (none)                                                                                                      | (none)
+  26 | PASS    | case    | office / live/direct.profiles.phone                           | refused (42501)                                                                                             | refused (42501)
+  27 | PASS    | case    | office / live/direct.organizations.trial_ends_at              | refused (42501)                                                                                             | refused (42501)
+  28 | PASS    | case    | office / live/flag_configurations                             | (none)                                                                                                      | (none)
+  29 | PASS    | case    | office / live/autonomy_policies                               | (none)                                                                                                      | (none)
+  30 | PASS    | control | office / live/roster                                          | P112 accountant, P112 office, P112 owner                                                                    | P112 accountant, P112 office, P112 owner
+  31 | PASS    | control | office / live/organizations                                   | P112 tenant A                                                                                               | P112 tenant A
+  32 | PASS    | case    | accountant / live/directory.phone                             | (none)                                                                                                      | (none)
+  33 | PASS    | case    | accountant / live/directory.backup                            | (none)                                                                                                      | (none)
+  34 | PASS    | case    | accountant / live/direct.profiles.phone                       | refused (42501)                                                                                             | refused (42501)
+  35 | PASS    | case    | accountant / live/direct.organizations.trial_ends_at          | refused (42501)                                                                                             | refused (42501)
+  36 | PASS    | case    | accountant / live/flag_configurations                         | (none)                                                                                                      | (none)
+  37 | PASS    | case    | accountant / live/autonomy_policies                           | (none)                                                                                                      | (none)
+  38 | PASS    | control | accountant / live/roster                                      | P112 accountant, P112 office, P112 owner                                                                    | P112 accountant, P112 office, P112 owner
+  39 | PASS    | control | accountant / live/organizations                               | P112 tenant A                                                                                               | P112 tenant A
+  40 | PASS    | case    | owner-B / live/directory.phone                                | P112 tenant B owner=050-2000001                                                                             | P112 tenant B owner=050-2000001
+  41 | PASS    | case    | owner-B / live/directory.backup                               | P112 tenant B owner=owner-b-p112@example.test                                                               | P112 tenant B owner=owner-b-p112@example.test
+  42 | PASS    | case    | owner-B / live/direct.profiles.phone                          | refused (42501)                                                                                             | refused (42501)
+  43 | PASS    | case    | owner-B / live/direct.organizations.trial_ends_at             | refused (42501)                                                                                             | refused (42501)
+  44 | PASS    | case    | owner-B / live/flag_configurations                            | assistant.history, assistant.ui, p112.tenant-b                                                              | assistant.history, assistant.ui, p112.tenant-b
+  45 | PASS    | case    | owner-B / live/autonomy_policies                              | delivery_note.receiving, document.interpretation, document.packet_split, p112.autonomy-b, price_list.intake | delivery_note.receiving, document.interpretation, document.packet_split, p112.autonomy-b, price_list.intake
+  46 | PASS    | control | owner-B / live/roster                                         | P112 tenant B owner                                                                                         | P112 tenant B owner
+  47 | PASS    | control | owner-B / live/organizations                                  | P112 tenant B                                                                                               | P112 tenant B
+(47 rows)
+
+ passed | failed | total | controls_green | controls_total 
+--------+--------+-------+----------------+----------------
+     47 |      0 |    47 |             11 |             11
+(1 row)
+
+DO
+ROLLBACK

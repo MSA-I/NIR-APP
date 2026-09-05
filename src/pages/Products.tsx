@@ -1,5 +1,5 @@
 import { useT } from '../lib/i18n/LocaleProvider';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { Plus, Pencil, Copy, Power, Upload, History } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -12,7 +12,10 @@ import { fmtMoneyExact, formatUnit, normalizeUnitInput, productLabel } from '../
 import { useCategories } from './Suppliers';
 import type { Product } from '../lib/types';
 import { fetchAll } from '../lib/supabasePaging';
-import { ProductNameReview } from './ProductNameReview';
+// The SPLIT, not the parser. `productDisplayName.spec.ts` keeps the normaliser out of this file
+// because it renders a column of product names; `splitNameQueue` returns groups to count and no
+// name to render, and it lives on the approval surface the allowlist already names (`PL-08`).
+import { ProductNameReview, splitNameQueue } from './ProductNameReview';
 import { ProductNameRepairReview, type ProductNameRepairQueue } from './ProductNameRepairReview';
 
 interface ProductRow extends Product {
@@ -96,6 +99,13 @@ export default function Products() {
   const awaitingName = data
     ? data.filter((p) => p.display_name === null && !namedThisSession.has(p.id))
     : null;
+  /**
+   * The queue is not the work (`PL-08`). Most of a catalogue with no canonical names parses to a
+   * proposal identical to the name already stored, and every one of those cards says so on its own
+   * face. Offering all of them as pending decisions buries the ~39 that need a person.
+   */
+  const nameWork = useMemo(() => (awaitingName ? splitNameQueue(awaitingName) : null),
+    [awaitingName]);
   // Three states, three different sentences: unknown (not loaded), never measured (no dry-run
   // report exists), and measured (a real count, `0` included).
   const repairMeasured = repairSummary ? repairSummary.has_dry_run : null;
@@ -222,7 +232,8 @@ export default function Products() {
             ? t('products.text_6')
             : t('products.namesAwaitingRepair', { count: repairCount ?? '—' })
           : reviewMode
-          ? t('products.namesAwaitingApproval', { count: awaitingName ? awaitingName.length : '—' })
+          ? `${t('products.namesAwaitingApproval', { count: nameWork ? nameWork.changing.length : '—' })}`
+            + `${nameWork ? ` · ${t('products.namesConfirmOnly', { count: nameWork.confirmOnly.length })}` : ''}`
           : t('products.productsShown', { count: rows.length })}
         actions={<>
           {/* The same owner/office boundary used by the price-list screen. */}
@@ -246,7 +257,7 @@ export default function Products() {
           }}
           items={[
             { key: 'catalogue', label: t('products.text_8') },
-            { key: 'review', label: t('products.tabNamesForApproval', { count: awaitingName ? awaitingName.length : '—' }), testId: 'name-review-toggle' },
+            { key: 'review', label: t('products.tabNamesForApproval', { count: nameWork ? nameWork.changing.length : '—' }), testId: 'name-review-toggle' },
             { key: 'repair', label: t('products.tabRepairFromSource', { count: repairCount ?? '—' }), testId: 'source-name-repair-toggle' },
           ]} />
       )}

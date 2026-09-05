@@ -1,0 +1,58 @@
+PR 31a — DASH-07 — what the screen actually showed. 1440x900, headed system Edge,
+the compiled stylesheet. Both screenshots were opened and READ before this file was written.
+=======================================================================================
+BEFORE  — the LIVE deployment https://app.inplace.digital, the build the sweep measured, signed in
+          as owner@gamos.demo, reading the production project. The window was TYPED into the two
+          date inputs, because that deployed build ignores ?from=/?to= (DASH-08, fixed elsewhere in
+          this campaign and not yet released) — this is the sweep's own repro.
+AFTER   — the same production project and the same window, through a dev server on this branch, so
+          the picture is of the fix over the REAL 115 products and the REAL zero invoice lines
+          rather than over a fabricated fixture.
+
+Header, both runs:  115 מוצרים · 2026-01-01 עד 2026-09-04
+Rows rendered per page: 15 of 115 (the table paginates).
+
+  BEFORE — per column, over all 15 rendered rows
+    מוצר                         em-dash   0 · blank   0 · figure  15
+    נרכש בפועל                   em-dash   0 · blank   0 · figure  15
+    הוזמן                        em-dash   0 · blank   0 · figure  15
+    התקבל                        em-dash  10 · blank   0 · figure   5
+    חויב                         em-dash  15 · blank   0 · figure   0
+    עלות לפי ההזמנה              em-dash   0 · blank   0 · figure  15
+    הוצאה                        em-dash  15 · blank   0 · figure   0
+    מחיר יחידה ממוצע             em-dash  15 · blank   0 · figure   0
+    ספקים · הזמנות · חשבוניות    em-dash   0 · blank   0 · figure  15
+
+  AFTER — per column, over all 15 rendered rows
+    מוצר                         em-dash   0 · blank   0 · figure  15
+    נרכש בפועל                   em-dash  10 · blank   0 · figure   5
+    הוזמן                        em-dash   0 · blank   0 · figure  15
+    התקבל                        em-dash  10 · blank   0 · figure   5
+    חויב                         em-dash  15 · blank   0 · figure   0
+    עלות לפי ההזמנה              em-dash   0 · blank   0 · figure  15
+    הוצאה                        em-dash  15 · blank   0 · figure   0
+    מחיר יחידה ממוצע             em-dash  15 · blank   0 · figure   0
+    ספקים · הזמנות · חשבוניות    em-dash   0 · blank   0 · figure  15
+
+WHAT MOVED, AND WHAT DID NOT
+  * חויב, הוצאה, מחיר יחידה ממוצע: 15/15 em dash in BOTH runs. The fix does not add money and
+    was never meant to — the money does not exist. The em dash is the right answer.
+  * עלות לפי ההזמנה: 15/15 a figure in BOTH runs — ₪2,274.80, ₪792.00, ₪78.30, ₪64.00, ₪434.00,
+    ₪162.00, ₪5.11 on the visible rows. THIS IS THE MEASUREMENT THAT FALSIFIES THE FINDING'S
+    HEADLINE: the report does state a cost, on every row, in both builds.
+  * ספקים · הזמנות · חשבוניות ends in "· 0" on every row in both runs — zero invoices, which is
+    the same fact the database ladder measures from the other side.
+  * נרכש בפועל: BEFORE printed a figure on all 15 (a literal 0 on ten of them); AFTER prints an em
+    dash on ten. THAT IS NOT THIS PR — it is EXP-04's canonical-zero fix, already landed on the
+    campaign branch, visible here because the AFTER build carries it.
+  * role="status" notes: BEFORE 0 (the only note on the page is the counting-rule note, which
+    carries no role). AFTER 1 — the new sentence.
+
+THE SENTENCE, AS RENDERED (read back out of the live DOM, not from the dictionary):
+  בטווח הזה לא נמצאה אף שורת חשבונית ספק מאושרת שהגיעה למוצר — לא כזו שהוקצתה לשורת הזמנה, ולא כזו שממתינה להקצאה. לכן „חויב”, „הוצאה” ו„מחיר יחידה ממוצע” ריקים בכל השורות כאן. זה אינו אפס — זה מספר שטרם ידוע.„עלות לפי ההזמנה” הוא מה שהדוח כן יודע: המחיר שנשמר בהזמנה כפול הכמות שהוזמנה.העמודות האלה יתמלאו אחרי שחשבונית הספק תאושר ושורותיה יוקצו לשורות ההזמנה, במסך „בדיקת שורות החשבונית” שבתוך החשבונית.
+
+READING THE PICTURES. In the AFTER screenshot the new note sits between the existing blue
+counting-rule note and the table, in the amber "await" tone the unmapped-lines note beside it
+already uses — no new colour, no new token. It is right-to-left, its three paragraphs break where
+the dictionary breaks them, and it does not crowd the grid. In the BEFORE screenshot the same
+space holds nothing at all, and the three em-dash columns run down the page unexplained.

@@ -1,0 +1,17 @@
+PR42 / OWN-09 — GREEN. npx vitest run src/lib/tolerances.spec.ts src/components/currencyTolerancesPanel.spec.tsx
+
+The fix is one condition in writeTolerance: the collapse back to the legacy scalar now tests
+the RESULT (a map holding only ILS) instead of the argument it was handed. Clearing the last
+non-shekel currency restores the row the organisation started with, in either currency order
+and through the panel's own save fold. The neighbour spec — the panel that calls it — is green
+in the same run, so the round trip did not cost the per-currency behaviour it exists for.
+
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-aa6ab415e44e16b91
+
+
+ Test Files  2 passed (2)
+      Tests  37 passed (37)
+   Start at  15:06:23
+   Duration  3.49s (transform 653ms, setup 922ms, import 1.09s, tests 720ms, environment 2.16s)
+

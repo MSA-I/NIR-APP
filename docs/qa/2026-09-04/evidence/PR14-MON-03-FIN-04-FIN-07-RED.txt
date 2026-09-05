@@ -1,0 +1,174 @@
+PR 14 — MON-03 / FIN-04 / FIN-07 — THE RED
+==========================================
+
+WHAT THIS FILE IS. The database half of PR 14, measured on the local Supabase stack by the agent
+holding `.claude/locks/supabase`. The off-stack half — the production measurement, the ancestry
+check, the migration text, the suite text and the `FIN-07` label change with its own component
+red/green — is in `PR14-MON-03-FIN-04-FIN-07.txt`, written before this one and not repeated here.
+
+Branch `worktree-agent-ae47027df0053d26d`, on top of `a04b7e0f` / `f5d05a8b`.
+Run 05.09.2026, local time.
+
+--------------------------------------------------------------------------------------------
+0. THE STACK WAS CLOBBERED BEFORE THIS RUN, AND THE HEAD WAS ASSERTED RATHER THAN INHERITED
+--------------------------------------------------------------------------------------------
+
+`docs/ux-remediation-documents-assistant` rebuilt the shared database at 01:58 UTC from a branch
+that predates PR 7. Measured at the start of this run, BEFORE touching anything:
+
+    select version from supabase_migrations.schema_migrations where version >= '0310'
+    -> 0310  0311  0312  0313  0314  0316
+    select pg_postmaster_start_time()  ->  2026-09-05 01:58:28.145789+00
+
+`0315` — PR 7's committed-amount guard — was NOT in that database and `0316`, which is not this
+campaign's, was. Every money reading taken on it would have measured the wrong thing. So the head
+below is not inherited: `supabase db reset` was run FROM THIS WORKTREE before each of the two
+readings, and the ledger was re-read afterwards each time.
+
+--------------------------------------------------------------------------------------------
+1. `0320` APPLIES — the migration, its two anchor counts and its assertion block
+--------------------------------------------------------------------------------------------
+
+    supabase db reset            (from this worktree, migrations 0001…0315, 0320)
+    -> Applying migration 0315_one_balance_one_approval.sql...
+       Applying migration 0320_a_currency_this_role_cannot_value.sql...
+       Seeding data from supabase/seed.sql...
+       Finished supabase db reset on branch main.
+    -> exit 0
+
+    select version from supabase_migrations.schema_migrations where version >= '0310'
+    -> 0310  0311  0312  0313  0314  0315  0320          <-- 0315 PRESENT, 0320 PRESENT
+
+Exit 0 is the whole assertion, and this is worth saying out loud: `0320` raises rather than warns.
+Its two anchored replacements each assert their occurrence count is exactly 1, and its
+`$assert_0320$` block re-reads `pg_proc` afterwards. A reset that reaches "Finished" is a reset in
+which
+
+  * `left join balances b on b.invoice_id = i.id`                      occurred exactly once,
+  * `coalesce(sum(b.balance_in_currency), 0)::numeric(14,3),`          occurred exactly once,
+  * the positive sentinel `sum(b.balance_in_currency)::numeric(14,3)`  is present afterwards,
+  * `left join balances` and `coalesce(sum(b.balance_in_currency)`     are both gone,
+  * the function is still `SECURITY DEFINER` with `search_path=public` pinned, and still carries
+    EXECUTE for `authenticated` and `service_role`,
+  * `private.scope_enforcement_violations()` returned nothing.
+
+Read back independently of the migration's own opinion:
+
+    no-left-join | sentinel-present | no-coalesce | secdef=true
+    body_md5   = 24a2e15a89bf816f3cf0a290860e3771     (LF-normalised)
+    proconfig  = search_path=public
+    A5 row `p0_supplier_balance_rows_by_currency()` — body_hash matches pg_proc: true
+    private.scope_enforcement_violations() -> 0 rows
+
+The A5 pin is recomputed from `pg_proc` by the migration, never typed as a literal, so it cannot
+carry a CRLF-flavoured digest across machines.
+
+--------------------------------------------------------------------------------------------
+2. THE RED — `p113` on the genuinely unfixed tree
+--------------------------------------------------------------------------------------------
+
+`0320` was MOVED OUT of `supabase/migrations` (to a holding directory outside the repo), the
+database was reset again, and the suite was run. Nothing else was changed: the suite file is
+byte-identical to the one in `f5d05a8b` (`git diff HEAD -- supabase/tests/p113_…sql` is empty;
+SHA-256 63009A131E9507A3C668D834A892D1D4E3F782BF2B6DA5A054DDA51E3881AB52), and it is the same file
+run again in the green.
+
+    select version from supabase_migrations.schema_migrations where version >= '0310'
+    -> 0310  0311  0312  0313  0314  0315                <-- 0315 PRESENT, 0320 ABSENT
+
+    docker cp supabase/tests/p113_a_currency_this_role_cannot_value.sql \
+              supabase_db_supplyflow-p0:/var/lib/postgresql/p113.sql
+    docker exec -e PGPASSWORD=postgres -e PGTZ=Asia/Jerusalem supabase_db_supplyflow-p0 \
+      psql -U postgres -d postgres -v ON_ERROR_STOP=1 -f /var/lib/postgresql/p113.sql
+    -> exit 3
+
+    psql:/var/lib/postgresql/p113.sql:286: ERROR:  P113 failed — the supplier ledger states a
+    balance in a currency its reader cannot value:
+      accountant_a_usd: expected 'no row', got '0.000/0'  (MON-03/FIN-04: the accountant cannot
+        value this currency, so it gets no row and the card draws an em dash. `0.000` here is the
+        sentence "this supplier owes nothing in dollars", and it is false against a real $300)
+      accountant_a_usd_leak: expected 'none', got '0.000'  (and the fix is not a widening: the
+        accountant is shown neither the $300 nor a zero standing in for it)
+      accountant_all_rows: expected 'A/ILS=150.000/1 B/ILS=640.000/1 B/USD=200.000/1 C/ILS=0.000/0',
+        got 'A/ILS=150.000/1 A/USD=0.000/0 B/ILS=640.000/1 B/USD=200.000/1 C/ILS=0.000/0
+        D/USD=0.000/0'  (MON-03: exactly the rows this role can value. A/USD and D/USD must be
+        ABSENT, not zero)
+      accountant_d_usd: expected 'no row', got '0.000/0'  (FIN-04 as the whole card: a supplier
+        this role can value nothing of returns nothing at all)
+    CONTEXT:  PL/pgSQL function inline_code_block line 13 at RAISE
+
+4 of 16 expectations failed. THE OTHER 12 PASSED IN THAT SAME RUN, which is what makes this a
+finding rather than a broken harness. The suite reports every disagreement in one raise, so the
+twelve that are absent from the list above are absent because they matched:
+
+    owner_all_rows      A/ILS=150.000/1 A/USD=300.000/1 B/ILS=640.000/1 B/USD=200.000/1
+                        C/ILS=0.000/0 D/USD=500.000/1
+    owner_a_ils         150.000/1
+    owner_a_usd         300.000/1   <-- CONTROL, and the sentence that inverts FIN-04's diagnosis
+    owner_b_ils         640.000/1
+    owner_b_usd         200.000/1
+    owner_c_ils         0.000/0     <-- CONTROL: a MEASURED zero, and it stays a zero
+    owner_d_usd         500.000/1
+    owner_a_merged      0           <-- CONTROL: 150 and 300 are never one row of 450
+    accountant_a_ils    150.000/1   <-- CONTROL: what this role MAY value is untouched
+    accountant_b_ils    640.000/1
+    accountant_b_usd    200.000/1   <-- CONTROL: a currency it CAN value is reported in full
+    accountant_c_ils    0.000/0     <-- CONTROL: the measured zero, for the accountant too
+
+Every one of those readings was taken with `role` set to `authenticated` and a real
+`request.jwt.claim.sub`, through the VIEW the client reads (`public.supplier_balances_by_currency`),
+so `auth_org()`, `auth_role()`, `auth_scopes()`, RLS and the view's grants were all in the path. A
+reading taken as `postgres` would have skipped all of them and proved nothing.
+
+FIN-04'S OWN DIAGNOSIS IS INVERTED, AND THE RED IS WHERE THAT IS VISIBLE. It recorded "a phantom
+row on a supplier with no dollar activity". In the same run, the owner reads `owner_a_usd =
+300.000/1` — the dollar activity exists and the supplier owes the money. What the accountant's
+screen printed was not a phantom row; it was a FALSE STATEMENT OF SETTLEMENT over a real debt,
+shown to the one person whose job is to reconcile against a bank statement. `MON-03` is right.
+
+--------------------------------------------------------------------------------------------
+3. THE SAME DEFECT ON SCREEN — the accountant's card and the dashboard, before
+--------------------------------------------------------------------------------------------
+
+`supabase/demo/demo_seed.sql` carries no dollar invoice at all, so the production shape the sweep
+photographed does not exist in the local demo tenant. It was reproduced on supplier
+`aa000000-…-0013` — the very supplier the sweep photographed — as two invoices: ILS 150 approved
+through `set_invoice_review_status` on the guarded path (0099 forbids a fixture from materialising
+`approved` any other way), and USD 300 left at `received`. That is production's shape: shekels the
+accountant may value, dollars it may not.
+
+Read on the guarded path, on the UNFIXED database:
+
+    OWNER       ILS 150.000 / 1 open      USD 300.000 / 1 open
+    ACCOUNTANT  ILS 150.000 / 1 open      USD   0.000 / 0 open      <-- the false zero
+
+Headed system Edge, 1440x900, `reducedMotion: 'reduce'`, `locale: 'he-IL'`, real sign-in as the
+demo accountant through `/login`. Playwright's bundled chromium fails `spawn UNKNOWN` on this
+machine, so `executablePath` names system Edge; headless misses injected CSS here. The camera is
+`scripts/pr14-supplier-currency-visual-check.cjs`, committed with this evidence.
+
+    PR14-RED-accountant-supplier-card-1440x900.png
+      "יתרה פתוחה"   ->   150 ₪
+                          0 $           <-- two lines; the second is the defect
+    PR14-RED-accountant-dashboard-1440x900.png
+      "יתרת חשבוניות פתוחות"   ->   ₪ 4,184     <-- FIN-07: the plain, unqualified word
+    /invoices balance column header  ->  "יתרה"                     <-- likewise unqualified
+
+For the two label surfaces the pre-fix wording was restored for the duration of this shot (the two
+lines of `f5d05a8b` in `he.ts` and `Invoices.tsx`, reverted and then put back; `git status`
+afterwards shows no modification to either file), so the "before" is the wording a reader actually
+met rather than the new wording over an old database.
+
+What the picture says beyond the number: the invoice feed under that card lists only the shekel
+invoices. The $300 that would contradict the `$ 0` is not on the accountant's screen at all — which
+is precisely why a zero there cannot be dismissed as a harmless extra line.
+
+--------------------------------------------------------------------------------------------
+4. WHAT WAS NOT RUN, AND WHY
+--------------------------------------------------------------------------------------------
+
+  * `npm run verify` whole and `npm run quality` — the standing brief reserves both for one
+    baseline run on an idle machine. The individual guards this change touches were run instead;
+    see the GREEN file.
+  * No production write of any kind. The production reads behind `f5d05a8b` were read-only through
+    the Management API and are recorded in `PR14-MON-03-FIN-04-FIN-07.txt`.

@@ -144,7 +144,7 @@ function RepairCard({ candidate, onApplied }: {
       <div className="note-idle items-start">
         <FileSpreadsheet size={ICON.sm} className="mt-0.5 shrink-0" aria-hidden="true" />
         <div className="min-w-0 space-y-1 text-sm">
-          <p><span className="font-medium">{t('productNameRepair.text_11')}</span> <bdi>{candidate.source_file_name}</bdi>
+          <p><span className="font-medium">{t('productNameRepair.text_11')}</span> <bdi dir="ltr">{candidate.source_file_name}</bdi>
             {candidate.source_row != null && <> {t('productNameRepair.text_12')} <span className="num">{candidate.source_row}</span></>}</p>
           {evidence.length > 0 && <p>{evidence.map(([key, value]) => `${key}: ${String(value)}`).join(' · ')}</p>}
           <p className="break-all text-xs text-ink-muted" dir="ltr" title={candidate.source_checksum}>

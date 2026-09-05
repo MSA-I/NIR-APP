@@ -1,0 +1,176 @@
+RTL-A11Y-02 — /payments at 390px drops the invoice-allocation column, the notes and the
+executed-by column, and there is no way to get them back.
+
+ORACLE (GATES.md): at 390px /payments shows the invoice-allocation column after the viewer turns
+it on.
+
+WHAT IS RUN: the mechanism, at the DataTable level where it lives. A priority-3 column, a phone
+viewport, and the picker's own checklist. Six claims: the priority default still holds for a
+column nobody chose; the checklist on a phone reports the CARD rather than the desktop table;
+ticking puts the column on every card; a second tick returns it to the default WITHOUT hiding the
+column from the desktop table; the choice survives a remount; and a priority-1/2 column still
+hides on both bodies. A seventh, in its own block, pins that desktop behaviour is unchanged.
+
+RUN AGAINST THE UNFIXED TREE. An oracle that has never been seen failing is a claim, not a
+check (plan §6, gate G14).
+
+COMMAND: npx vitest run src/components/mobileColumnParity.spec.tsx
+  (run from another worktree in this session, so the actual invocation carried the tree
+   explicitly: npx vitest run --root <worktree> --config <worktree>/vitest.config.ts <spec>)
+
+------------------------------------------------------------------------------
+
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/pr20-mobile-columns
+
+ ❯ src/components/mobileColumnParity.spec.tsx (7 tests | 4 failed) 462ms
+     × reports the card, not the desktop table, in the checklist on a phone 107ms
+     × puts a priority 3 column on the card when the viewer turns it on 37ms
+     × returns it to the priority default on a second tick, without hiding it from the table 51ms
+     × survives a remount, so the choice is a preference and not a gesture 30ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/components/mobileColumnParity.spec.tsx > mobile cards — an explicit column choice beats the priority default (RTL-A11Y-02) > reports the card, not the desktop table, in the checklist on a phone
+Error: expect(element).not.toBeChecked()
+
+Received element is checked:
+  <input
+  checked=""
+  class="size-4 shrink-0 accent-action"
+  type="checkbox"
+/>
+ ❯ src/components/mobileColumnParity.spec.tsx:82:65
+     80|     // The measured defect: הערות read as shown while no card carried …
+     81|     // column is on, over a card that does not have it, is the thing t…
+     82|     expect(screen.getByRole('checkbox', { name: 'הערות' })).not.toBeCh…
+       |                                                                 ^
+     83|     expect(screen.getByRole('checkbox', { name: 'סכום' })).toBeChecked…
+     84|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  src/components/mobileColumnParity.spec.tsx > mobile cards — an explicit column choice beats the priority default (RTL-A11Y-02) > puts a priority 3 column on the card when the viewer turns it on
+Error: expect(element).not.toBeChecked()
+
+Received element is checked:
+  <input
+  checked=""
+  class="size-4 shrink-0 accent-action"
+  type="checkbox"
+/>
+ ❯ src/components/mobileColumnParity.spec.tsx:90:21
+     88|     openSheet();
+     89|     const box = screen.getByRole('checkbox', { name: 'הערות' });
+     90|     expect(box).not.toBeChecked();
+       |                     ^
+     91|     fireEvent.click(box);
+     92|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  src/components/mobileColumnParity.spec.tsx > mobile cards — an explicit column choice beats the priority default (RTL-A11Y-02) > returns it to the priority default on a second tick, without hiding it from the table
+TestingLibraryElementError: Unable to find an element with the text: ריכוז שלוש חשבוניות. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+<li
+  class="mobile-data-card p-4  "
+>
+  <div
+    class="min-w-0 flex-1"
+  >
+    <div
+      class="flex items-center justify-between gap-3"
+    >
+      <div
+        class="min-w-0 break-words font-medium text-ink-body"
+      >
+        שורה אפס
+      </div>
+    </div>
+    <div
+      class="flex flex-wrap gap-x-4 gap-y-1 mt-1.5 text-sm text-ink-mid"
+    >
+      <span
+        class="inline-flex min-w-0 flex-wrap items-baseline gap-1"
+      >
+        <span
+          class="text-xs text-ink-muted"
+        >
+          סכום
+          :
+        </span>
+        100
+      </span>
+    </div>
+  </div>
+</li>
+ ❯ Object.getElementError ../../../node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/components/mobileColumnParity.spec.tsx:104:32
+    102|     const box = screen.getByRole('checkbox', { name: 'הערות' });
+    103|     fireEvent.click(box);
+    104|     expect(within(firstCard()).getByText('ריכוז שלוש חשבוניות')).toBeI…
+       |                                ^
+    105|
+    106|     fireEvent.click(box);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  src/components/mobileColumnParity.spec.tsx > mobile cards — an explicit column choice beats the priority default (RTL-A11Y-02) > survives a remount, so the choice is a preference and not a gesture
+TestingLibraryElementError: Unable to find an element with the text: ריכוז שלוש חשבוניות. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+<li
+  class="mobile-data-card p-4  "
+>
+  <div
+    class="min-w-0 flex-1"
+  >
+    <div
+      class="flex items-center justify-between gap-3"
+    >
+      <div
+        class="min-w-0 break-words font-medium text-ink-body"
+      >
+        שורה אפס
+      </div>
+    </div>
+    <div
+      class="flex flex-wrap gap-x-4 gap-y-1 mt-1.5 text-sm text-ink-mid"
+    >
+      <span
+        class="inline-flex min-w-0 flex-wrap items-baseline gap-1"
+      >
+        <span
+          class="text-xs text-ink-muted"
+        >
+          סכום
+          :
+        </span>
+        100
+      </span>
+    </div>
+  </div>
+</li>
+ ❯ Object.getElementError ../../../node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/components/mobileColumnParity.spec.tsx:118:32
+    116|     openSheet();
+    117|     fireEvent.click(screen.getByRole('checkbox', { name: 'הערות' }));
+    118|     expect(within(firstCard()).getByText('ריכוז שלוש חשבוניות')).toBeI…
+       |                                ^
+    119|     first.unmount();
+    120|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 3 passed (7)
+   Start at  13:15:08
+   Duration  3.85s (transform 829ms, setup 638ms, import 1.02s, tests 462ms, environment 1.47s)

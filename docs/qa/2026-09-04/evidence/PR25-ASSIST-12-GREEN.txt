@@ -1,0 +1,14 @@
+# PR25 · ASSIST-12 · GREEN
+# oracle: npx vitest run src/pages/dashboards/accountantCreditVisibility.spec.tsx -t ASSIST-12
+# exit code: 0
+
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-ab86901d055337c47
+
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Start at  15:25:31
+   Duration  3.29s (transform 612ms, setup 421ms, import 1.21s, tests 266ms, environment 1.14s)
+
+

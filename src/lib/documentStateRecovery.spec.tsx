@@ -12,6 +12,7 @@ describe('document state action matrix', () => {
       processing: 'wait',
       review: 'review',
       supplier_unresolved: 'review',
+      awaiting_scan: 'review',
       unassigned: 'file',
       assigned: 'none',
       completed: 'none',

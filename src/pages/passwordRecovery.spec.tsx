@@ -100,8 +100,67 @@ describe('/forgot-password', () => {
     await user.type(screen.getByLabelText('אימייל'), 'office@demo.supplyflow.local');
     await user.click(screen.getByRole('button', { name: /שליחת קישור איפוס/ }));
 
-    await screen.findByText(/נשלחו יותר מדי בקשות איפוס/);
+    await screen.findByText(/יותר מדי בקשות/);
     expect(screen.queryByText(/אם הכתובת רשומה במערכת/)).toBeNull();
+  });
+
+  /**
+   * ENTRY-07 — the rate-limit sentence was dead code, and the test above is why nobody noticed.
+   *
+   * It fed `msg: 'email rate limit exceeded'`, a string GoTrue does not send. The real wire,
+   * captured on the live site 2026-09-04 and committed at `docs/qa/2026-09-04/entry.json`, is
+   * the body below: neither "rate limit" nor "too many" occurs anywhere in it. So the regex at
+   * ForgotPassword.tsx never matched in production, and a throttled visitor was told the
+   * operation failed and to contact support -- for a wait of under a minute.
+   *
+   * A green test against a string the server never sends is worse than no test: it reports the
+   * dead branch as covered. This one asserts against the real body.
+   */
+  it('names the rate limit on the body GoTrue really sends, not on prose that matches nothing', async () => {
+    server.use(
+      http.post(`${SUPABASE_URL}/auth/v1/recover`, () => HttpResponse.json({
+        code: '429',
+        error_code: 'over_email_send_rate_limit',
+        msg: 'For security purposes, you can only request this after 55 seconds.',
+      }, { status: 429 })),
+    );
+
+    const user = userEvent.setup();
+    render(<MemoryRouter><ForgotPassword /></MemoryRouter>);
+    await user.type(screen.getByLabelText('אימייל'), 'office@demo.supplyflow.local');
+    await user.click(screen.getByRole('button', { name: /שליחת קישור איפוס/ }));
+
+    await screen.findByText(/יותר מדי בקשות/);
+    // The generic failure banner is what the defect produced. It must be gone, not merely joined.
+    expect(screen.queryByText(/פנה לתמיכה/)).toBeNull();
+    expect(screen.queryByText(/אם הכתובת רשומה במערכת/)).toBeNull();
+  });
+
+  /**
+   * The same message must not answer the question ruling #352 deliberately leaves open.
+   *
+   * A throttle only fires where there is an address to send to, so a sentence that asserts mail
+   * WAS sent -- "נשלחו יותר מדי בקשות איפוס" -- tells a stranger the address is registered, which
+   * is `ENTRY-01` sharpened by the fix for `ENTRY-07`. Naming the wait ("55 seconds") does the
+   * same thing with a number.
+   */
+  it('does not disclose that the address is registered, and does not name the wait', async () => {
+    server.use(
+      http.post(`${SUPABASE_URL}/auth/v1/recover`, () => HttpResponse.json({
+        code: '429',
+        error_code: 'over_email_send_rate_limit',
+        msg: 'For security purposes, you can only request this after 55 seconds.',
+      }, { status: 429 })),
+    );
+
+    const user = userEvent.setup();
+    render(<MemoryRouter><ForgotPassword /></MemoryRouter>);
+    await user.type(screen.getByLabelText('אימייל'), 'stranger@example.com');
+    await user.click(screen.getByRole('button', { name: /שליחת קישור איפוס/ }));
+
+    const shown = (await screen.findByText(/יותר מדי בקשות/)).textContent ?? '';
+    expect(shown).not.toMatch(/נשלח/);
+    expect(shown).not.toMatch(/\d+\s*(שניות|שניה|seconds)/);
   });
 });
 

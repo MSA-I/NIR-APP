@@ -1,0 +1,76 @@
+PR 28 — screens read at 1440x900, system Edge through playwright-core, reducedMotion: reduce.
+
+HOW THESE WERE RENDERED, and what that does and does not prove.
+The shared local Supabase stack is at migration head 0245 against a 0314 tree and this agent was
+told not to touch it, so nothing here was rendered against a database. A Vite dev server was
+started on port 5311 (not 5199, which belongs to the project and possibly to another agent) with
+VITE_SUPABASE_URL pointed at an origin nothing listens on, and every /rest/v1 and /auth/v1 call
+was answered by a Playwright route handler from fixtures written by hand. So these images prove
+what the COMPONENTS draw for a given server answer. They do not prove what the server answers —
+that is what the migrations quoted in the ledger rows are for, and no row here claims otherwise.
+
+Two things the harness had to get right before anything rendered at all, recorded because the next
+agent will hit them: PostgREST answers .single()/.maybeSingle() with an OBJECT rather than a
+one-element array, and a cross-origin fulfil must send access-control-expose-headers:
+content-range or postgrest reads no count and every server-mode list refuses to state a total.
+
+------------------------------------------------------------------------------------------------
+PR28-invoices-1440x900.png    /invoices as accountant     FIN-09 / MON-09
+------------------------------------------------------------------------------------------------
+Three rows, three different answers in the יתרה column — which is the whole finding:
+
+  0509   ₪ 640.00   יתרה ₪ 0.00   מאושרת · שולמה
+  3377   ₪ 900.00   יתרה ₪ 150.00 מאושרת
+  7702   ₪ 4,720.00 יתרה —        דורשת בירור · לא שולמה
+
+0509 is the invoice MON-09 drove to a measured zero by hand; it now prints 0.00 in the settled
+tone instead of borrowing the em dash. 3377 keeps its open balance in the awaiting tone. 7702 is
+the row that must NOT change: invoice_balances_by_currency returned no row for it, so the balance
+is genuinely unknown and the em dash is the honest mark. Before this change all three of the
+first and third rows drew the same glyph.
+
+------------------------------------------------------------------------------------------------
+PR28-credits-1440x900.png     /credits?status=all as accountant     FIN-01 (the half this PR owns)
+------------------------------------------------------------------------------------------------
+Header: `סה״כ זיכויים פתוחים: אין זיכויים פתוחים`.
+
+One credit exists in the fixture (#4, אריזות הדרום, 150.00 ₪, קוזז בתשלום) and none is open, so
+the open-credit population is measured and empty. It used to read `—`, the marker this codebase
+reserves for a figure it could not measure — while the dashboards, over the very same population,
+said `0` and `אין זיכויים פתוחים`. The sentence on screen is now the dashboards' own, and the
+spec asserts that by reading the dashboard's key rather than a literal.
+
+------------------------------------------------------------------------------------------------
+PR28-financial-supplier-1440x900.png   /finance/suppliers/<id> as accountant     FIN-02
+------------------------------------------------------------------------------------------------
+`פעילות פיננסית אחרונה` now lists, top to bottom:
+
+  תשלום #6      28.06.2026   ₪ -750
+  חשבונית 0509  20.06.2026   ₪ 640
+  חשבונית 3377  20.06.2026   ₪ 900
+  חשבונית 7702  20.06.2026   ₪ 4,720
+
+There is NO `זיכוי #4` line. Credit #4 is labelled `קוזז בתשלום` and its allocated amount is
+0.00 — a pre-0173 row whose label says consumed and whose money never moved — so it took nothing
+off the debt and the ledger no longer says it did. The `זיכויים` card above still shows the
+credit at its own nominal 150 ₪ with its own status badge, which is right: that card is a list of
+credits, not a claim about the balance.
+
+The headline `יתרה פתוחה 150 ₪` and the feed do not tie in THIS image, and that is a property of
+the screenshot fixture rather than of the fix: three invoices are seeded here so the balance
+column above could be read for FIN-09, while the supplier balance fixture carries the sweep's
+single figure. The identity the finding actually asks for — headline == net of the ledger — is
+asserted arithmetically, on a single-invoice fixture, in src/pages/supplierCreditLedger.spec.tsx,
+in both directions (a stale offset credit that must not be counted, and a half-consumed credit
+that must be counted at 60 rather than 150).
+
+------------------------------------------------------------------------------------------------
+NOT RENDERED, and why
+------------------------------------------------------------------------------------------------
+/invoices/<id> — the invoice card carrying the definite-duplicate warning (FIN-06's copy change).
+The detail loader reads the invoice with two embedded link graphs, a balance row, allocations with
+an embedded payment, an allowed-transition read and get_invoice_three_way_match, and the fixture
+harness could not satisfy all of it: the screen stayed on `הפעולה נכשלה`. Two fixture rounds were
+spent on it and the third was not, because the change is one dictionary string in each language
+and its oracle reads those strings directly in src/pages/duplicateInvoiceWarning.spec.ts. The row
+is BLOCKED on its other clause regardless. Recorded here rather than left as a silent gap.

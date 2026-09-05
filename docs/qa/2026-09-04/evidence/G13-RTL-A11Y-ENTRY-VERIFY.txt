@@ -1,0 +1,378 @@
+G13 CROSS-VERIFICATION — area RTL-A11Y-* and ENTRY-*
+====================================================
+
+Verifier branch: worktree-agent-a0146960ee59b8eb9   (worktree .claude/worktrees/agent-a0146960ee59b8eb9)
+Tree verified:   5a56770c "chore(qa-sweep): the cross-verification wave opens..."
+Date:            05.09.2026
+Wrote none of the fixes. The local Supabase stack was held by the G13 "SQL" verifier throughout;
+nothing here touches it — every browser harness below answers Supabase from a fixture and points
+the client at a dead port (127.0.0.1:59998 / :59999).
+
+HOW THE RED WAS PRODUCED — the honest route, not a reverted line
+---------------------------------------------------------------
+A second, detached worktree (`.tmp-verify/red`, removed after the run) was checked out at the
+PARENT of each fix commit, the HEAD version of the oracle copied in, and the oracle run there.
+That is the genuinely unfixed tree, not an edited one. No product file and no spec was modified
+anywhere. Fix commits located with `git log --oneline -- <oracle path>`.
+
+  b222babb~1 = c85f1de4   ENTRY-07, ENTRY-10, ENTRY-11
+  435fc37f~1 = 182eef90   RTL-A11Y-02, -03, -04, -05
+  e0230295~1 = ebfa032a   RTL-A11Y-07
+  719d00af~1 = 760b9b44   RTL-A11Y-08
+  14593465~1 = 719d00af   ENTRY-02, -05, -06, -12
+  4803fd4f~1 = e0230295   ENTRY-08
+  182eef90~1 = 47d6befb   RTL-A11Y-01
+  e2b1c9de~1 = 27eeef96   RTL-A11Y-09, -11, -12   (and -10, which does NOT go red there — see below)
+  27eeef96~1 = 50188f6e   RTL-A11Y-10
+
+GREEN BASELINE, whole tree at 5a56770c
+--------------------------------------
+  npx vitest run src/pages/offboardingStepUp.spec.tsx src/components/mobileColumnParity.spec.tsx \
+    src/pages/mobileColumnScreens.spec.tsx src/pages/reportsMobileParity.spec.tsx \
+    src/pages/noDataMarker.spec.ts src/lib/fileNameIsolation.spec.ts src/lib/bidiText.spec.ts \
+    src/components/dataTable.spec.tsx src/components/planCardPhone.spec.ts \
+    src/pages/pricingPublicClaims.spec.tsx src/pages/pricing.spec.tsx \
+    src/pages/hebrewNumberAgreement.spec.tsx src/pages/publicEntranceTouchTargets.spec.tsx \
+    src/pages/passwordRecovery.spec.tsx src/routeNotFound.spec.tsx \
+    src/pages/operatorInviteRefusal.spec.ts
+
+  Test Files  16 passed (16)
+       Tests  119 passed (119)
+
+No vitest fork timeout occurred in any run below; nothing here is recorded as environmental.
+
+
+PER ROW
+=======
+
+RTL-A11Y-01  /settings, offboarding step-up                                          MET
+  oracle  npx vitest run src/pages/offboardingStepUp.spec.tsx
+  red @47d6befb   4 failed | 3 passed (7)
+  green @5a56770c 7 passed (7)
+  The row's own claim — the CANCEL branch measured separately from the request branch — is one of
+  the four reds: "asks again before cancelling an open request". Two controls pass in BOTH runs
+  ("still skips the prompt for the export link", "keeps the password box when the identity list is
+  absent"), so the red is not a broken harness. Counts identical to PR01-OWN-01-RED.txt.
+
+RTL-A11Y-02  /payments at 390px, column parity                                       MET
+  oracle  npx vitest run src/components/mobileColumnParity.spec.tsx
+  red @182eef90   4 failed | 3 passed (7)
+  green           7 passed (7)
+  Three controls green in the red run, including the desktop regression guard.
+  LIMIT, stated: the oracle never renders /payments. It drives DataTable directly, at the
+  mechanism the finding names (ui.tsx:2216). The route in the row's own header was not measured.
+
+RTL-A11Y-03  /prices at 390px, unit and previous price                               MET
+RTL-A11Y-04  /suppliers at 390px, rating/categories/contact/minimum                  MET
+  oracle  npx vitest run src/pages/mobileColumnScreens.spec.tsx   (one file, both rows)
+  red @182eef90   4 failed (4)   — two /prices cases, two /suppliers cases
+  green           4 passed (4)
+  Images READ, not assumed:
+    PR20-prices-mobile-390x844.png            card shows name, current price, change %, valid-from
+                                              only — no unit, no previous price
+    PR20-prices-mobile-390x844-columns-on.png card now carries «יחידה: kg» and «מחיר קודם: 12.50 ₪»,
+                                              which is the base the −74.4% was computed from
+    PR20-suppliers-mobile-390x844-columns-on.png  «דירוג: 4 ★», «קטגוריות: ירקות»,
+                                              «איש קשר: סיגל אברהם», «מינ׳ הזמנה: 1,250.00 ₪»
+  The images show what the rows claim.
+
+RTL-A11Y-05  /reports at 390px, entry date and five totals                           MET
+  oracle  npx vitest run src/pages/reportsMobileParity.spec.tsx
+  red @182eef90   2 failed (2)
+  green           2 passed (2)
+  Image READ: PR20-reports-mobile-390x844.png — the invoice cards carry «תאריך קליטה: 02.09.2026»
+  and the mobile totals line states five figures (487.66 / 85.34 / 573.00 / 562.00 / 11.00), the
+  same five the desktop <tfoot> states.
+
+RTL-A11Y-06  dark-mode page description contrast                              stays FIXED
+  NOT MET, and the reason is not doubt about the fix.
+  The row's oracle is scripts/measure-composited-contrast.mjs, a heavy rendered-contrast browser
+  gate this verifier was instructed not to run, so the RED was never seen. What WAS checked:
+    - npm run check:tokens          PASS (585 files, 145 tokens, zero raw palette classes)
+    - npm run check:contrast        PASS — and it says so itself: "The RATIOS are measured in the
+      CI browser job (scripts/check-contrast-rendered.mjs) -- this gate only proves the list is
+      honest." Neither cheap guard measures this row's claim.
+    - npm run check:appearance-scope PASS
+    - src/index.css:1997 carries `:root[data-theme='dark'] .app-glow { display: none; }`, the
+      change ruling #354 mandates, unlayered exactly as the comment beside it explains.
+    - Images READ: PR21-dark-dashboard-1440x900-BEFORE.png shows the orb's wash lifting the ground
+      under the page description; -AFTER.png shows the same layout on a flat dark ground with the
+      panels and text unchanged. Consistent with 2.877-3.266:1 -> 4.775-5.385:1.
+  A green nobody produced is not a green. The row keeps FIXED until someone runs the measurement.
+
+RTL-A11Y-07  the mandated "—" drawn in a below-AA token                               MET
+  oracle  npx vitest run src/pages/noDataMarker.spec.ts
+  red @ebfa032a   1 failed (1) — and it names all EIGHT sites per row, not a count:
+                  Onboarding.tsx:1148 ghost; PriceLists.tsx:171,174,184 faint;
+                  Suppliers.tsx:65,211 ghost; :1001 faint; :1015 ghost
+  green           1 passed (1)
+  The oracle reads the exemption list out of scripts/contrast-pairs.mjs rather than copying it,
+  and refuses to run if that list parses empty — so it cannot pass by measuring nothing.
+  LIMIT, stated: it is a SOURCE scan. It asserts the token, never the ratio, and its MARKER regex
+  only sees a literal — between element tags; a marker rendered through a variable is invisible to
+  it. The ">= 4.5:1" half of the row rests on the composited measurement, which was not re-run.
+
+RTL-A11Y-08  file name with Hebrew renders reordered                                  MET
+  oracle  npx vitest run src/lib/fileNameIsolation.spec.ts src/lib/bidiText.spec.ts
+  red @760b9b44   4 failed | 3 passed (7)
+  green           7 passed (7)
+  Control green in both runs: "scans a real number of files, so a broken path cannot pass by
+  finding nothing".
+  THE BRIEF'S QUESTION — would the guard fail on a genuinely unsafe name, or only on an absent
+  one? Read scripts/filename-bidi-visual-check.cjs end to end. It fails on BOTH, and correctly:
+    - it sorts per-character Range rectangles by screen x, so it reads the READER's order, not
+      textContent (which would report the logical name and call a scrambled screen correct);
+    - claim 1 is "the visual string ends with the extension"; claim 2 is "every technical run of
+      >=2 printable ASCII in the STEM survives contiguous in its own order" — 00002007_93 fails it;
+    - a name not drawn at all is pushed as a finding ("nothing to measure"), and a clipped name is
+      pushed as a finding ("clipped, not measurable"). Absence cannot pass silently.
+    - two controls are declared expectPassUnfixed and the run FAILS if they break, or if no
+      control was measured at all.
+  Its one real limit, which the file itself states: a single-character technical token (the `3` in
+  «חלק 3») is not asserted, because separating it needs an LRM per Latin run, which was measured to
+  destroy Hebrew word order.
+  Images READ: PR34-documents-desktop-1440x900-BEFORE.png renders row 1 left-to-right as
+  `pdf.3 חלק — 00002007_93` — extension first, document number reordered; -AFTER.png renders
+  `93_00002007 — 3 חלק.pdf`. `חשבונית ספק לבדיקה.pdf` goes from `pdf.` leading to `.pdf` last.
+  Both controls (`invoice-2026-08 סופי.pdf`, `ADTV Ltd receipt 7352.pdf`) are unchanged in both.
+
+RTL-A11Y-09  column chooser announced as a dialog                                     MET
+  oracle A  npx vitest run src/components/dataTable.spec.tsx
+    red @27eeef96   2 failed | 30 passed (32)   — "does not claim to be a dialog" and
+                    "the trigger reports the state and points at the region it reveals"
+    green           32 passed (32)              — 30 controls green in the same red run
+  oracle B  node scripts/picker-focus-rtl-visual-check.cjs   (headed system Edge, own port 5937)
+    red @27eeef96   /suppliers FAIL — announces dialog=true, disclosure wired=false
+    green @5a56770c /suppliers PASS — role null, aria-controls resolves (controlsResolves: true)
+    Escape returns focus to the trigger and Tab leaves the panel in BOTH runs — the honest half of
+    the row, that the sweep's second claim was already false, reproduces.
+  NOTE ON THE ROW'S IMAGES: PR37-RED-09-suppliers-picker-open-1440x900.png and its GREEN twin are
+  BYTE-IDENTICAL (sha256 1cdc73afe776bde6466a280c9899902ba6daa7f3d2c97a5419adc048ca24ec98), and so
+  is the one my own green run produced. That is not dishonest — this change lives in the
+  accessibility tree, not in pixels — but "screens read, not remembered" implies a visible
+  before/after that does not exist. The evidence for this row is the `panel semantics on open` line.
+
+RTL-A11Y-10  shekel sign on opposite sides of the figure on one screen                MET
+  *** THE RED IS NOT REPRODUCIBLE FROM THIS ROW'S OWN COMMIT, AND THAT IS THE FINDING. ***
+  oracle  node scripts/picker-focus-rtl-visual-check.cjs
+    at e2b1c9de~1 (this row's own fix commit's parent):  RTL-A11Y-10 **PASS**, {"left":12}
+    at 27eeef96~1 (= 50188f6e):                          RTL-A11Y-10 FAIL, {"left":7,"right":5}
+    green @5a56770c                                      PASS, {"left":12}
+  On the campaign branch the five `dir="ltr"` attributes were removed by 27eeef96 (PR 25, row
+  DASH-09). e2b1c9de (PR 37, this row) adds only three explanatory COMMENTS to Dashboard.tsx — its
+  behavioural hunks were empty after the merge. The PR 37 commit message says so plainly ("the
+  three Dashboard.tsx hunks conflicted with PR 25, which had already removed the same dir
+  attributes"); the GATES row does not. Anyone reverting PR 37 to test this row would find nothing
+  wrong and conclude the row was never a defect.
+  Recorded MET because the defect, the red and the green are all real and I saw both sides — but
+  the commit that carries the behaviour is 27eeef96, not e2b1c9de.
+  Images READ: PR37-RED-dashboard-desktop-1440x900.png shows `68,663₪`, `1,724₪`, `10,942₪` in the
+  hero strip against `573.00 ₪` and `17,250 ₪` lower on the SAME page. My own green run's
+  screenshot shows `₪ 68,663`, `₪ 1,724`, `₪ 10,942` — one shape on one screen.
+
+RTL-A11Y-11  the alerts field on the mobile supplier card has no label                MET
+  oracle  node scripts/picker-focus-rtl-visual-check.cjs (390x844)
+    red at BOTH e2b1c9de~1 and 27eeef96~1:  FAIL — 2 unlabelled field(s) on 2 card(s)
+    green @5a56770c:                        PASS — 0 unlabelled field(s) on 2 card(s)
+  Images READ (mine): the red card 1 shows `טלפון: 026518868`, then bare chips `1 חריג` `1 זיכוי`
+  with no field name, then `יתרה פתוחה: 573.00 ₪`; card 2 shows a bare `—` in the same slot. The
+  green shows `התראות: 1 חריג 1 זיכוי` and `התראות: —`. The same orphan `—` is visible in the
+  older PR20-suppliers-mobile-390x844-columns-on.png, which is independent corroboration that it
+  was on the screen before PR 37.
+
+RTL-A11Y-12  four bars, three axis labels                                             MET
+  oracle  node scripts/picker-focus-rtl-visual-check.cjs (six widths)
+    red at BOTH e2b1c9de~1 and 27eeef96~1:  344px (card 329px) 4 bars / 3 labels
+                                            [יוני 2026, יולי 2026, ספטמבר 2026]
+    green @5a56770c:                        4 labels at all six widths (430, 412, 390, 375, 360, 344)
+  Image READ: my red 344px capture shows the August bar with NO label while «ספטמבר 2026» sits
+  under the fourth bar, so a reader counting labels is one position out. My green 344px capture
+  shows four labels — and, exactly as the row discloses, the two longest abut without a gap.
+  STATED, because MET must not be read as more than it is: **the finding's own 390px does NOT
+  reproduce.** At 390px the unfixed tree draws four labels on this fixture, at both parents. The
+  red is at 344px, a width the finding never named. The row says this; a reader of the ledger
+  should not take "MET" to mean the sweep's 390px observation was reproduced.
+
+ENTRY-02  /pricing on a phone shows no entitlement rows                               MET
+  oracle A  npx vitest run src/components/planCardPhone.spec.ts
+    red @719d00af  2 failed | 1 passed (3)   green 3 passed (3)
+    The one pass is the declared positive control ("the card really does draw both blocks and
+    draws no expander"), green in both runs.
+  oracle B  node scripts/measure-public-entrance.mjs   (headed Edge, my own vite on :5942/:5941,
+            catalogue from a fixture, Supabase client on a dead port)
+    red @719d00af   /pricing 390x844: **0 of 52** entitlement rows laid out, 0 expanders,
+                    body text 817 chars; desktop 52/52 in the same run
+    green @5a56770c /pricing 390x844: **52 of 52** laid out, body text 2573 chars
+    Identical, figure for figure, to the committed PR36-measurement-RED/GREEN.json.
+  This is a MEASURED count of laid-out rows, not a class name.
+  Images READ: PR36-pricing-390x844-RED.png shows four plan names and four document counts and
+  nothing else; -GREEN.png shows both capability blocks with every row on all four cards.
+
+ENTRY-05  the banner contradicts the cards                                            MET
+  oracle  npx vitest run src/pages/pricingPublicClaims.spec.tsx
+  red @719d00af   3 failed (3) — two of them this row's (he and en)
+  green           3 passed (3)
+  The oracle asserts BOTH halves together, exactly as the row claims: it requires the rendered
+  ladder to contain at least one excluded row (`expect(excluded.length).toBeGreaterThan(0)`),
+  requires the banner NOT to carry «כל היכולות פתוחות בכל המסלולים» / «ההבדל הוא נפח בלבד», AND
+  requires it still to name capabilities (`toMatch(/יכולות/)`). A page that simply deleted the
+  banner would fail the third assertion. Same three assertions in English.
+  Read on screen: PR36-pricing-1440x900-RED.png carries the banner directly above cards drawing
+  ✗ rows; the 390x844 GREEN image carries the replacement sentence naming capabilities.
+
+ENTRY-06  the Free rung breaks its own card                                           MET
+  oracle A  npx vitest run src/pages/pricingPublicClaims.spec.tsx src/pages/pricing.spec.tsx
+    red @719d00af   pricingPublicClaims 3 failed (3), third case is this row's;
+                    pricing.spec.tsx 1 failed | 19 passed (20)
+    green           3 passed (3) and 20 passed (20)
+    The label assertion is exact — `expect(label.textContent.trim()).toBe(AUTOMATION.label)` —
+    so a label carrying the extra sentence cannot pass.
+  oracle B  node scripts/measure-public-entrance.mjs — MEASURED GEOMETRY, not a class:
+    red   badge overflowStart **+13px OUTSIDE** the card on all five intro rows (card 209px,
+          badge 110px), tallest row on the free card **138px**, free card **1172px**
+    green badge overflowStart **-30px / end -69px INSIDE**, tallest row **61px**, card **822px**
+    every other card's tallest row 35px in BOTH runs — the control that shows only the free rung moved
+  Identical to the committed PR36-measurement-RED/GREEN.json.
+  Image READ: PR36-pricing-1440x900-RED.png — the «רק 30 יום ראשוני» chips visibly cross the free
+  card's border, the labels wrap one word per line, and פרו/פרימיום carry hundreds of pixels of
+  empty coloured fill because the free card is 1172px tall.
+
+ENTRY-07  the recovery rate-limit sentence was dead code                              MET
+  oracle  npx vitest run src/pages/passwordRecovery.spec.tsx
+  red @c85f1de4   2 failed | 8 passed (10)   green 10 passed (10)
+  Counts identical to PR02-ENTRY-07-RED.txt. The oracle feeds the REAL GoTrue body
+  ({code:'429', error_code:'over_email_send_rate_limit', msg:'...after 55 seconds.'}, status 429)
+  and additionally asserts the message does not say «נשלח» and does not name the wait — so it
+  asserts the anti-enumeration property ruling #352 leaves open, not just the happy branch.
+
+ENTRY-08  Hebrew plural agreement on /pricing                                         MET
+  oracle  npx vitest run src/pages/hebrewNumberAgreement.spec.tsx
+  red @e0230295   6 failed | 2 passed (8); this row owns two of the six
+                  («1 משתמש פעיל» / «15 משתמשים פעילים», «1 סניף» / «10 סניפים»)
+  green           8 passed (8)
+  Counts identical to PR35-...-RED.txt. The oracle pins BOTH forms on BOTH rungs and additionally
+  `not.toContain('משתמשים פעילים')` / `not.toContain('סניפים')` on the free card, so a test that
+  only pinned the plural could not pass here.
+  Corroborated on screen: PR36-pricing-390x844-GREEN.png shows the free card reading
+  «1 משתמש פעיל» and «1 סניף» beside פרימיום's «30 משתמשים פעילים» and «10 סניפים».
+
+ENTRY-10  a nonexistent route is a silent bounce to /login                            MET
+  oracle  npx vitest run src/routeNotFound.spec.tsx
+  red @c85f1de4   3 failed (3)   green 3 passed (3)
+  Counts identical to PR02-ENTRY-10-PERM-04-RED.txt. The oracle asserts BOTH that role=alert
+  renders AND that useLocation's pathname is still '/no-such-screen', so "did not bounce" is an
+  assertion and not a hope.
+  NOTE for the ledger: only two of the three tests are ENTRY-10's; the third
+  ("reads differently from a wrong address") belongs to PERM-04, which is not my row. A reader
+  counting "3 failed" against ENTRY-10 alone would over-credit it.
+  PR02-404-SCREEN-READ.txt was read: it records the live DOM text at 1440x900 and 390x844 and
+  names honestly what it did not measure (the role-refusal screen needs a seeded session).
+
+ENTRY-11  the operator invitation refusal names a state, not a next step              MET
+  oracle  npx vitest run src/pages/operatorInviteRefusal.spec.ts
+  red @c85f1de4   **4 failed | 5 passed (9)**   green 9 passed (9)
+  The four reds are exactly the finding's own two states in both languages (revoked he/en,
+  unknown he/en). Two controls green in the red run ("accepted" in both languages) plus the twin
+  control.
+  *** DISCREPANCY WITH THE RECORDED EVIDENCE, stated rather than smoothed over. ***
+  PR02-ENTRY-11-RED.txt records 5 failed | 4 passed (9), the fifth being English `expired`, and
+  the commit message repeats it ("English `expired` failed too, 5 of 9 cases red"). Against the
+  regex that SHIPPED — NEXT_STEP.en = /\brequest|\bask\b|\bsign in\b|\bcontact\b|\byou can\b/i —
+  `expired` reads "...a new link has to be requested.", which `\brequest` matches. It passes, at
+  the parent commit and at HEAD; neither the string nor the spec changed after b222babb. The
+  recorded red was therefore measured against a NARROWER earlier regex and never re-run after the
+  oracle was widened. The fix is sound and the finding is asserted; the evidence file overstates
+  the red by one case.
+
+ENTRY-12  16-20px text controls on the public entrance                                MET
+  oracle A  npx vitest run src/pages/publicEntranceTouchTargets.spec.tsx
+    red @719d00af  3 failed | 1 passed (4)   green 4 passed (4)
+    The one pass is the declared positive control (the four strings are really on the screen).
+  oracle B  node scripts/measure-public-entrance.mjs — the oracle of record, and MEASURED:
+    red   /login שכחתי סיסמה **20px**, להרשמה **20px**, תנאי שימוש **16px**,
+          מדיניות פרטיות **16px**; /signup התחברות **20px**;
+          /forgot-password חזרה למסך הכניסה **19px**
+    green all six **44px**
+    Identical to the committed PR36-measurement-RED/GREEN.json. Widths unchanged (84/53/59/77/57/113),
+    which is the row's claim that the type size did not move.
+  LIMIT, stated: the vitest spec asserts a CSS CLASS (`min-h-11|h-N|btn-*` in className), by its
+  own admission — jsdom lays nothing out. A class can be present while the rendered box is wrong.
+  The height claim is guarded ONLY by measure-public-entrance.mjs, which planCardPhone.spec.ts's
+  own header notes is "not in any workflow this repository runs on every push".
+  Images READ: PR36-login-390x844-RED.png and -GREEN.png — same type size, the four controls given
+  taller boxes, page height grown accordingly.
+
+
+BROWSER HARNESS RUNS I PERFORMED (headed system Edge, explicit executablePath; bundled Chromium
+does not spawn on this machine; headless misses injected CSS here)
+------------------------------------------------------------------------------------------------
+  node scripts/picker-focus-rtl-visual-check.cjs --tag G13GREEN   @5a56770c
+     SUMMARY {"RTL-A11Y-09":"PASS","RTL-A11Y-11":"PASS","RTL-A11Y-10":"PASS","RTL-A11Y-12":"PASS"}
+  node scripts/picker-focus-rtl-visual-check.cjs --tag G13RED     @27eeef96 (= e2b1c9de~1)
+     SUMMARY {"RTL-A11Y-09":"FAIL","RTL-A11Y-11":"FAIL","RTL-A11Y-10":"PASS","RTL-A11Y-12":"FAIL"}
+  node scripts/picker-focus-rtl-visual-check.cjs --tag G13RED25   @50188f6e (= 27eeef96~1)
+     SUMMARY {"RTL-A11Y-09":"FAIL","RTL-A11Y-11":"FAIL","RTL-A11Y-10":"FAIL","RTL-A11Y-12":"FAIL"}
+  node scripts/measure-public-entrance.mjs  MEASURE_LABEL=G13GREEN QUALITY_BASE_URL=:5941 @5a56770c
+     PASS — 0 failure(s)
+  node scripts/measure-public-entrance.mjs  MEASURE_LABEL=G13RED   QUALITY_BASE_URL=:5942 @719d00af
+     FAIL — 8 failure(s)  (1 x ENTRY-02, 1 x ENTRY-06 covering five badges, 6 x ENTRY-12)
+
+  Two throwaway vite servers were used, on ports 5941 and 5942 with --strictPort, reached at
+  http://localhost:<port> (this machine's vite binds the IPv6 loopback, so 127.0.0.1 is refused).
+  Port 5199 was left alone — it belongs to another worktree. Both servers were stopped afterwards
+  and both were verified stopped. The screenshots and JSON these runs produced were read and then
+  deleted; this .txt is the record, per the verify brief's ".txt only" rule.
+
+GUARDS RUN
+----------
+  npm run check:tokens             PASS
+  npm run check:contrast           PASS  (manifest only — it says so itself)
+  npm run check:appearance-scope   PASS
+
+NOT RUN, AND WHY
+----------------
+  npm run verify (whole)  / npm run quality  — forbidden by the brief.
+  scripts/measure-composited-contrast.mjs    — the heavy rendered-contrast gate; the brief told
+                                               this verifier not to run it. It is the ONLY oracle
+                                               for RTL-A11Y-06, which is why that row stays FIXED.
+  scripts/filename-bidi-visual-check.cjs     — RTL-A11Y-08's rendered half. Read end to end and
+                                               judged sound (see above); the source oracle was
+                                               red/greened and the committed images were read.
+  Anything touching the local Supabase stack  — held by another verifier for the whole wave.
+
+
+ORACLES I BELIEVE DO NOT FULLY ASSERT THEIR FINDING
+===================================================
+None asserts the OPPOSITE of its finding. These are gaps between what the row claims and what its
+oracle can see. Ordered by how much a reader of the ledger would be misled.
+
+1. RTL-A11Y-10 — the ledger row credits the wrong commit, and reverting it proves nothing.
+   The behaviour is 27eeef96 (PR 25 / DASH-09). e2b1c9de contributes three comments. Measured:
+   PASS at e2b1c9de~1, FAIL at 27eeef96~1.
+
+2. ENTRY-11 — the recorded red (5 of 9) was measured against a regex that did not ship. Against
+   the shipped one it is 4 of 9. The oracle was widened mid-flight and only one side re-run.
+
+3. RTL-A11Y-12 — the finding's own viewport (390px) is GREEN on the unfixed tree. The red exists
+   only at 344px. Disclosed in the row; must not be read as "the sweep's observation reproduced".
+
+4. RTL-A11Y-09 — the RED and GREEN screenshots the row cites are literally the same file
+   (identical sha256). The change is not visible; the ARIA line in the oracle text is the evidence.
+
+5. RTL-A11Y-02 — the oracle never renders /payments, the row's own route. It tests DataTable.
+
+6. RTL-A11Y-07 — a source scan asserts the TOKEN, never the 4.5:1 the row promises; and its regex
+   only sees a literal — written directly between element tags.
+
+7. ENTRY-12 — the committed spec asserts a CSS class name, not a height, and the script that does
+   measure the height runs in no workflow. Today it passes; nothing keeps it passing on push.
+
+8. ENTRY-02 / ENTRY-06 — same shape: the source oracles are CSS-rule scans; the counts and the
+   geometry come only from measure-public-entrance.mjs. I re-ran it and it holds, but the cheap
+   half of each pair could stay green while the page went blank again for a different CSS reason.
+
+9. ENTRY-10 — the row's status quotes "3 failed (3)" for a spec file it shares with PERM-04. Two
+   of the three are ENTRY-10's.
+
+10. RTL-A11Y-06 — no cheap guard covers it at all: check:tokens does not measure contrast, and
+    check:contrast states in its own success message that it proves only the list, not the ratios.

@@ -1,0 +1,17 @@
+PR42 / OWN-14 — GREEN. npx vitest run src/pages/onboardingLiveRecordNotice.spec.tsx
+  src/pages/onboardingFinish.spec.tsx src/pages/onboardingManualSuppliers.spec.tsx
+
+The measurement still passes (the first button patches organizations?id=eq.org-test with name,
+vat_rate and settings.business, merging the bank-matching keys through), and the notice now
+precedes that button in document order. The two neighbouring onboarding specs are green in the
+same run, so a Note added to step 1 did not disturb the wizard's ending or its supplier import.
+
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-aa6ab415e44e16b91
+
+
+ Test Files  3 passed (3)
+      Tests  6 passed (6)
+   Start at  15:06:36
+   Duration  3.52s (transform 1.95s, setup 1.35s, import 3.29s, tests 1.47s, environment 3.63s)
+

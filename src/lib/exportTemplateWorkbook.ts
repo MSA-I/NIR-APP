@@ -1,5 +1,4 @@
 import * as XLSX from 'xlsx';
-import { neutralizeSpreadsheetString } from './documentExport';
 import type { PlaceholderMapping } from './exportTemplates';
 
 /**
@@ -224,10 +223,17 @@ export async function fillTemplateWorkbook(
     // A cell that is now purely one number stays a number, so the accountant's own formatting
     // and any SUM over it keep working. Assigning `value` leaves `cell.style` — font, fill,
     // border and number format — exactly as the template had it.
+    //
+    // AND THE TEXT GOES IN AS IT CAME (`EXP-10`). This used to prefix an apostrophe to anything
+    // opening `= + - @`, borrowed from the CSV path where a cell really is typed into the grid on
+    // open. Here the value lands in an .xlsx string cell, which is evaluated only when it carries
+    // an `<f>` element — and assigning a string to `cell.value` never produces one. The apostrophe
+    // protected nothing and was displayed, inside the very template this function exists to
+    // preserve unchanged. `documentExport.ts` still owns the rule for the CSV path that needs it.
     const asNumber = Number(filled);
     cell.value = filled.trim() !== '' && Number.isFinite(asNumber) && !/^0\d/.test(filled.trim())
       ? asNumber
-      : neutralizeSpreadsheetString(filled);
+      : filled;
   };
 
   if (mapping) {

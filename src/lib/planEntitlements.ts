@@ -12,6 +12,15 @@ export interface PlanEntitlementRow {
   boolean_value: boolean | null;
   measured: boolean;
   source: 'plan' | 'intro' | 'override' | 'unavailable';
+  /**
+   * The numeric half of the same row. `my_entitlements()` has returned both since 0154 — the
+   * ceiling and whether there is one — and this interface simply did not name them, because until
+   * `OWN-06` the only reader was the capability gate in `App.tsx`. Naming a column the server
+   * already sends is not a contract change; leaving it unnamed is how a screen ends up refetching
+   * the same answer from a second place.
+   */
+  unlimited: boolean;
+  numeric_limit: number | null;
 }
 
 export interface PlanFeatureRowData {

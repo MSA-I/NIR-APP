@@ -1,0 +1,86 @@
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a8a6bac8cbdd30611
+
+ ❯ src/lib/bankImportWorkbook.spec.ts (13 tests | 4 failed) 451ms
+     × labels every column in Hebrew and states the values direction accepts 7ms
+     × carries exactly one worked example row, in the shape a real row takes 8ms
+     × refuses the file by name while the example row is still in it 3ms
+     × imports the filled template with the guide sheet still in the workbook 7ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/lib/bankImportWorkbook.spec.ts > EXP-09 — a template a Hebrew bookkeeper can fill in > labels every column in Hebrew and states the values direction accepts
+AssertionError: a guide sheet beside the data sheet: expected undefined to be defined
+ ❯ src/lib/bankImportWorkbook.spec.ts:156:58
+    154|     const workbook = shipped();
+    155|     const guide = workbook.SheetNames.find((name) => name !== BANK_IMP…
+    156|     expect(guide, 'a guide sheet beside the data sheet').toBeDefined();
+       |                                                          ^
+    157|
+    158|     const text = cells(workbook, guide!).join('\n');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  src/lib/bankImportWorkbook.spec.ts > EXP-09 — a template a Hebrew bookkeeper can fill in > carries exactly one worked example row, in the shape a real row takes
+AssertionError: expected [ Array(2) ] to have a length of 3 but got 2
+
+- Expected
++ Received
+
+- 3
++ 2
+
+ ❯ src/lib/bankImportWorkbook.spec.ts:179:18
+    177|     expect(rows[0]).toEqual(['INPLACE_BANK_IMPORT', BANK_IMPORT_TEMPLA…
+    178|     expect(rows[1]).toEqual([...BANK_IMPORT_HEADERS]);
+    179|     expect(rows).toHaveLength(3);
+       |                  ^
+    180|
+    181|     const [date, description, direction, amount, reference] = rows[2]!;
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  src/lib/bankImportWorkbook.spec.ts > EXP-09 — a template a Hebrew bookkeeper can fill in > refuses the file by name while the example row is still in it
+AssertionError: expected [Function] to throw an error
+
+- Expected:
+null
+
++ Received:
+undefined
+
+ ❯ src/lib/bankImportWorkbook.spec.ts:195:8
+    193|     // delete a row. The refusal is what makes a worked example safe t…
+    194|     expect(() => parseCanonicalBankImportWorkbook(bytes, 'bank-import.…
+    195|       .toThrow('bank_import_example_row_present');
+       |        ^
+    196|   });
+    197|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  src/lib/bankImportWorkbook.spec.ts > EXP-09 — a template a Hebrew bookkeeper can fill in > imports the filled template with the guide sheet still in the workbook
+AssertionError: expected [] to have a length of 1 but got +0
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ src/lib/bankImportWorkbook.spec.ts:210:25
+    208|
+    209|     const parsed = parseCanonicalBankImportWorkbook(filled, 'bank-impo…
+    210|     expect(parsed.rows).toHaveLength(1);
+       |                         ^
+    211|     expect(parsed.rows[0]).toMatchObject({
+    212|       tx_date: '2026-08-21', description: 'העברה לספק א', direction: '…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 9 passed (13)
+   Start at  17:10:53
+   Duration  2.47s (transform 103ms, setup 499ms, import 119ms, tests 451ms, environment 1.14s)
+

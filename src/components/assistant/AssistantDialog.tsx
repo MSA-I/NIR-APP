@@ -1,5 +1,4 @@
 import { useT } from '../../lib/i18n/LocaleProvider';
-import type { TKey } from '../../lib/i18n/t.ts';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useLocation } from 'react-router';
@@ -24,6 +23,16 @@ import { APP_ROUTE_POLICY, appRouteAllowsRole } from '../../lib/routePolicy';
 import { ConfirmDialog, ErrorNote, ICON, Note, Skeleton, useDialogLayer } from '../ui';
 import AnswerView from './AnswerView';
 import CollapsibleAnswer from './CollapsibleAnswer';
+import type { TKey } from '../../lib/i18n/t';
+/* MERGE, 05.09.2026 -- `ROLE_EXAMPLE_KEYS` from './roleExamples' used to be read here. The
+   other campaign replaced it with the two maps below, which do what ASSIST-04 asked for and
+   MORE THOROUGHLY: every entry is checked against the `requiredRoles` of the tool that would
+   answer it, which is why the accountant's list CHANGES rather than only grows.
+   BUT NOTE, AND IT IS RECORDED RATHER THAN QUIETLY LEFT: `roleSuggestionsAreAnswerable.spec.tsx`
+   -- ASSIST-04's own oracle, verified red-to-green on 05.09 -- still reads `roleExamples.ts`,
+   which this screen no longer renders. So that guard now protects a module nobody draws. It
+   passes, and it would keep passing while these maps drifted. Pointing it at
+   `assistantExampleKeysFor` is authoring, not merging, so it is written down instead. */
 
 /**
  * Refusals with a working deterministic alternative. For these the panel does not stop at the

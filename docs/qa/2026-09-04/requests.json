@@ -1,0 +1,93 @@
+[
+  {
+    "id": "REQ-01",
+    "severity": "high",
+    "kind": "NEW",
+    "area": "payment request approval",
+    "route": "/payment-requests",
+    "role": "office + owner",
+    "title": "The approval panel says the request cannot be approved, and the enabled red button beside it says \"approve despite the warnings\" — the server then refuses, and the message it produces names a cause that did not happen and an action that cannot help",
+    "evidence": "out/requests/ap-01-detail.png (read with the Read tool): request #21, the red panel reads 'לא ניתן לאשר את הדרישה במצבה הנוכחי.' · 'חסימה אחת · אזהרה אחת' · 'הדרישה כוללת חשבונית שטרם אושרה לתשלום', and directly beneath it the enabled primary button reads 'אישור למרות האזהרות'. The blocking check is called a warning by the button. Wire, as OFFICE (out/requests/08-office-approve.json) and again as OWNER (out/requests/10-owner-lifecycle.json, step approveRpc): transition_payment_request -> HTTP 400 {\"code\":\"P0001\",\"message\":\"payment_request_checks_failed\"}. The message rendered to the user (out/requests/ap-03-after.txt): 'בדיקות השרת מצאו חשבונית ששולמה או יתרה שהשתנתה. רענן ובדוק את הדרישה.' — src/lib/i18n/dictionaries/he.ts:127, en.ts:123. Nothing was paid (paid_invoice_count 0 in the signals call in the same log), no balance changed, and refreshing redisplays exactly the same state. The real cause is the fourth condition in the server's approval arm — supabase/migrations/0031_role_capability_contract.sql:903, `i.review_status <> 'approved'` — which the panel one line above already states correctly. The same component already knows how to close this door: for the over-allocation critical it renders a DISABLED button with an explaining aria-label (src/pages/PaymentRequests.tsx:908-912, `overAllocated`); `invoice_unapproved` gets the enabled 'approve anyway' button instead, though the server refuses it just as absolutely. PROVENANCE: the message (commit b91c7687, 27.08.2026) and the button (2ef93430, 28.08.2026) both predate the Wave 0-8 deploy — a fresh discovery in pre-existing code, not a regression this deploy caused.",
+    "repro": "Sign in as office or owner. /payment-requests -> open any request whose linked invoice is not review_status 'approved' (every pending request in this tenant qualifies) -> read 'לא ניתן לאשר את הדרישה במצבה הנוכחי' -> press 'אישור למרות האזהרות' -> confirm. Watch the network tab for transition_payment_request.",
+    "expected": "Either the button is disabled with the reason attached — the pattern this same file already uses for over-allocation — or, if it is offered, the refusal names the actual cause (this invoice has not been approved for payment) and the step that clears it.",
+    "actual": "An enabled approval button under a panel that says approval is impossible, a refusal the user cannot act on, and a message describing a payment and a balance change that never occurred, ending in an instruction (refresh) that changes nothing."
+  },
+  {
+    "id": "REQ-04",
+    "severity": "high",
+    "kind": "NEW",
+    "area": "supplier proposals — discoverability",
+    "route": "/orders/proposals/:proposalId · /orders · /dashboard · /alerts · /exceptions",
+    "role": "owner + office",
+    "title": "A supplier's counter-offer waiting for a decision is announced nowhere: not on the orders list, not on the dashboard, not in alerts, not in exceptions — and the order it sits on still tells the user to send it to the supplier",
+    "evidence": "Measured with proposal 84d47966-dc02-4e32-b1a8-260a805db0c1 actually in status `submitted` on order #274 (out/requests/17-discovery.json). Scans as owner: /orders — no mention (dc-orders.txt; #274's row reads the same 'מוכנה לשליחה לספק' as every other ready order, and none of the list's eight status filters covers a waiting proposal); /dashboard — no mention (dc-dashboard.txt); /alerts — no mention (dc-alerts.txt); /exceptions — no mention (dc-exceptions.txt). Only /orders/274 itself carries it: 'פורטל ספק · התקבלה תשובה · הספק שלח תשובה דרך הפורטל (04.09.2026, 03:24) · ממתינה להחלטה. מעבר לסקירה והחלטה' (dc-order-detail.txt) — and four lines above that same screen still says 'הפעולה הבאה: פתיחת ההזמנה ב-WhatsApp ואישור השליחה', i.e. it instructs the user to send an order the supplier has already answered. Code confirms there is nothing else to find: `supplier_order_proposals` is read in exactly two files, src/lib/supplierPortal.ts and the review screen itself — it appears in no alert builder, no exception type and no dashboard metric; and no migration in supabase/migrations/ ever inserts a `notifications` row for a proposal (grep), so the bell cannot carry one either. This tenant holds 272 purchase orders.",
+    "repro": "Sign in as owner. Open a `ready` order, issue a supplier portal link, submit a change through the portal as the supplier. Then look at /orders, /dashboard, /alerts and /exceptions.",
+    "expected": "A counter-offer is a decision the business owes the supplier, with money attached. Per §12 the manager must learn within seconds that one is waiting — a row on the orders list, a queue entry, or an alert.",
+    "actual": "The proposal exists, the money delta is computed, and the only way anyone learns about it is by opening that one order out of 272. The screen whose job is 'accept or reject a supplier's counter-offer' cannot be reached by anyone who does not already know the counter-offer exists."
+  },
+  {
+    "id": "REQ-02",
+    "severity": "medium",
+    "kind": "NEW",
+    "area": "payment request approval",
+    "route": "/payment-requests",
+    "role": "owner",
+    "title": "Not one of the five live payment requests in this tenant can be approved, and nothing in the product says so — the money still counts as committed",
+    "evidence": "out/requests/09-probe.json, every live request with its linked invoice: #21 (90.00) invoice review_status `received`; #10 (2,950.00) invoice `in_review` and already paid, balance 0; #7 (1,404.00) invoice `investigation`; #3 (3,040.00, draft) invoice `pending_approval`; #2 (2,832.00, suspected_duplicate) invoice approved but paid, balance 0. transition_payment_request's approval arm requires `i.review_status = 'approved'` on every linked invoice (0031:903), so all five are refused. The only invoice in the tenant that is BOTH approved and carries an open balance is 3377, which is the already-filed MON-02 case (the writer computes its balance as 0). I then tried to create an approvable one and could not: promoting LIVE-E2E-6430D260 to approved is itself refused — set_invoice_review_status -> HTTP 500 {\"code\":\"55000\",\"message\":\"invoice_approval_blocked_three_way_review\"} (out/requests/10-owner-lifecycle.json, 12-misc.json), because that invoice has an order but no goods receipt. Meanwhile the screen's own subtitle for the active filter reads 'כסף שכבר התחייבנו לו — טיוטות, ממתינות לאישור, מאושרות ולביצוע' over roughly 10,300 ILS that cannot move.",
+    "repro": "Sign in as owner -> /payment-requests?status=all -> open each of #2, #3, #7, #10, #21 and press the approve button; each returns payment_request_checks_failed.",
+    "expected": "Either the queue can be worked, or the screen tells the reader which of these are stuck and on what — the invoice each one is waiting for.",
+    "actual": "Five requests presented as live commitments, an enabled approve button on each, and a 100% refusal rate with no explanation of the dependency. This is also why I could not drive the approve leg of the lifecycle: there is no reachable path in this tenant to a request the server will approve."
+  },
+  {
+    "id": "REQ-03",
+    "severity": "medium",
+    "kind": "NEW",
+    "area": "payment request creation — allocation bounds",
+    "route": "/payment-requests",
+    "role": "owner + office",
+    "title": "The create screen has no check that can ever be critical for an over-allocation: 999,999.99 against a 150.00 balance is a soft amber warning with the green submit button enabled, and 4,721.00 against 4,720.00 produces no balance finding at all",
+    "evidence": "out/requests/mi-05-big-allocation.png (read with the Read tool): invoice 3377 with 'יתרה 150.00 ₪' printed beside a field holding 999999.99, 'סכום הדרישה ₪999,999.99', and the only balance-related row is the amber 'סכום הדרישה שונה מהיתרה הפתוחה של החשבוניות המקושרות' — the primary 'שליחה לאישור' is green and enabled. Second measurement, one shekel over: out/requests/bd-over-modal.txt, invoice 7702 balance 4,720.00, allocation 4,721.00 — the check list shows ONLY 'הדרישה כוללת חשבונית שטרם אושרה לתשלום', the bank-check advisory and the open-credit advisory; there is no balance finding at all, and the server then refuses on submit with HTTP 400 {\"code\":\"P0001\",\"message\":\"payment_request_allocation_invalid\"} (out/requests/13-bounds.json). CAUSE (code): the only critical balance check on this screen is `allocation_vs_balance_one/_many`, derived from `over_allocated_invoice_count`, which the server computes from EXISTING payment_request_invoices rows — zero for a request that does not exist yet (src/lib/checks.ts:254-262, and its own 0146 comment says it is aimed at a credit offset AFTER creation). The other balance signal, `amount_matches_open_balance`, is tolerance-based and mapped to severity 'warning' (checks.ts:264-270); at 4,721 vs 4,720 it returned true. I did NOT submit the 999,999.99 request.",
+    "repro": "Sign in as owner -> /payment-requests -> דרישה חדשה -> pick a supplier -> tick an invoice -> type any number larger than the balance printed next to it -> read the check panel and the primary button.",
+    "expected": "On a screen that prints the invoice's open balance directly beside the field, an allocation above it is blocked before the button — the way the same component blocks the post-creation over-allocation.",
+    "actual": "No critical finding at any magnitude, an enabled primary button, and the refusal arrives from the server after the user has finished the form. The server-side refusal itself is intact, so no bad request can be created — the defect is that the screen offers what it knows the server will not take."
+  },
+  {
+    "id": "REQ-05",
+    "severity": "medium",
+    "kind": "NEW",
+    "area": "payment request creation — status promise",
+    "route": "/payment-requests",
+    "role": "office",
+    "title": "When any critical check fires, the only submit button promises the request will be flagged as a suspected duplicate — the server sends it straight into the approval queue instead",
+    "evidence": "out/requests/sub-01-modal-ready.png and out/requests/of-ERROR.png: with the invoice-not-approved critical showing, the primary button reads 'שמירה (יסומן כחשד לכפילות)' (English: 'Save (will be flagged as a possible duplicate)'). Pressing it produced the toast 'הדרישה נשלחה לאישור' and a FRESH page load showed payment request #21, 90.00 ILS, status `pending_approval` (out/requests/07-office-submit.json, sub-02-after-create.txt, sub-03-fresh-list.txt). The signals in the same log show why: unapproved_invoice_count 1, and no duplicate. CAUSE: the client keys that label on `hasCritical` — ANY critical check (src/pages/PaymentRequests.tsx:544-547), while the server assigns `suspected_duplicate` only when a live request of the same supplier and the same amount already exists (supabase/migrations/0073_payment_credit_override.sql:457-469).",
+    "repro": "Sign in as office -> /payment-requests -> דרישה חדשה -> משק ירוק — ירקות ופירות -> tick LIVE-E2E-6430D260 -> read the primary button, press it, then reload and read the status.",
+    "expected": "A button naming the outcome it produces. If the record will be a live pending-approval request, the button must not promise a quarantine.",
+    "actual": "A user choosing the cautious-looking option gets a live claim on cash in the approval queue. And in the cases where the label IS accurate, a non-duplicate critical marks the record 'חשד לכפילות' — the same signal this tenant already carries an open exception for (#12)."
+  },
+  {
+    "id": "REQ-06",
+    "severity": "medium",
+    "kind": "NEW",
+    "area": "goods receipt record",
+    "route": "/receipts/:receiptId",
+    "role": "owner + office",
+    "title": "The receipt record never says what is still outstanding and never mentions the credit request it opened — for the only kind of credit the product raises automatically",
+    "evidence": "Receipt #24 (043b5170-8f9c-4b6f-a8ee-b7d07f0f8d3d) on order #254, created 04.09.2026: three lines, one partial — 1 of 2 cartons at 42.00 ILS (out/requests/01-recon.json, 03-recon3.json). The screen (out/requests/owner-receipt-24.png, read with the Read tool; identical as office, fi-office-receipt.png) shows for that line only 'כמות שהתקבלה: 1 קרטון' with the badge 'התקבל חלקית'. No ordered quantity, no remainder. Machine check on the full page text: the word 'זיכוי' does not appear, and neither does any of יתר/נותר/חסר/מתוך (out/requests/19-final-office.json, step receiptSays: {mentionsCredit:false, mentionsRemainder:false}). The same receipt automatically created credit request #11, 42.00 ILS, status `open`, notes 'חוסר כמות בקבלה #24' (81b63d4b-4427-4807-a8c2-e44e2c9da49e). Order #254 does show the pair (qty 2, received 1, out/requests/owner-order-254.txt); the receipt does not. CAUSE (code): src/pages/ReceiptDetail.tsx:99 builds its 'unsettled' note from lines with status `damaged` or `returned` only — but the automatic credit fires on missing/partial (0023:1619,:1638), so the one line status that produces money is the one status the note excludes. PROVENANCE: ReceiptDetail.tsx is not among the files this deploy changed, so this is a fresh discovery in older code rather than a regression. The route's known 'nothing links to it' finding is unchanged in severity and is not re-reported here.",
+    "repro": "Sign in as owner or office and open /receipts/043b5170-8f9c-4b6f-a8ee-b7d07f0f8d3d.",
+    "expected": "The record of what arrived states what did not: the ordered quantity beside the received one, the remainder, and the credit the shortfall opened, with a way to reach it.",
+    "actual": "One number and a badge. The 42.00 ILS the supplier now owes back is invisible on the document that caused it."
+  },
+  {
+    "id": "REQ-07",
+    "severity": "low",
+    "kind": "NEW",
+    "area": "refusal messages",
+    "route": "/invoices/:id (blocking my route) · /orders/proposals/:proposalId",
+    "role": "owner",
+    "title": "Two ordinary business refusals arrive as HTTP 500 with codes no dictionary translates, so the user gets 'contact support' for a rule the product is deliberately enforcing",
+    "evidence": "Wire: set_invoice_review_status -> HTTP 500 {\"code\":\"55000\",\"message\":\"invoice_approval_blocked_three_way_review\"} (out/requests/10-owner-lifecycle.json and 12-misc.json, reproduced twice — once through the RPC and once by pressing 'אישור לתשלום' on /invoices/6430d260-edd6-44bb-801f-39d4dd818152); decide_supplier_order_proposal on an already-decided proposal -> HTTP 500 {\"code\":\"55000\",\"message\":\"proposal_already_decided\"} (out/requests/15-reject.json). Neither string appears anywhere under src/ (grep across src/lib/errors.ts and src/lib/i18n/dictionaries/*.ts), so errorText falls through to `fallback` — 'הפעולה נכשלה. אם הבעיה חוזרת — פנה לתמיכה.' HONEST LIMIT: I did not capture the rendered toast (out/requests/mi-02-invoice-after-approve.png was taken after it had cleared), so the fallback text is a code-level claim, not a screenshot. The proposal one is not reachable through the UI, since the buttons disappear once a proposal is decided.",
+    "repro": "Sign in as owner, open an invoice that has an order but no goods receipt (LIVE-E2E-6430D260) and press 'אישור לתשלום'.",
+    "expected": "A rule the product enforces on purpose gets a sentence naming it, and a 4xx. 55000 is raise_exception, not a server fault.",
+    "actual": "HTTP 500 and a support ticket instruction for 'this invoice has not passed three-way matching yet' — which is exactly the state the product intends and the user could act on."
+  }
+]

@@ -1,0 +1,111 @@
+PR 45 · MON-10 — RED. The oracle run against the UNFIXED tree.
+
+date:    2026-09-04
+branch:  worktree-agent-a0a2aac045395d268
+tree:    50188f6e + the oracle only. No product file changed yet.
+command: npx vitest run src/pages/creditRequestCurrencyLabel.spec.tsx
+
+What the label actually renders, read off the DOM through the input's own
+`for`/`id` association, exactly as the sweep reported it:
+
+    USD invoice -> 'סכום (₪) (USD)'
+    ILS invoice -> 'סכום (₪) (ILS)'
+
+3 failed / 1 passed. The one that passes is the control — the reason box and the
+notes box of the same dialog, which this change does not touch.
+
+--------------------------------------------------------------------------------
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a0a2aac045395d268
+
+stderr | src/pages/creditRequestCurrencyLabel.spec.tsx > MON-10 — one currency marker on the credit amount field > states the dollar invoice's currency, and does not also say shekel
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • GET http://127.0.0.1:55431/rest/v1/documents?select=*&entity_type=eq.invoice&entity_id=eq.f4000000-0000-4000-8000-000000000013&deleted_at=is.null&order=created_at.desc%2Cid.asc&offset=0&limit=1000
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | src/pages/creditRequestCurrencyLabel.spec.tsx > MON-10 — one currency marker on the credit amount field > prints exactly one marker, on a dollar invoice
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • GET http://127.0.0.1:55431/rest/v1/documents?select=*&entity_type=eq.invoice&entity_id=eq.f4000000-0000-4000-8000-000000000013&deleted_at=is.null&order=created_at.desc%2Cid.asc&offset=0&limit=1000
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | src/pages/creditRequestCurrencyLabel.spec.tsx > MON-10 — one currency marker on the credit amount field > prints exactly one marker on a shekel invoice as well
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • GET http://127.0.0.1:55431/rest/v1/documents?select=*&entity_type=eq.invoice&entity_id=eq.f4000000-0000-4000-8000-000000000013&deleted_at=is.null&order=created_at.desc%2Cid.asc&offset=0&limit=1000
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+ ❯ src/pages/creditRequestCurrencyLabel.spec.tsx (4 tests | 3 failed) 882ms
+     × states the dollar invoice's currency, and does not also say shekel 444ms
+     × prints exactly one marker, on a dollar invoice 167ms
+     × prints exactly one marker on a shekel invoice as well 127ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/creditRequestCurrencyLabel.spec.tsx > MON-10 — one currency marker on the credit amount field > states the dollar invoice's currency, and does not also say shekel
+AssertionError: expected 'סכום (₪) (USD)' not to contain '₪'
+
+Expected: "₪"
+Received: "סכום (₪) (USD)"
+
+ ❯ src/pages/creditRequestCurrencyLabel.spec.tsx:140:22
+    138|     const text = await amountLabel('USD');
+    139|     expect(text).toContain('USD');
+    140|     expect(text).not.toContain('₪');
+       |                      ^
+    141|   });
+    142|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  src/pages/creditRequestCurrencyLabel.spec.tsx > MON-10 — one currency marker on the credit amount field > prints exactly one marker, on a dollar invoice
+AssertionError: expected [ '₪', 'USD' ] to have a length of 1 but got 2
+
+- Expected
++ Received
+
+- 1
++ 2
+
+ ❯ src/pages/creditRequestCurrencyLabel.spec.tsx:145:39
+    143|   it('prints exactly one marker, on a dollar invoice', async () => {
+    144|     const text = await amountLabel('USD');
+    145|     expect(text.match(MARKERS) ?? []).toHaveLength(1);
+       |                                       ^
+    146|   });
+    147|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  src/pages/creditRequestCurrencyLabel.spec.tsx > MON-10 — one currency marker on the credit amount field > prints exactly one marker on a shekel invoice as well
+AssertionError: expected [ '₪', 'ILS' ] to have a length of 1 but got 2
+
+- Expected
++ Received
+
+- 1
++ 2
+
+ ❯ src/pages/creditRequestCurrencyLabel.spec.tsx:155:39
+    153|   it('prints exactly one marker on a shekel invoice as well', async ()…
+    154|     const text = await amountLabel('ILS');
+    155|     expect(text.match(MARKERS) ?? []).toHaveLength(1);
+       |                                       ^
+    156|     expect(text).toContain('ILS');
+    157|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 1 passed (4)
+   Start at  15:50:34
+   Duration  4.36s (transform 1.10s, setup 497ms, import 1.68s, tests 882ms, environment 1.07s)
+

@@ -1,0 +1,115 @@
+PR06 - PERM-01 - REGRESSION - what else a REVOKE could have taken with it
+========================================================================
+Local stack at head 0319 (0310 0311 0312 0313 0314 0315 0319), 05.09.2026, immediately after the
+GREEN run and before `npm run demo:restore`. Exclusive hold of the campaign's Supabase lock.
+
+WHY THIS FILE EXISTS. A `REVOKE` is the one change in this campaign that can break every open tab
+in the product: the client asks for a column it may no longer have and PostgREST refuses the WHOLE
+statement with a 403, nowhere near the line that caused it. A green oracle on its own would only
+say the leak closed. These seven say nothing else lost a read it needs.
+
+Each suite was run ON ITS OWN -- one docker cp, one docker exec, its own captured output -- against
+the same database, in the order below. All seven end in `rollback`, so none of them left state for
+the next.
+
+  docker cp  supabase/tests/<suite>.sql supabase_db_supplyflow-p0:/var/lib/postgresql/reg-<n>.sql
+  docker exec -e PGPASSWORD=postgres -e PGTZ=Asia/Jerusalem supabase_db_supplyflow-p0 \
+    psql -U postgres -d postgres -v ON_ERROR_STOP=1 -f /var/lib/postgresql/reg-<n>.sql
+
+RESULTS -- six pass, one is a suite that is retired and cannot pass at any head since 0134
+
+  suite                                   psql exit   ERROR lines   last line
+  --------------------------------------  ----------  ------------  -----------------------------
+  p0_client_dml_acl                            0            0       ROLLBACK
+  p1_financial_commands                        0            0       "p1_financial_commands:
+                                                                     all assertions passed"
+  p17_financial_supplier_view                  0            0       ROLLBACK
+  p3_org_scope                                 0            0       p3_org_scope_passed
+  p22_trial_read_only                          3            1       ERROR: trial_retired
+  p43_active_persona_surface                   0            0       p43_active_persona_surface_passed
+  p44_trial_retirement_document_control        0            0       ROLLBACK
+
+THE TWO THAT COULD HAVE BROKEN, AND DID NOT
+  p1_financial_commands carries the all-tables ACL contract this migration was written around: for
+  every table in `public`, a permissive read policy exists if and only if `authenticated` can read
+  it. 0319 revokes the TABLE grant on profiles and organizations and re-issues it column by column,
+  which is exactly the 0112 shape that contract already allows ("COLUMN-level SELECT counts"), and
+  it narrows the two configuration tables in the POLICY while KEEPING their grant. Both halves are
+  proved here rather than argued: the suite passes.
+
+  p0_client_dml_acl is the suite that executes refusals rather than reading the catalogue. It
+  passes unchanged, which also says the 42501 the oracle now relies on is the ordinary column ACL
+  denial this image raises cleanly.
+
+p22_trial_read_only -- PRE-EXISTING, NOT CAUSED BY THIS CHANGE, AND SAID WITH ITS OWN WORDS
+  It fails at its own line 81:
+
+    update public.organizations set status = 'trial', trial_ends_at = ...
+    ERROR:  trial_retired
+    CONTEXT:  PL/pgSQL function private.organizations_trial_write_guard() line 12 at RAISE
+
+  Three independent reasons this is not 0319's doing, none of which needs a second reset to check:
+
+  1. The guard is unconditional. `private.organizations_trial_write_guard`, as it stands in the
+     database, opens with
+
+       if new.status = 'trial' or new.trial_ends_at is not null then
+         raise exception 'trial_retired' using errcode = '22023';
+
+     Every write p22 makes to set up its fixtures matches that. The suite cannot pass at ANY head
+     from 0134 onward, with or without 0319. The guard was retired into this shape by 0134, 185
+     migrations before ours.
+  2. It is a trigger RAISE, not a privilege error. 0319 changes SELECT privileges and two read
+     policies; it grants and revokes nothing on writes, and anchor (b) of the migration plus the
+     `catalogue/self-service-update-kept` control both assert the UPDATE privileges are intact.
+  3. The failing statements run as the `postgres` superuser -- the suite has not switched role at
+     that point -- and column privileges do not apply to a superuser at all.
+
+  It is also not in CI. The suite is absent from `scripts/check-quality-gates.ps1`, and its own
+  header says why, in its author's words: "RETIRED, AND KEPT ON PURPOSE ... It is NOT in the 118
+  suites `scripts/ci-sql-suites.mjs` runs, it would fail if it were, and it must not be re-wired."
+  It was run here anyway because the task named it; the result is recorded rather than waved at,
+  and nothing was changed to make it pass. Re-wiring it would be re-opening a retired decision
+  (OPEN-DECISIONS #15), which is not this PR's business.
+
+THE POSTGRES CRASH COUNT, BEFORE AND AFTER THE WHOLE SEQUENCE
+  docker logs supabase_db_supplyflow-p0 | grep -c "was terminated by signal"
+    before the first reset:  0
+    after demo:restore:      0
+  This matters because a function-EXECUTE denial takes this image's backend down; every privilege
+  question about a FUNCTION in this repository is answered from `has_function_privilege` for that
+  reason. The refusals this campaign step executes are table/column ACL denials, which raise 42501
+  cleanly -- and the count says so.
+
+THE STACK WAS HANDED BACK RESTORED, AND PROVED
+  The database was reset twice during this work, so the demo tenant had to be rebuilt. Project
+  rule, not a courtesy.
+
+    npm run demo:restore
+
+    == Restoring the demo Auth users from the external manifest
+    created owner@demo.supplyflow.local -> 37b2531c-fab0-43e4-9e2b-bd71df57959a
+    created office@demo.supplyflow.local -> 990c3a36-506a-4fc3-953a-9757f5018795
+    created accountant@demo.supplyflow.local -> 723d7776-b966-4c49-8cd9-934108025e8d
+
+    == Loading the demo tenant (supabase/demo/demo_seed.sql)
+
+    == Proving the restore
+      sign-in OK: owner@demo.supplyflow.local
+      sign-in OK: office@demo.supplyflow.local
+      sign-in OK: accountant@demo.supplyflow.local
+      profile OK: owner
+      profile OK: office
+      profile OK: accountant
+
+    Demo restore complete: 3 sign-ins proved, 3 profiles present.
+
+  Three real password grants against http://127.0.0.1:55431 and three profiles in the right roles.
+  HTTP 200 or the mere existence of the rows would not have been proof; a password grant is.
+
+  No fixture of this PR's own survives: p112 and all seven regression suites end in `rollback`, so
+  there was nothing to retire soft or otherwise. What the two resets destroyed was the demo tenant,
+  and that is what was rebuilt.
+
+  Final state handed to the next holder: head 0319, container healthy, crash count 0, demo tenant
+  present and signed into.

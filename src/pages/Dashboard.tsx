@@ -1,17 +1,18 @@
 import { useT } from '../lib/i18n/LocaleProvider';
 import { Link, useNavigate } from 'react-router';
-import { useState, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { ArrowUpLeft, Banknote, Check, ChevronDown, ChevronLeft, ReceiptText, RefreshCw, ShoppingCart, TrendingUp, type LucideIcon } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { unwrap, useQuery } from '../lib/useQuery';
 import { Skeleton, StatusBadge, Note, AttentionZone, PageHeader, Card, ICON, ToggleGroup, PeriodComparison, type AttentionItem, type ComparisonBasis } from '../components/ui';
 import { ForecastCard, type ScheduledPaymentsOutlook } from '../components/ForecastCard';
 import { useFeatureFlags } from '../lib/flags';
+import { useParamState } from '../lib/useParamState';
 import { EXCEPTION_TYPE, PO_STATUS, SEVERITY } from '../lib/status';
 import {
   addCalendarDays, BUSINESS_TIME_ZONE, dateStartInstant, daysInCalendarMonth,
-  fmtMoneyExact, fmtMoneyRounded, fmtMonth, localDateKey, productLabel, shiftCalendarMonth,
-  startOfCalendarWeek,
+  fmtMoneyExact, fmtMoneyRounded, fmtMonth, glancePercentDigits, localDateKey, productLabel,
+  shiftCalendarMonth, startOfCalendarWeek,
   todayISO as businessTodayISO,
 } from '../lib/format';
 import { comparisonSeries } from '../lib/theme';
@@ -32,10 +33,68 @@ import { UnreadAlerts } from '../components/UnreadAlerts';
  * Every glance figure on this screen is drawn in the currency the row it came from is in — never
  * in a currency the screen picked. `glanceMoney(value, currency)` keeps the shape rule (whole
  * units on a glance surface) and leaves the unit to the data.
+ *
+ * `DASH-09` — AND IT IS DRAWN IN ONE BIDI CONTEXT, WHICH IS WHY NO MONEY ELEMENT BELOW CARRIES
+ * `dir="ltr"`. The formatter emits `RLM digits NBSP RLM ₪` for every currency alike, and where
+ * that string LANDS decides which end of the figure the marker sits at: measured per character in
+ * Edge on 04.09.2026, it trails the digits inside `dir="ltr"` and leads them in the document's own
+ * RTL — for ₪, $ and € together. The screen shipped both shapes at once (the band was `ltr`,
+ * every `MoneyByCurrency` figure beside it was not), so the marker moved from tile to tile under
+ * one reader. DESIGN.md already settles which one goes: "`.tech-id` הוא החריג היחיד... מזהים
+ * אטומיים מקבלים `dir="ltr"`; סכומים, כמויות, אחוזים, תאריכים... נשארים". A sum is not an
+ * identifier. `.num`'s own `unicode-bidi: isolate` is what fences the figure from its neighbours;
+ * forcing a direction on top of it was also the reason the separator space in front of the marker
+ * was reordered away, gluing `11,582₪` together.
  */
 const glanceMoney = fmtMoneyRounded;
 // "עודכן ב-HH:MM" freshness stamp — the screen promises real-time, so it says when it last read.
 const timeFmt = new Intl.DateTimeFormat('he-IL', { hour: '2-digit', minute: '2-digit', timeZone: BUSINESS_TIME_ZONE });
+
+/**
+ * WHERE FOUR TILES OPEN — and why these are functions rather than four strings inside the JSX.
+ *
+ * `DASH-03`..`DASH-06` were one defect wearing four faces: each tile's count and its link's
+ * filter were written independently, so a manager pressed a number and landed on a list of a
+ * different size — 2 opened 9, 7 opened 254, ₪2,353 opened every order the tenant had ever
+ * placed, and ₪11,582 opened a list missing the ₪150 inside it and holding a $300 that was not.
+ * A tile that cannot be checked is not a picture of the business (§12).
+ *
+ * A builder takes the SAME inputs the count is derived from, which is what makes the two
+ * comparable — `src/pages/dashboardTileDestinations.spec.ts` runs each link through the
+ * destination screen's own filter and asserts it lands on exactly the rows the tile counted.
+ */
+
+/**
+ * `invoice_balance_money` (`0218:378-382`): invoices with `balance_in_currency > 0`, one row per
+ * currency. `?pay=open` is `payment_status <> 'paid'` — the partially-paid invoice inside the
+ * figure lives there and NOT under `?pay=unpaid` — and `?currency=` narrows to the unit the
+ * picker is on. Nothing is converted; the other currency stays one click away in the picker.
+ */
+export const openInvoiceBalanceLink = (currency: string | null) =>
+  `/invoices?pay=open${currency ? `&currency=${encodeURIComponent(currency)}` : ''}`;
+
+/**
+ * `open_order_metrics.late` (`0218:474`): open orders whose `expected_date` is before today.
+ * `?status=late` on `/receiving` and NOT `?status=attention`, which is a wider set — it also holds
+ * every partial receipt and every delivery promised for today.
+ */
+export const lateDeliveriesLink = () => '/receiving?status=late';
+
+/**
+ * `open_order_metrics.no_date` (`0218:473`): open orders with no `expected_date` at all. It is a
+ * count of things rather than a sum of money, so it carries no currency — narrowing this one to
+ * the picker would hide undated orders the business really does have out.
+ */
+export const undatedOpenOrdersLink = () => '/orders?status=sent,confirmed,partial&delivery=undated';
+
+/**
+ * "נרכש החודש": the orders this screen sums — `not status in ('draft','cancelled')`, created this
+ * month, inside the currency being read. The month is carried the way `/payments?month=` already
+ * carries it; the status set and the currency are what `?status=all` alone could not say.
+ */
+export const purchasedThisMonthLink = (monthKey: string, currency: string | null) =>
+  `/orders?status=ready,sent,confirmed,partial,received&month=${monthKey}`
+  + `${currency ? `&currency=${encodeURIComponent(currency)}` : ''}`;
 
 type WeeklyPoint = { week: string; total: number; count: number; label: string };
 /**
@@ -166,7 +225,12 @@ function BandStat({ title, value, tone = 'idle', to, context, icon: Icon, aux, c
         <span className="text-xs font-medium text-ink-muted">{title}</span>
       </div>
       <div className="mt-2 flex items-center gap-3">
-        <div className={`shrink-0 kpi-hero num ${toneCls}`} dir="ltr">{glanceMoney(value, currency)}</div>
+        {/* No `dir="ltr"`. `.num` already carries `unicode-bidi: isolate`, which is what protects
+            the Hebrew around a figure; the direction override on top of it is what put the shekel
+            sign on the far side of the digits — `68,663₪` in the strip against `₪ 573.00` further
+            down the same screen. The rule `src/index.css` states beside `.num` is that callers set
+            `dir=ltr` only for atomic Latin identifiers, and a sum of money is not one. */}
+        <div className={`shrink-0 kpi-hero num ${toneCls}`}>{glanceMoney(value, currency)}</div>
         {hasSpark && spark && sparkLabel && <TrendSparkline points={spark} label={sparkLabel} currency={currency} />}
       </div>
       {/* One context line, never the same sentence twice. Where a comparison exists it IS the
@@ -341,7 +405,7 @@ function DeliveriesZone({ today, tomorrow, noDateCount, className = '' }: {
   // The honesty line: open orders (same statuses) that simply have no expected_date. Without it,
   // a quiet card could read "all clear" while five undated orders are still in flight.
   const noDateHint = noDateCount > 0 ? (
-    <Link to="/orders" className="inline-flex min-h-11 items-center text-xs text-ink-muted hover:text-ink-mid active:text-ink">
+    <Link to={undatedOpenOrdersLink()} className="inline-flex min-h-11 items-center text-xs text-ink-muted hover:text-ink-mid active:text-ink">
       <span className="num me-1">{noDateCount}</span> {t('dashboard.openOrdersNoDate')}
     </Link>
   ) : null;
@@ -582,12 +646,21 @@ export default function Dashboard() {
   const { isEnabled } = useFeatureFlags();
   const navigate = useNavigate();
 
-  /* WHICH currency the control centre is reading, and `null` for "whatever the organisation keeps
-     its books in". Null rather than `baseCurrency` on purpose: the organisation row can still be
-     loading when this state is created, and storing the answer to a question that has not been
+  /* WHICH currency the control centre is reading, and empty for "whatever the organisation keeps
+     its books in". Empty rather than `baseCurrency` on purpose: the organisation row can still be
+     loading when this screen mounts, and storing the answer to a question that has not been
      answered yet would pin the picker to a stale currency for the rest of the session. The
-     resolution happens below, once, against the currencies the data actually came back with. */
-  const [pickedCurrency, setPickedCurrency] = useState<string | null>(null);
+     resolution happens below, once, against the currencies the data actually came back with.
+
+     `DASH-13` — AND IT LIVES IN THE URL, like every other view filter in this product
+     (`useParamState`: Invoices, Exceptions, Payment requests, Bank, Credits, Orders, Prices,
+     Suppliers, Payments — and now here). It was `useState`, so a refresh silently swapped the
+     unit under an identical layout with identical labels: `$300` became `₪11,582` in the same
+     tile under the same words. State that changes what every figure on the screen MEANS is not a
+     private detail of one mount; it has to be shareable, bookmarkable and survive F5. `replace`
+     rather than `push` is deliberate and matches the other filters — flipping the picker four
+     times should not cost four presses of Back. */
+  const [pickedCurrency, setPickedCurrency] = useParamState('currency');
   const { data, loading, error, refetch, fetching } = useQuery(async () => {
     const now = new Date();
     const todayISO = businessTodayISO();
@@ -904,12 +977,26 @@ export default function Dashboard() {
       { key: 'pay-overdue', label: t('dashboard.text_24'), count: paymentsOverdue, tone: 'alert', to: '/payment-requests?due=overdue', hint: paymentsOverdue == null ? t('dashboard.text_25') : undefined, clearLabel: t('dashboard.text_26') },
       { key: 'pay-today', label: t('dashboard.text_27'), count: paymentsDueToday, tone: 'await', to: '/payment-requests?due=today', hint: paymentsDueToday == null ? t('dashboard.text_28') : undefined, clearLabel: t('dashboard.text_29') },
       { key: 'exceptions', label: t('dashboard.openExceptions'), count: exceptions.length, tone: 'alert', to: '/exceptions?status=open', hint: highExceptions ? t('dashboard.highSeverity', { count: highExceptions }) : undefined, clearLabel: t('dashboard.noOpenExceptions') },
+      /* `DASH-10` — THE POPULATION WAS NEVER WRONG; THE WORD OVER IT WAS. Measured before
+         touching anything: `0218`'s `credit_metrics` and `credit_money` both count
+         `status in ('open','requested','received')`, `Credits.tsx` filters `status=active` on the
+         same three, `supplier_metrics.open_credits` (`0204:70`, `0223:74`) counts the same three,
+         and the accountant's control room the same again. Not one predicate differs — so nothing
+         here is widened or narrowed, which would have made two honest surfaces disagree instead
+         of one dishonest one agree. What was wrong is that all of them said "פתוחים" over a set
+         that includes `received`, which `status.ts:229` paints `done` and badges התקבל: the
+         product told the reader a row was settled and counted it as open in the same breath.
+         The three states share exactly one thing, and it is now what the label says — nothing has
+         been offset yet. `offset` and `closed` are the final states and stay outside. */
       { key: 'credits', label: t('dashboard.text_30'), count: snapshot.credits.count, amounts: amountsIn(openCreditsByCurrency), tone: 'info', to: '/credits?status=active', clearLabel: t('dashboard.text_31') },
       // `openOrders` is `status in ('sent','confirmed','partial')` — an order that has not left
       // the building is not a commitment. `?status=open` on that screen means "not received and
       // not cancelled", which also lists drafts and ready orders.
       { key: 'commitments', label: t('dashboard.openCommitments'), count: snapshot.openOrders.count, amounts: amountsIn(committedByCurrency), tone: 'idle', to: '/orders?status=sent,confirmed,partial', hint: remainingInView != null && remainingInView.amount > 0 ? t('dashboard.remainingToReceive', { amount: fmtMoneyRounded(remainingInView.amount, remainingInView.currency) }) : undefined, clearLabel: t('dashboard.noOpenCommitments') },
-      { key: 'late-delivery', label: t('dashboard.text_32'), count: lateDeliveries, tone: 'alert', to: '/receiving', clearLabel: t('dashboard.text_33') },
+      // `DASH-04`: the row-queue link beside this one correctly opens the whole receiving queue
+      // (9). This row counts the late subset, so it carries the late filter and nothing else —
+      // two numbers pointing at one URL is what made the 2 unfindable among the 9.
+      { key: 'late-delivery', label: t('dashboard.text_32'), count: lateDeliveries, tone: 'alert', to: lateDeliveriesLink(), clearLabel: t('dashboard.text_33') },
       { key: 'awaiting-confirmation', label: t('dashboard.text_34'), count: awaitingConfirmation, tone: 'await', to: '/orders?status=sent', clearLabel: t('dashboard.text_35') },
       // The label says "(30 יום)" and the fetch above bounds `price_effective_date` to the last
       // thirty days. `?increases=1` alone is every row whose last change happened to be upward,
@@ -1030,7 +1117,7 @@ export default function Dashboard() {
      reads (its last open invoice was paid), and a dashboard that answers "—" to everything because
      it is reading a currency the business no longer holds is a worse answer than falling back. */
   const currencies = data?.currencies ?? [];
-  const viewCurrency = pickedCurrency != null && currencies.includes(pickedCurrency) ? pickedCurrency
+  const viewCurrency = currencies.includes(pickedCurrency) ? pickedCurrency
     : baseCurrency != null && currencies.includes(baseCurrency) ? baseCurrency
       : currencies[0] ?? null;
   /* Every figure below that carries money comes from HERE, not from `data`. `data` keeps only what
@@ -1074,6 +1161,10 @@ export default function Dashboard() {
      IS their unit — no search for it. It used to be recovered by matching the row array back to
      its group, which was the only way to name the unit while the screen picked the group itself. */
   const topBalancesCurrency = viewCurrency;
+  /* `DASH-11` — the saving's percentage, at a precision that can express it, or `null` when none
+     can. See `glancePercentDigits`: 9 of 2,353 is 0.38%, and the whole-unit rounding this line
+     replaces printed it as `0` beside an exact `₪9`. */
+  const savingsPctDigits = glancePercentDigits(view?.savingsPct);
   const monthlyAria = view ? t('dashboard.monthlyAria', {
     points: view.monthly.length
       ? view.monthly.map((point) => `${point.month} ${point.count ? fmtMoneyExact(point.total, viewCurrency) : t('dashboard.noInvoices')}`).join(', ')
@@ -1231,19 +1322,19 @@ export default function Dashboard() {
                 owner's ruling is that the reader chooses the unit instead of reading every unit at
                 once. Nothing is summed and nothing is converted: the other currency is a click
                 away in the picker, holding its own balance and its own invoice count. */}
-            {/* `/invoices` takes review/pay/export/month/attention/q/page/sort and no currency,
-                so the link does NOT carry one: a query parameter the target silently ignores
-                promises a filtered list and delivers every currency's invoices. The tile still
-                names its currency in the label; narrowing the list itself needs a currency
-                filter on that screen, which is its own change. */}
-            <Card as={Link} pad={false} to="/invoices?pay=unpaid"
+            {/* `DASH-03`: the link now carries the tile's own predicate — `?pay=open` for the
+                balance the figure is taken over, and `?currency=` for the unit the picker is on.
+                Both exist on `/invoices` as visible controls, so a reader who arrives can see
+                which narrowing is on and clear it. */}
+            <Card as={Link} pad={false} to={openInvoiceBalanceLink(viewCurrency)}
               aria-label={t('dashboard.openBalanceAria', { currency: viewCurrency ?? '', count: view.money.openInvoiceCount })}
               className="card-link-hover block min-h-24 px-4 py-3.5 sm:px-5">
               <div className="flex items-center gap-2">
                 <ReceiptText size={ICON.md} className="shrink-0 text-ink-muted" aria-hidden="true" />
                 <span className="text-xs font-medium text-ink-muted">{t('dashboard.title_3')}</span>
               </div>
-              <div className="mt-2 kpi-hero num text-await-fg" dir="ltr">
+              {/* Direction: see the note on `BandStat`'s figure — one money shape per screen. */}
+              <div className="mt-2 kpi-hero num text-await-fg">
                 {glanceMoney(view.money.openBalance, viewCurrency)}
               </div>
               <div className="mt-1 flex items-center justify-between gap-3 text-xs text-ink-muted">
@@ -1254,11 +1345,14 @@ export default function Dashboard() {
             <BandStat title={t('dashboard.paidThisMonth')} value={view.money.paidMonth} tone="done" to={`/payments?month=${view.money.monthKey}`}
               icon={Banknote} context={t('dashboard.context_2')} comparison={view.money.paidComparison} currency={viewCurrency}
               spark={view.paidWeekly} sparkLabel={t('dashboard.sparkLabel')} />
-            <BandStat title={t('dashboard.title_4')} value={view.money.purchasedMonth} to="/orders?status=all"
+            <BandStat title={t('dashboard.title_4')} value={view.money.purchasedMonth} to={purchasedThisMonthLink(view.money.monthKey, viewCurrency)}
               icon={ShoppingCart} context={t('dashboard.context_3')} comparison={view.money.purchasedComparison} currency={viewCurrency}
+              /* `DASH-11`: the percentage is printed only at a precision that can hold it, and is
+                 dropped entirely when none can. `toFixed(0)` used to put `0%` beside a real ₪9 —
+                 half a sentence saying money was saved and the other half saying none was. */
               aux={view.savings != null
-                ? (view.savingsPct != null
-                  ? t('dashboard.estimatedSavingWithPct', { amount: fmtMoneyRounded(view.savings, viewCurrency), percent: view.savingsPct.toFixed(0) })
+                ? (savingsPctDigits != null
+                  ? t('dashboard.estimatedSavingWithPct', { amount: fmtMoneyRounded(view.savings, viewCurrency), percent: savingsPctDigits })
                   : t('dashboard.estimatedSaving', { amount: fmtMoneyRounded(view.savings, viewCurrency) }))
                 : undefined}
               spark={view.weekly} sparkLabel={t('dashboard.sparkLabel_2')} />
@@ -1380,7 +1474,8 @@ export default function Dashboard() {
                   </p>
                 ) : (
                   <div className="mt-2 flex min-h-32 flex-col justify-center gap-4 sm:min-h-40">
-                    <div className="kpi-hero num text-ink" dir="ltr">
+                    {/* Direction: see the note on `BandStat`'s figure — one money shape per screen. */}
+                    <div className="kpi-hero num text-ink">
                       {glanceMoney(view.dueWindow.overdueAmount + (view.dueWindow.dueWithin7Amount ?? 0), viewCurrency)}
                     </div>
                     {view.dueWindow.otherCurrencies.length > 0 && (
@@ -1404,11 +1499,11 @@ export default function Dashboard() {
                     )}
                     <div className="flex flex-col gap-1.5 text-sm">
                       <p className="text-alert-fg">
-                        {t('dashboard.ofWhichOverdue')} <span className="num" dir="ltr">{glanceMoney(view.dueWindow.overdueAmount, viewCurrency)}</span>
+                        {t('dashboard.ofWhichOverdue')} <span className="num">{glanceMoney(view.dueWindow.overdueAmount, viewCurrency)}</span>
                         {' · '}<span className="num">{view.dueWindow.overdueCount}</span> {t('dashboard.requestsWord')}
                       </p>
                       <p className="text-ink-mid">
-                        {t('dashboard.dueWithinSevenDays')} <span className="num" dir="ltr">{glanceMoney(view.dueWindow.dueWithin7Amount, viewCurrency)}</span>
+                        {t('dashboard.dueWithinSevenDays')} <span className="num">{glanceMoney(view.dueWindow.dueWithin7Amount, viewCurrency)}</span>
                         {' · '}<span className="num">{view.dueWindow.dueWithin7Count}</span> {t('dashboard.requestsWord')}
                       </p>
                     </div>

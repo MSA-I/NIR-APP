@@ -1,0 +1,107 @@
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a0180200f5f0dfffc
+
+Not implemented: navigation to another Document
+Not implemented: navigation to another Document
+Not implemented: navigation to another Document
+Not implemented: navigation to another Document
+stderr | src/pages/supplierBankDetails.spec.tsx > SupplierForm — structured bank-details flow (migration 0171) > a stale session cannot reach the RPC without a correct password
+[supplyflow] Invalid login credentials
+
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+ ❯ src/pages/supplierBankDetails.spec.tsx (11 tests | 3 failed) 22080ms
+     × a stale session cannot reach the RPC without a correct password 5042ms
+     × leaves the other-fields path untouched: no RPC, no step-up dialog 889ms
+     × renders international fields and sends IBAN/BIC without Israel-only columns 5012ms
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/supplierBankDetails.spec.tsx > SupplierForm — structured bank-details flow (migration 0171) > a stale session cannot reach the RPC without a correct password
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ src/pages/supplierBankDetails.spec.tsx:361:3
+    359|    * `assert_recent_password_authentication()` (`0171:314`) enforces o…
+    360|    */
+    361|   it('a stale session cannot reach the RPC without a correct password'…
+       |   ^
+    362|     authState.session = sessionWithAge(10 * 60);
+    363|     const user = userEvent.setup();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  src/pages/supplierBankDetails.spec.tsx > SupplierForm — structured bank-details flow (migration 0171) > leaves the other-fields path untouched: no RPC, no step-up dialog
+AssertionError: expected 'a04-7654321' to be '04-7654321' // Object.is equality
+
+Expected: "04-7654321"
+Received: "a04-7654321"
+
+ ❯ src/pages/supplierBankDetails.spec.tsx:424:30
+    422|     await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    423|     expect(patched).toHaveLength(1);
+    424|     expect(patched[0].phone).toBe('04-7654321');
+       |                              ^
+    425|     expect(Object.keys(patched[0])).not.toContain('bank_details');
+    426|     expect(rpcBodies).toHaveLength(0);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  src/pages/supplierBankDetails.spec.tsx > SupplierForm — structured bank-details flow (migration 0171) > renders international fields and sends IBAN/BIC without Israel-only columns
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ src/pages/supplierBankDetails.spec.tsx:455:3
+    453|   });
+    454|
+    455|   it('renders international fields and sends IBAN/BIC without Israel-o…
+       |   ^
+    456|     const user = userEvent.setup();
+    457|     trackSupplierPatch();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed | 238 passed (239)
+      Tests  3 failed | 2502 passed (2505)
+   Start at  14:25:35
+   Duration  92.86s (transform 64.62s, setup 255.54s, import 181.55s, tests 279.61s, environment 504.98s)
+
+
+NOTE — the three failures above are environmental, not this PR.
+src/pages/supplierBankDetails.spec.tsx touches nothing this PR changed (supplier bank details, 0171).
+Two of the three timed out at ~5000ms, the signature of a fork under CPU contention on this machine.
+An earlier full run of the same tree at 14:13 was 239/239 files, 2505/2505 tests.
+Re-run in isolation immediately after, on this exact tree:
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a0180200f5f0dfffc
+
+
+ Test Files  1 passed (1)
+      Tests  11 passed (11)
+   Start at  14:27:58
+   Duration  13.65s (transform 840ms, setup 440ms, import 1.66s, tests 10.25s, environment 1.06s)
+

@@ -1,0 +1,73 @@
+PR 11 · MON-04 · what production actually holds — measured read-only
+====================================================================
+
+Project : rkftlbctohswhbbiaqin  (production)
+How     : scripts/db-query.ps1 -ProjectRef rkftlbctohswhbbiaqin -AllowProduction, two SELECT-only
+          statements. Not covered by the campaign's local-stack lock, and nothing was written.
+Date    : 2026-09-05
+
+THE FINDING SAYS: "One 2,950.00 ILS statement line carries two CONFIRMED allocations of 2,950.00
+each to the same invoice." THAT IS NOT WHAT IS THERE, and the difference decides the design.
+
+--- 1. how many lines are over-allocated, across all tenants -----------------------------------
+
+  with per_tx as (
+    select t.org_id, t.id, t.currency, round(t.amount, 3) as tx_amount,
+           round(coalesce(sum(ba.amount) filter (where ba.confirmed), 0), 3) as confirmed_sum,
+           count(*) filter (where ba.confirmed) as confirmed_rows,
+           round(coalesce(sum(ba.amount), 0), 3) as any_sum,
+           count(ba.id) as any_rows
+    from public.bank_transactions t
+    left join public.bank_allocations ba on ba.bank_transaction_id = t.id
+    group by t.org_id, t.id, t.currency, t.amount
+  )
+  ... totals, then the two over-allocation buckets, then a detail row per offender.
+
+  a_totals                     bank_transactions 9 · bank_allocations 9 · confirmed 8 · tenants 1
+  b_over_allocated_confirmed   0 lines, 0 tenants, 0 excess
+  c_over_allocated_any         1 line, 1 tenant, excess 2950.000
+  d_detail fa000000-…-0008     tx 2950.000 · confirmed 2950.000 · confirmed_rows 1 · ILS
+                               org 11111111-1111-4111-8111-111111111111
+
+So: ZERO statement lines whose CONFIRMED allocations exceed the line. One line that exceeds it
+only once unconfirmed suggestions are counted too.
+
+--- 2. the two rows on that line ---------------------------------------------------------------
+
+  select ba.id, ba.invoice_id, ba.amount, ba.currency, ba.confirmed, ba.confidence, ba.created_at,
+         t.amount as tx_amount, t.status
+  from public.bank_allocations ba
+  join public.bank_transactions t on t.id = ba.bank_transaction_id
+  where ba.bank_transaction_id = 'fa000000-0000-4000-8000-000000000008' order by ba.created_at;
+
+  aefd9d49-6136-4990-8686-a3c084efb395
+    invoice f4000000-…-0011 · 2950.000 ILS · confirmed=FALSE · confidence 0.820
+    created 2026-07-16 15:36:05 UTC
+  358c95e8-c1d3-4e53-b0b5-5097cdd84a49
+    invoice f4000000-…-0011 · 2950.000 ILS · confirmed=TRUE  · confidence 0.700
+    created 2026-09-02 21:36:37 UTC
+
+  line: 2950.000 ILS, status `matched`, reference 782044.
+
+WHAT THAT MEANS. The first row is the demo seed's SUGGESTION — it is written verbatim at
+`supabase/demo/demo_seed.sql:758`, `confirmed false`, on a line the same seed leaves `suggested`.
+The second is a real `match_bank_transaction` call made on 02.09.2026 (the sweep itself), which
+inserted a confirmed allocation and set the line to `matched`. ONE claim on the money, not two.
+
+TWO CONSEQUENCES, BOTH DELIBERATE:
+
+  1. The bound in `0322` counts CONFIRMED rows and only those. A suggestion claims no money, and
+     the product already reads the table that way everywhere (`Bank.tsx:502`,
+     `match_bank_transaction`'s idempotent replay, `unmatch_bank_transaction`). A bound that
+     counted suggestions would refuse the ordinary path: confirming a full-line suggestion inserts
+     a SECOND row rather than flipping the first, so this very line could never have been matched.
+
+  2. `0322`'s pre-flight assertion — that no line is already over the bound — is safe to apply to
+     production: the confirmed sum here is EQUAL to the line, and equal is allowed.
+
+RESIDUAL, NOT FIXED HERE. `match_bank_transaction` does not clear the suggestions on a line it
+confirms, so every confirmed match leaves its suggestion behind and the line then displays two
+rows of the same amount. That is the appearance the finding described. It is a data-hygiene defect
+in a financial command, its correction would be a deletion of financial rows, and which row
+survives is the owner's call. The pair is left exactly as it is.
+

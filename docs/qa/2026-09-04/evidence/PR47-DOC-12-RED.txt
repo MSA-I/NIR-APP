@@ -1,0 +1,74 @@
+PR 47 · DOC-12 — RED. The oracle run against the UNFIXED tree.
+
+date:    2026-09-04
+branch:  worktree-agent-a0a2aac045395d268
+tree:    50188f6e + PR 45 + PR 46, plus this oracle. No product file changed yet.
+command: npx vitest run src/pages/receiptLinkFromInvoice.spec.tsx
+
+2 failed / 3 passed.
+
+The two that fail are owner and office asking for a door into the receipt the
+invoice names. The rendered page carries three anchors and none of them is
+/receipts/<id>:
+
+    expected [ '/invoices', ...(2) ] to include
+             '/receipts/a1000000-0000-4000-8000-000000000077'
+
+THE THREE THAT PASS ARE THE CONTROLS, and they are what make the red specific:
+
+  1. the ORDER on the line directly above is already a /orders/<id> link in the
+     same card, from the same read — so anchors, routing and the harness all work
+     and the missing link is the receipt row;
+  2. the accountant sees the number and no /receipts/ link. That is the state the
+     fix must PRESERVE: App.tsx guards the route with STAFF, so a link there would
+     be a door that refuses the person who follows it;
+  3. App.tsx really does declare `path="/receipts/:receiptId" ... roles={STAFF}`
+     with STAFF = owner, office — read out of the file, so the branch in (2) cannot
+     go on describing a route that has changed underneath it.
+
+WHY A LINK AND NOT A REMOVAL. /receipts/:receiptId is a working, role-guarded
+screen, it is already linked from `document-review/model.ts` (the routing card a
+delivery note gets once it has been reviewed) and from the linked-context strip on
+/invoices/new, and `REQ-06` — a separate open finding — asks that page to say MORE,
+not to disappear. What it lacked was a door from a record somebody is reading.
+
+--------------------------------------------------------------------------------
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a0a2aac045395d268
+
+ ❯ src/pages/receiptLinkFromInvoice.spec.tsx (5 tests | 2 failed) 347ms
+     × gives the owner a way into the receipt it names 203ms
+     × gives office the same door 44ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/receiptLinkFromInvoice.spec.tsx > DOC-12 — the receipt named on the invoice opens > gives the owner a way into the receipt it names
+AssertionError: expected [ '/invoices', …(2) ] to include '/receipts/a1000000-0000-4000-8000-000…'
+ ❯ src/pages/receiptLinkFromInvoice.spec.tsx:136:27
+    134|
+    135|   it('gives the owner a way into the receipt it names', async () => {
+    136|     expect(await hrefs()).toContain(`/receipts/${RECEIPT_ID}`);
+       |                           ^
+    137|   });
+    138|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/pages/receiptLinkFromInvoice.spec.tsx > DOC-12 — the receipt named on the invoice opens > gives office the same door
+AssertionError: expected [ '/invoices', …(2) ] to include '/receipts/a1000000-0000-4000-8000-000…'
+ ❯ src/pages/receiptLinkFromInvoice.spec.tsx:141:27
+    139|   it('gives office the same door', async () => {
+    140|     currentRole = 'office';
+    141|     expect(await hrefs()).toContain(`/receipts/${RECEIPT_ID}`);
+       |                           ^
+    142|   });
+    143|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 3 passed (5)
+   Start at  16:22:07
+   Duration  4.12s (transform 1.22s, setup 486ms, import 1.82s, tests 347ms, environment 1.20s)
+

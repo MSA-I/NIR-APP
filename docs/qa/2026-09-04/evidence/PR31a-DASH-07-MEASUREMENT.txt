@@ -1,0 +1,242 @@
+PR 31a — DASH-07: why every cost column on /reports/products is empty.
+=======================================================================================
+MEASURE-FIRST PR. The ledger row said the root cause was not established by the sweep and that a
+database check was needed before any oracle could be written. This file is that check: the actual
+queries, the actual row counts, and the verdict they force. Everything below was run READ-ONLY
+against the LIVE PRODUCTION project rkftlbctohswhbbiaqin through scripts/db-query.ps1
+(-AllowProduction), on 2026-09-05. No local stack was touched and no lock was taken; the campaign
+lock file states that remote read-only queries need no grant.
+
+The window throughout is the sweep's own: 2026-01-01 .. 2026-09-04.
+
+---------------------------------------------------------------------------------------
+0. WHAT THE SWEEP RECORDED, AND ITS TWO HYPOTHESES
+---------------------------------------------------------------------------------------
+docs/qa/2026-09-04/dashboard.json entry 6:
+
+  title  : "The product purchase summary produces no cost at all -- הוצאה, מחיר יחידה ממוצע and
+            חויב are empty for all 115 products over nine months, with no message saying why"
+  actual : "Root cause is not determinable from the UI -- either no invoice line in this tenant
+            references a product, or unmapped_invoice_lines is failing to count lines it should;
+            both need a DB look."
+
+BOTH HYPOTHESES ARE WRONG, and the headline is false. Measured below.
+
+---------------------------------------------------------------------------------------
+1. THE READ PATH, READ FROM THE LIVE DATABASE RATHER THAN FROM A MIGRATION
+---------------------------------------------------------------------------------------
+  select pg_get_functiondef(
+    'private.product_purchase_summary(uuid,date,date,uuid)'::regprocedure);
+
+The wrapper the client calls is get_product_purchase_summary(date,date,uuid); the body above is
+what it delegates to. Three findings from the body itself:
+
+  a. The BILLED half is computed in the `invoiced` CTE, whose innermost table is
+     public.invoice_line_matches, joined to public.invoice_lines and public.invoices.
+  b. gross_amount_by_currency, average_unit_price and invoiced_qty are ALL guarded by
+     `case when row.invoice_count > 0 then ... end`, so with no matched line the function emits
+     NULL and never a fabricated 0. The em dashes on screen are the function behaving correctly.
+  c. `unmapped_invoice_lines` is computed in the `unmapped` CTE, which reads public.invoice_lines
+     DIRECTLY -- the SAME table the empty columns depend on.
+
+(c) is the structural point of this whole finding and is returned to in section 5.
+
+---------------------------------------------------------------------------------------
+2. DOES THE SOURCE DATA EXIST AT ALL?  --  q01
+---------------------------------------------------------------------------------------
+  select o.id, o.base_currency,
+         (select count(*) from purchase_orders       po  where po.org_id  = o.id) as orders,
+         (select count(*) from purchase_order_items  poi where poi.org_id = o.id) as order_items,
+         (select count(*) from invoices              i   where i.org_id   = o.id) as invoices,
+         (select count(*) from invoice_lines         il  where il.org_id  = o.id) as invoice_lines,
+         (select count(*) from products              p   where p.org_id   = o.id) as products
+  from organizations o order by orders desc;
+
+  org 11111111-1111-4111-8111-111111111111  ILS  orders 272  items 496  invoices 18  LINES 0  products 271
+  org 74cf7496-c616-477c-a9a4-cf212251d820  ILS  orders   0  items   0  invoices  0  LINES 0  products  74
+  org 3f468349-33c4-415d-9ccf-1b2f908f26fc  ILS  orders   0  items   0  invoices  0  LINES 0  products  86
+  org f12336ed-3660-4405-bab6-d5b70ec1709c  ILS  orders   0  items   0  invoices  0  LINES 0  products   0
+  org 80eb4bc1-4cea-43d8-b04d-94cfa3eff532  ILS  orders   0  items   0  invoices  0  LINES 0  products   0
+
+THE ANSWER IS NO, AND IT IS NOT SUBTLE. public.invoice_lines holds ZERO ROWS in production.
+The order side is fully populated: 272 orders, 496 order lines, 271 products.
+
+---------------------------------------------------------------------------------------
+3. THE FUNCTION'S OWN OUTPUT, FOR THE SWEEP'S WINDOW  --  q05
+---------------------------------------------------------------------------------------
+  with r as (select private.product_purchase_summary(
+       '11111111-1111-4111-8111-111111111111'::uuid,
+       date '2026-01-01', date '2026-09-04', null) as j),
+       p as (select jsonb_array_elements((select j from r) -> 'products') as row)
+  select ... ;
+
+  products_returned                     115
+  unmapped_invoice_lines                  0
+  unmapped_amount_json                   []
+  rows_with_gross_null                  115
+  rows_with_avg_price_null              115
+  rows_with_invoice_count_zero          115
+  rows_with_ordered_amount_nonempty     115      <-- every row DOES carry a cost
+  rows_with_ordered_amount_empty          0
+  rows_with_ordered_amount_zero_value     0      <-- and not one of them is zero
+  sum_of_ordered_amount_ILS       182208.210
+  invoice_line_matches_all_orgs           0
+  invoice_lines_all_orgs                  0
+  invoices_demo_count                    18
+  invoices_demo_approved_payable_in_window  10
+  invoices_demo_status_breakdown  approved/payable x10 | in_review/payable x2 |
+                                  investigation/payable x2 | pending_approval/payable x1 |
+                                  received/payable x3   (none deleted)
+  invoices_demo_date_range        2026-05-20 .. 2026-09-03
+  invoices_demo_total_amount_sum      27766.600
+
+THE HEADLINE OF THE FINDING IS FALSE. "produces no cost at all" is not what this report does.
+ordered_amount_by_currency -- the column עלות לפי ההזמנה, added by migration 0301 and deployed --
+carries a figure on 115 OF 115 rows, ILS 182,208.210 for the window, none of them zero. What is
+empty is the BILLED half only: חויב, הוצאה and מחיר יחידה ממוצע. The sweep's own `actual` field
+says this accurately ("one of the report's three declared data sources yields nothing"); the title
+overstated it.
+
+---------------------------------------------------------------------------------------
+4. THE CLAUSE-BY-CLAUSE LADDER  --  q06
+---------------------------------------------------------------------------------------
+The brief asked which join / predicate / date window / currency filter / org filter kills the rows,
+narrowed to ONE clause by removing clauses one at a time. The ladder terminates at the first rung.
+
+  LADDER A -- the billed side, innermost table first
+    A1  invoice_line_matches, NO predicate at all, ALL orgs .......................  0
+    A2  invoice_lines,        NO predicate at all, ALL orgs .......................  0
+    A3  invoice_lines,        demo org, no other predicate .......................   0
+    A4  invoices, demo org, no predicate ..........................................  18
+    A5  + deleted_at is null .....................................................   18
+    A6  + review_status = 'approved' .............................................   10
+    A7  + financial_role = 'payable' .............................................   10
+    A8  + invoice_date between 2026-01-01 and 2026-09-04 .........................   10
+
+  LADDER B -- the order side, same window, as the contrast
+    B1  purchase_order_items, demo org, no predicate ............................. 496
+    B2  + join purchase_orders on same org ....................................... 496
+    B3  + status not in ('draft','cancelled') .................................... 490
+    B4  + (created_at at time zone 'Asia/Jerusalem')::date in window ............. 490
+    B5  + unit_price is not null and <> 0 ........................................ 490
+
+  LADDER C -- one tenant, or all of production?
+    C1  orgs with >= 1 invoice_line ..............................................   0
+    C2  orgs with >= 1 invoice_line_match ........................................   0
+    C3  orgs total ...............................................................   5
+    C4  orgs with >= 1 invoice ...................................................   1
+    C5  orgs with >= 1 purchase_order ............................................   1
+
+  LADDER D -- did the pipeline that writes lines ever run?
+    D1  documents, all orgs ......................................................  81
+    D2  document_interpretations, all orgs .......................................  77
+    D3  goods_receipts, demo org .................................................  21
+    D4  goods_receipt_items, demo org ............................................  59
+
+READ LADDER A DOWNWARDS. There is no clause to blame. The base table is empty BEFORE any predicate
+is applied, so no join, no predicate, no date window, no currency filter and no org filter can be
+at fault. And every predicate the invoice HEADERS pass through survives: all 18 invoices are
+undeleted, 10 are approved AND payable AND inside the window, so had lines existed the money would
+have reached the report. Ladder B shows the order side losing exactly the 6 draft/cancelled lines
+it should and nothing else. Ladder C says this is not one tenant's disposition: ZERO OF FIVE
+organisations has ever had an invoice line in production. Ladder D says the document pipeline has
+run (81 documents, 77 interpretations) and receipts exist (21/59, which is why התקבל is populated
+where חויב is not) -- lines specifically were never created.
+
+  RE-MEASURED AFTER THE BROWSER RUNS (q07, same session): purchase_orders 272, order_items 496,
+  invoice_lines 0, invoice_line_matches 0, newest order created_at 2026-09-04T00:23:05Z, orders
+  created in the last 2 hours 0, products returned 115. Production did not move under the
+  measurement.
+
+---------------------------------------------------------------------------------------
+5. THE VERDICT, AND WHY IT IS STILL A DEFECT
+---------------------------------------------------------------------------------------
+DASH-07 IS A DATA DISPOSITION, NOT A CODE DEFECT IN THE REPORT. The server is right: an unknown
+spend is NULL, and NULL renders as an em dash rather than a zero, which is the constitution's own
+rule. Neither of the sweep's hypotheses holds -- it is not that lines exist and fail to reference a
+product, and unmapped_invoice_lines is not miscounting: it is correctly reporting 0 because it
+counts rows of the same empty table.
+
+SO THE DEFECT IS THE DISPLAY, and it has a sharper shape than "no message". THE ONE IDIOM THIS
+SCREEN HAS FOR EXPLAINING AN EMPTY MONEY COLUMN CANNOT FIRE IN THIS STATE. The unmapped-lines note
+is guarded by `unmapped_invoice_lines > 0`, and that count reads public.invoice_lines -- the same
+table whose emptiness empties the columns. No invoice lines means no unmapped invoice lines. The
+note can therefore appear only when SOME lines exist and are unmatched, and is structurally silent
+in precisely the case that empties the column completely. The sweep's own `expected` pointed at
+that idiom as the fix; measurement shows the idiom is the hole.
+
+THE FIX IS THEREFORE THE SENTENCE, ON BOTH SURFACES, FROM ONE PREDICATE:
+  * billedNothingInWindow(products, unmappedInvoiceLines) in src/lib/productPurchaseWorkbook.ts --
+    true only when the window returned products, NO product carries an approved payable invoice
+    line, and no unmatched line is waiting either. Both halves earn their place: one billed
+    product makes the sentence false, and when unmatched lines DO exist the report's existing note
+    is the right one to show.
+  * the screen renders a role="status" note naming the three empty columns, saying the words
+    "this is not zero -- it is a figure not yet known", naming עלות לפי ההזמנה as what the report
+    DOES know, and stating the step that fills the rest.
+  * the exported sheet states the same sentence on ROW 2, appended to the window assertion rather
+    than replacing it, because row 2 is where a sheet says what it holds. The finding's evidence
+    named the file as well as the screen.
+
+NO MIGRATION AND NO SUITE NUMBER WERE NEEDED OR DRAWN. Every fact the predicate needs is already in
+the RPC response.
+
+NO QUERY WAS WIDENED. Nothing was relaxed to make money appear; the report shows exactly the rows
+it showed before, with a sentence beside them.
+
+---------------------------------------------------------------------------------------
+6. WHAT THE SCREEN ACTUALLY SHOWED  --  1440x900, headed system Edge
+---------------------------------------------------------------------------------------
+See PR31a-SCREEN-READ.txt for the per-column reads and
+PR31a-BEFORE-products-1440x900.png / PR31a-AFTER-products-1440x900.png for the pictures.
+
+---------------------------------------------------------------------------------------
+7. RESIDUALS -- recorded, not silently fixed
+---------------------------------------------------------------------------------------
+R1. PRODUCTION HAS NEVER HELD A SINGLE INVOICE LINE, in any of its five organisations. That means
+    the three-way match -- the feature this report's whole billed half exists to serve -- is
+    entirely unexercised in production. Not this PR's to change, and not a code defect on the
+    evidence gathered here, but the coordinator/owner should know it: no live screenshot, export or
+    smoke of that half proves anything today.
+
+R2. THE FINDING'S HEADLINE IS WRONG and the ledger row quotes it. "produces no cost at all" was
+    true before migration 0301 and stopped being true when 0301 and the עלות לפי ההזמנה column
+    shipped -- both of which were live at sweep time (the frontend commit that adds the column is
+    an ancestor of the merge the sweep names). The row is corrected rather than closed against the
+    wrong sentence.
+
+R3. THE TENANT-TEMPLATE EXPORT PATH IS UNTOUCHED. When an organisation has configured its own
+    report template, renderConfiguredReportTemplate wins and the built-in builder never runs, so
+    the row-2 sentence is absent from that file. Adding it means changing the template value
+    contract in src/lib/reportTemplateExport.ts and the templates tenants already hold. Left alone
+    deliberately; stated rather than discovered later.
+
+R4. THE PER-ROW MIXED CASE IS UNCHANGED. When SOME products are billed and others are not, the
+    unbilled rows still show three em dashes with no per-row explanation. That is the correct
+    absence marker beside a populated neighbour, and a row-level caveat there would be noise; the
+    finding measured the all-empty case and that is the case addressed.
+
+R5. THE DEPLOYED BUILD IGNORES ?from=/?to= ON THIS SCREEN -- that is DASH-08, fixed elsewhere in
+    this campaign and not yet released. The BEFORE run therefore typed the window into the two
+    date inputs, exactly as the sweep's own repro says to, and the header was read back to prove
+    which window the BEFORE figures belong to (115 מוצרים · 2026-01-01 עד 2026-09-04). The first
+    BEFORE attempt, navigated by URL, silently landed on 20 products · 2026-09-01 עד 2026-09-05 and
+    was discarded.
+
+---------------------------------------------------------------------------------------
+8. WHAT WAS NOT RUN, AND WHY
+---------------------------------------------------------------------------------------
+  * npm run verify (whole) and npm run quality -- forbidden by the campaign brief; the campaign
+    runs one baseline verify on an idle machine. The individual guards this change touches were
+    run and are in PR31a-GUARDS.txt.
+  * Any SQL suite, any local-stack command, any migration -- none was needed and the stack lock is
+    held by another agent.
+  * scripts/check-contrast-rendered.mjs -- it belongs to the heavy browser gate. The new note adds
+    no colour: it reuses the `await` tone the unmapped note beside it already uses, so no new token
+    pair exists to measure. check:tokens passed and the rendered result was read from the AFTER
+    screenshot.
+  * The RPC was executed through the Management API, i.e. as `postgres`, which bypasses RLS. That
+    is sound HERE and only here: the tables are empty for every role, so no policy can be hiding
+    rows from the owner that postgres can see. The signed-in owner reading the same window in a
+    real browser (section 6) returned the same 115 products with the same empty columns, which is
+    the guarded-path confirmation.

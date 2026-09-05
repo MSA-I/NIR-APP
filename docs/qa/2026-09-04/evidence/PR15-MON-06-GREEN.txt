@@ -1,0 +1,27 @@
+MON-06 GREEN - the two figures now name their own populations
+Tree: fixed. src/pages/AccountantPaymentQueue.tsx + he.ts/en.ts (two new keys).
+Oracle: src/pages/payQueueCreditScope.spec.tsx  (unchanged since the RED run above)
+Run: npx vitest run src/pages/payQueueCreditScope.spec.tsx
+Date: 2026-09-05
+
+RED  was 3 failed | 2 passed (5).
+GREEN is 5 passed (5) - and BOTH controls that passed in the red still pass, so the three that
+flipped flipped because the screen changed, not because the harness did.
+
+NO MIGRATION ACCOMPANIES THIS FIX. Nothing in the database is wrong; see PR15-MON-06-MEASUREMENT.txt.
+
+==============================================================================
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a4814cae145c411f6
+
+ ✓ src/pages/payQueueCreditScope.spec.tsx > /pay — the credit figure and the credit list name their own populations > does not claim the supplier has no open credits when the read returned nothing 377ms
+ ✓ src/pages/payQueueCreditScope.spec.tsx > /pay — the credit figure and the credit list name their own populations > says instead that this role cannot see the supplier credits 121ms
+ ✓ src/pages/payQueueCreditScope.spec.tsx > /pay — the credit figure and the credit list name their own populations > marks the quoted override figure as the approver view at approval 148ms
+ ✓ src/pages/payQueueCreditScope.spec.tsx > /pay — the credit figure and the credit list name their own populations > CONTROL — still prints the override amount and its reason 177ms
+ ✓ src/pages/payQueueCreditScope.spec.tsx > /pay — the credit figure and the credit list name their own populations > CONTROL — a measured zero stays a measured zero 141ms
+
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
+   Start at  06:08:50
+   Duration  6.12s (transform 1.36s, setup 866ms, import 2.13s, tests 970ms, environment 1.78s)
+

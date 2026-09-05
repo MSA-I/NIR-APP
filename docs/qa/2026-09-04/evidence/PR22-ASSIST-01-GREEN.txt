@@ -1,0 +1,72 @@
+PR 22 — ASSIST-01 — GREEN
+=========================
+Gate      : ASSIST-01 (docs/GATES.md, Wave G)
+Spec      : src/components/assistant/assistantHistoryAdoption.spec.tsx (new)
+Command   : npx vitest run src/components/assistant/assistantHistoryAdoption.spec.tsx
+Tree      : FIXED — see ASSIST-01.patch (runSession.ts + AssistantPanel.tsx)
+
+WHERE THIS RAN
+--------------
+Same worktree note as the RED file: executed in .claude/worktrees/qa-sweep-20260904 because the
+harness isolation root refused writes and git against .claude/worktrees/pr22-assistant-history.
+The behaviour-carrying files were byte-identical between the two worktrees before the change.
+
+THE FIX
+-------
+inFlightRef answers "is a request in flight". It is cleared the instant a run settles, and the
+panel re-checks its guard only AFTER two awaits (list conversations, then load the newest). A
+question asked and settled inside that window passed the check and was overwritten.
+
+The missing condition is "has this panel session produced a question at all". That is askedRef:
+set synchronously in submit() beside setSubmittedQuestion, never unset when a run settles, and
+cleared only when the authorization fingerprint changes — a new authorization is a new person.
+
+restoreHistory has two callers with opposite rights, so the guard could not simply be added to it:
+  - the person pressing a stored conversation in the list ASKED for that thread and may replace
+    what is on screen. That path keeps restoreHistory unchanged.
+  - the panel offering the newest conversation on open asked nobody. That path now calls the new
+    adoptHistory, which refuses once askedRef is set and otherwise delegates.
+Putting the condition on restoreHistory itself would have silently broken the explicit list.
+
+RESULT
+------
+All three tests pass. The third one is the guard against over-fixing: an untouched panel still
+adopts the newest conversation, so the change refuses rather than disables.
+
+RAW OUTPUT — the oracle
+=======================
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/qa-sweep-20260904
+
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Start at  13:18:00
+   Duration  3.56s (transform 724ms, setup 534ms, import 1.04s, tests 531ms, environment 1.15s)
+
+
+RAW OUTPUT — regression across the whole assistant surface
+==========================================================
+npx vitest run src/components/assistant/ src/lib/assistant/
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/qa-sweep-20260904
+
+
+ Test Files  6 passed (6)
+      Tests  135 passed (135)
+   Start at  13:18:08
+   Duration  8.57s (transform 3.28s, setup 4.51s, import 5.05s, tests 5.45s, environment 9.32s)
+
+
+TARGETED CHECKS
+===============
+npx tsc --noEmit                        -> exit 0, no output
+npm run check:assistant-no-send         -> assistant-no-send: OK
+npm run check:assistant-tool-schemas    -> passed: 18 tool declaration(s); every property is
+                                           required, so strict mode accepts them.
+npm run check:i18n                      -> passed: 63 file(s) still carry 908 Hebrew line(s),
+                                           all at their pinned counts (63 documented exception(s)).
+
+npm run verify in full, npm run quality and every SQL suite were deliberately NOT run: eight
+agents share this machine and the campaign brief restricts this PR to targeted checks.
+No dictionary was touched; check:i18n was run anyway as a safety net.

@@ -1,0 +1,7 @@
+     × names the rate limit on the body GoTrue really sends, not on prose that matches nothing 3556ms
+     × does not disclose that the address is registered, and does not name the wait 3389ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+TestingLibraryElementError: Unable to find an element with the text: /יותר מדי בקשות/. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+TestingLibraryElementError: Unable to find an element with the text: /יותר מדי בקשות/. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+ Test Files  1 failed (1)
+      Tests  2 failed | 8 passed (10)

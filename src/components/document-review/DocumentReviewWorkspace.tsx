@@ -13,7 +13,8 @@ import { DocumentProcessingProgress } from './DocumentProcessingProgress';
 import { DocumentReviewProposals } from './DocumentReviewProposals';
 import { DocumentSourceViewer } from './DocumentSourceViewer';
 import { PriceListReviewConfirmation } from './PriceListReviewConfirmation';
-import type { ReviewSnapshot } from './model';
+import { resolveExportTemplateWinner, type ReviewSnapshot } from './model';
+import type { TKey } from '../../lib/i18n/t';
 
 interface DocumentReviewWorkspaceProps {
   snapshot: ReviewSnapshot;
@@ -35,6 +36,26 @@ export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialP
   const isPriceList = snapshot.interpretation?.payload.document_type === 'price_list';
   const extraction = snapshot.extraction?.payload ?? null;
   const uiStatus = documentUiStatus({ status: snapshot.stage, job: snapshot.job, document: snapshot.document });
+
+  /**
+   * `EXP-08` — the folder's row action named "ייצוא" arrives here as `?panel=export`, and it is
+   * gated there only on the processing stage. Four other things decide whether a file can actually
+   * be produced, and the folder can see none of them: it loads its snapshots without details, so
+   * at the moment the menu is built it does not know the document's type, its templates, or
+   * whether this reader may write. The sweep followed the item on a price list, enumerated every
+   * button on this screen for a download and got none — while the only sentence on the page was
+   * about who may APPROVE the document, which is a different act.
+   *
+   * So the destination answers for it. The first unmet condition, in the order a person can do
+   * something about it, becomes the sentence they arrive to.
+   */
+  const exportBlockedKey: TKey | null = (() => {
+    if (!extraction || !snapshot.interpretation) return 'docWorkspace.exportUnavailableNotInterpreted';
+    if (isPriceList) return 'docWorkspace.exportUnavailablePriceList';
+    if (readOnly) return 'docWorkspace.exportUnavailableReadOnly';
+    if (!resolveExportTemplateWinner(snapshot, actorId)) return 'docWorkspace.exportUnavailableNoTemplate';
+    return null;
+  })();
 
   useEffect(() => {
     let cancelled = false;
@@ -122,6 +143,14 @@ export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialP
       )}
       {snapshot.extraction?.payload.document.partial && (
         <Note tone="await" role="status">{t('docWorkspace.text_33')}</Note>
+      )}
+
+      {/* Only for a visitor who asked for the export panel. A reader who came here to review a
+          document is not owed a sentence about a file they did not ask for (`EXP-08`). */}
+      {initialPanel === 'export' && exportBlockedKey && (
+        <div data-testid="document-export-unavailable">
+          <Note tone="idle" role="status">{t(exportBlockedKey)}</Note>
+        </div>
       )}
 
       {/* Four notes stood here and none of them survived, because each one was the strip's sentence

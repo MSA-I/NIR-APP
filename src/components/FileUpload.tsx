@@ -23,7 +23,8 @@ import { ok, toErrorKey } from '../lib/errors';
 import type { TKey } from '../lib/i18n/t.ts';
 import { useQuery, unwrap } from '../lib/useQuery';
 import type { DocumentKind, DocumentRow } from '../lib/types';
-import { bidiIsolate, fmtDateTime } from '../lib/format';
+import { fmtDateTime, ltrIsolate } from '../lib/format';
+import { storageObjectName } from '../lib/storageObjectName';
 import { openReservedPopup } from '../lib/popup';
 import {
   mergeUploadBatchSummary,
@@ -385,7 +386,9 @@ export async function uploadDocument(
   let documentId = resume?.documentId ?? null;
 
   if (!path) {
-    const safeName = file.name.replace(/[^\w.\-]+/g, '_');
+    // DOC-10: `replace(/[^\w.\-]+/g, '_')` reads as script-neutral and deletes every Hebrew
+    // character, because `\w` here is ASCII. See `src/lib/storageObjectName.ts`.
+    const safeName = storageObjectName(file.name);
     // org_id must lead the path -- the bucket's RLS policy reads it to enforce tenant isolation.
     const objectKey = clientUploadKey;
     path = entityId
@@ -703,7 +706,7 @@ export function WeakCaptureDialog({ pick, source, onRetake, onUploadAnyway, onDi
         <ul className="mb-3 divide-y divide-line-soft rounded-lg border border-line-soft text-sm">
           {pick.weak.map((item, index) => (
             <li key={`${item.file.name}-${index}`} className="flex items-center gap-2 px-3 py-2">
-              <span className="min-w-0 flex-1 truncate text-ink-body"><bdi>{item.file.name}</bdi></span>
+              <span className="min-w-0 flex-1 truncate text-ink-body"><bdi dir="ltr">{item.file.name}</bdi></span>
               <span className="badge-await shrink-0">{t(WEAK_CAPTURE_LABEL_KEY[item.verdict])}</span>
             </li>
           ))}
@@ -1096,7 +1099,7 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
             return (
               <li key={d.id} className="flex min-h-14 flex-wrap items-center gap-2 px-3 py-2 text-sm">
                 <FileText size={ICON.sm} className="shrink-0 text-ink-faint" />
-                <button className="link min-w-32 flex-1 truncate text-start" onClick={() => void open(d)}><bdi>{d.file_name}</bdi></button>
+                <button className="link min-w-32 flex-1 truncate text-start" onClick={() => void open(d)}><bdi dir="ltr">{d.file_name}</bdi></button>
                 <span className="hidden text-xs text-ink-muted sm:inline">{t(documentKindKey(d.document_kind))}</span>
                 {/* G1, finding 20 — same badge, same four human states as the documents folder.
                     The raw stage stays on `data-document-processing-status`. */}
@@ -1147,7 +1150,7 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
         onClose={() => setPending(null)}
         onConfirm={() => { if (pending) void remove(pending); }}
         title={t('fileUpload.title')}
-        message={t('fileUpload.removeConfirm', { file: bidiIsolate(pending?.file_name ?? '') })}
+        message={t('fileUpload.removeConfirm', { file: ltrIsolate(pending?.file_name ?? '') })}
         confirmLabel={t('fileUpload.confirmLabel')}
         danger
         busy={deleting}

@@ -1,0 +1,52 @@
+PR38 — guards run on the fixed tree, 04.09.2026, worktree-agent-a183f8959614045c8.
+The heavy gate, every SQL suite and `npm run verify` in full are NOT run here: another
+agent holds the local Supabase stack for this wave.
+
+--- npx tsc --noEmit
+clean
+
+--- npm run check:money
+check:money passed: 3 rules over src/**/*.ts(x), src/lib/format.ts exempt.
+
+--- npm run check:currency
+GATE_CURRENCY_COLUMNS_OK — 84 numeric columns declared, all classified (40 money, 44 not money); carrier check enforced.
+GATE_CURRENCY_AGGREGATES_OK — money aggregates enforced from 0217 onward.
+GATE_CURRENCY_INTAKE_GUARD_OK — 0244_intake_says_when_it_could_not_check.sql still rejects an unrecognised currency as currency_unrecognised/error.
+
+--- npm run check:i18n
+check:i18n passed: 64 file(s) still carry 911 Hebrew line(s), all at their pinned counts (64 documented exception(s)).
+
+--- npm run check:plurals
+check:plurals passed: 77 counted phrase(s), 32 with a singular sibling, 45 pinned.
+
+--- npm run check:orphan-keys
+check:orphan-keys passed: 6065 leaf key(s), 106 with no call site, pinned.
+
+--- npm run check:key-manifest
+check:key-manifest passed: 5571 keys considered, 107 without a production call site — the same names as the baseline, none newly stranded, none spec-only.
+
+--- npm run check:supplier-columns
+check:supplier-columns passed: zero `select('*')` against suppliers across 557 files.
+
+--- npm run check:typography
+Typography contract passed (560 source files).
+
+--- npm run check:jsx-space
+check:jsx-space passed: 152 .tsx file(s), no glued translated expressions.
+
+--- npm run check:tokens
+check:tokens passed: 557 .ts/.tsx files with zero raw palette classes, zero hex literals, zero stock Tailwind shadows and zero references to a colour outside the 145 tokens @theme actually defines; src/index.css keeps every colour literal inside @theme and uses no rgb()/hsl(); 2 stylesheet(s) under src/, and the only one exempt from the token layer is styles/plan-card.css (OPEN-DECISIONS #296).
+
+--- npm run check:baseline-drift
+check:baseline-drift passed: baselines moved only in the allowed direction since eb1cc718.
+
+--- npm run check:decision-numbers
+check:decision-numbers passed: 333 rulings, #10–#357, none duplicated, 79 prose citation(s) and 1831 in code all resolve.
+
+--- npm run check:debt-numbers
+check:debt-numbers passed: 99 debt section number(s), none duplicated.
+
+--- npm run check:plan-labels
+check:plan-labels passed: 37 Hebrew label(s) match their seeded row.
+
+ALL GREEN

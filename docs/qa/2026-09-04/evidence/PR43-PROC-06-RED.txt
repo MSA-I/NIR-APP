@@ -1,0 +1,109 @@
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a0180200f5f0dfffc
+
+stderr | src/pages/orderDetailNotFound.spec.tsx > PROC-06 — /orders/:id with no record behind it > says the order does not exist instead of sending the person to support
+[supplyflow] JSON object requested, multiple (or no) rows returned
+
+stderr | src/pages/orderDetailNotFound.spec.tsx > PROC-06 — /orders/:id with no record behind it > offers the way back to the orders list
+[supplyflow] JSON object requested, multiple (or no) rows returned
+
+ ❯ src/pages/orderDetailNotFound.spec.tsx (2 tests | 2 failed) 6074ms
+     × says the order does not exist instead of sending the person to support 3046ms
+     × offers the way back to the orders list 3022ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/orderDetailNotFound.spec.tsx > PROC-06 — /orders/:id with no record behind it > says the order does not exist instead of sending the person to support
+TestingLibraryElementError: Unable to find an element with the text: הזמנה לא נמצאה. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"note-alert "[39m
+      [33mrole[39m=[32m"alert"[39m
+    [36m>[39m
+      [0mהפעולה נכשלה. אם הבעיה חוזרת — פנה לתמיכה.[0m
+    [36m</div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"mobile-overlay-stack fixed z-[60] start-4 end-4 flex flex-col items-center gap-2 pointer-events-none no-print sm:start-6 sm:end-6"[39m
+    [36m/>[39m
+  [36m</div>[39m
+[36m</body>[39m
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"note-alert "[39m
+      [33mrole[39m=[32m"alert"[39m
+    [36m>[39m
+      [0mהפעולה נכשלה. אם הבעיה חוזרת — פנה לתמיכה.[0m
+    [36m</div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"mobile-overlay-stack fixed z-[60] start-4 end-4 flex flex-col items-center gap-2 pointer-events-none no-print sm:start-6 sm:end-6"[39m
+    [36m/>[39m
+  [36m</div>[39m
+[36m</body>[39m
+ ❯ waitForWrapper ../../../node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ src/pages/orderDetailNotFound.spec.tsx:94:25
+     92|   it('says the order does not exist instead of sending the person to s…
+     93|     renderDetail();
+     94|     expect(await screen.findByText(he.orders.text_14)).toBeInTheDocume…
+       |                         ^
+     95|     expect(screen.queryByText(he.errors.fallback)).toBeNull();
+     96|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/pages/orderDetailNotFound.spec.tsx > PROC-06 — /orders/:id with no record behind it > offers the way back to the orders list
+TestingLibraryElementError: Unable to find an element with the text: הזמנה לא נמצאה. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"note-alert "[39m
+      [33mrole[39m=[32m"alert"[39m
+    [36m>[39m
+      [0mהפעולה נכשלה. אם הבעיה חוזרת — פנה לתמיכה.[0m
+    [36m</div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"mobile-overlay-stack fixed z-[60] start-4 end-4 flex flex-col items-center gap-2 pointer-events-none no-print sm:start-6 sm:end-6"[39m
+    [36m/>[39m
+  [36m</div>[39m
+[36m</body>[39m
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"note-alert "[39m
+      [33mrole[39m=[32m"alert"[39m
+    [36m>[39m
+      [0mהפעולה נכשלה. אם הבעיה חוזרת — פנה לתמיכה.[0m
+    [36m</div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"mobile-overlay-stack fixed z-[60] start-4 end-4 flex flex-col items-center gap-2 pointer-events-none no-print sm:start-6 sm:end-6"[39m
+    [36m/>[39m
+  [36m</div>[39m
+[36m</body>[39m
+ ❯ waitForWrapper ../../../node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ src/pages/orderDetailNotFound.spec.tsx:100:18
+     98|   it('offers the way back to the orders list', async () => {
+     99|     renderDetail();
+    100|     await screen.findByText(he.orders.text_14);
+       |                  ^
+    101|     const back = screen.getAllByRole('link').find((link) => link.getAt…
+    102|     expect(back, 'a link back to /orders').toBeDefined();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed (2)
+   Start at  14:05:03
+   Duration  8.86s (transform 717ms, setup 489ms, import 1.10s, tests 6.07s, environment 960ms)
+

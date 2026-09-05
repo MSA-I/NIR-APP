@@ -43,8 +43,15 @@ describe('documentUiStatus precedence', () => {
       documentUiStatus({ status: 'completed', document: inbox, evaluatedAt: NOW }).state,
       documentUiStatus({ status: 'failed', document: inbox, evaluatedAt: NOW }).state,
     ];
+    // MERGE, 05.09.2026: the second entry was 'processing' and is now 'awaiting_scan'. Both
+    // campaigns fixed the same symptom — a scan-approval document falling to the residual
+    // 'unassigned' — and only one answer is true. Calling it active makes the badge read "בעיבוד",
+    // which tells a person to wait for a worker that is not coming; `DOC-01` gives the state its
+    // own rung and says a PERSON must approve the scan. That row was verified red-to-green by a
+    // second agent, and three documents had been sitting at this gate since 02.09 on the old
+    // reading. See the comment on ACTIVE_RAW_STATUSES in documentStatus.ts.
     expect(states).toEqual([
-      'unassigned', 'processing', 'processing', 'processing', 'processing', 'review', 'unassigned', 'failed',
+      'unassigned', 'awaiting_scan', 'processing', 'processing', 'processing', 'review', 'unassigned', 'failed',
     ]);
   });
 

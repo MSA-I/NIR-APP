@@ -34,6 +34,34 @@ describe('bank screen language boundaries', () => {
     expect(en.bank).not.toHaveProperty('reasonOr');
   });
 
+  /**
+   * FIN-08 / MON-08 — one screen, two contradictory conventions for the same box.
+   *
+   * MON-08 measured the server half: `unmatch_bank_transaction` refuses a blank `p_reason` by name
+   * (`bank_unmatch_invalid`, 22023). The client never lets that refusal happen, and deliberately so
+   * — `reasonOr` writes a ledger sentence when the box is empty, which is the decided behaviour
+   * (owner, 11.08.2026, quoted in `src/lib/reason.ts`) and is pinned by the assertion above.
+   *
+   * So the box genuinely does NOT block the button, and the '*' on its label was the only thing on
+   * this screen making a claim the code does not keep — while the action dialog beside it, over an
+   * identically optional box, said "(רשות)". The label now reads from the one key `reason.ts`
+   * documents as "the label for a reason box that no longer blocks the button", so there is one
+   * convention rather than two, and no second place for the asterisk to come back to.
+   */
+  it('never marks the un-match reason box required, because nothing enforces it', () => {
+    expect(source).toContain("p_reason: reasonOr(reason, 'הסרת ההתאמה')");
+    expect(source).toContain("htmlFor=\"bank-unmatch-reason\">{t(OPTIONAL_REASON_LABEL_KEY)}");
+    expect(source).toContain("import { OPTIONAL_REASON_LABEL_KEY, reasonOr } from '../lib/reason';");
+    expect(he.bank).not.toHaveProperty('text_12');
+    expect(en.bank).not.toHaveProperty('text_12');
+    expect(he.reason.optionalLabel).toContain('רשות');
+    for (const dict of [he.bank, en.bank]) {
+      const reasonLabels = Object.entries(dict).filter(([key]) => /^setReason/.test(key));
+      expect(reasonLabels.length).toBeGreaterThan(0);
+      for (const [, value] of reasonLabels) expect(String(value)).not.toContain('*');
+    }
+  });
+
   it('stores candidate keys and import facts instead of resolved sentences', () => {
     expect(source).toContain('labelKey: TKey;');
     expect(source).not.toContain('label: string;');

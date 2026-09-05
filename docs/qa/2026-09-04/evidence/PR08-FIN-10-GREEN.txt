@@ -1,0 +1,34 @@
+PR 08 — GREEN — FIN-10
+
+  npx vitest run src/pages/payQueueSettledBalance.spec.tsx src/pages/payQueueBalanceArithmetic.spec.ts
+
+  Test Files  2 passed (2)
+       Tests  12 passed (12)
+
+Full run: docs/qa/2026-09-04/evidence/PR08-RUN-GREEN.txt
+
+  ✓ never claims the transfer cannot be performed
+      — asserts BOTH halves in one test: the refusal is gone, and the fact is still there.
+        expect(dialog.queryByText(/לא ניתן לבצע את ההעברה/)).toBeNull();
+        expect(dialog.getByText(/לא הוזנו פרטי בנק לספק זה/)).toBeTruthy();
+  ✓ keeps the primary enabled — ruling #353 accepts the recording
+
+WHAT CHANGED, AND WHAT DELIBERATELY DID NOT. `payQueue.text_7`/`text_8` are the same two keys with
+new wording, and the note dropped from `tone="alert"` to `tone="info"`. The missing bank account is
+still stated, because it is true and somebody has to act on it — it is now stated as a note about
+the NEXT transfer instead of a refusal of this recording. The button is untouched.
+
+  before: לא הוזנו פרטי בנק לספק זה, ולכן לא ניתן לבצע את ההעברה. יש לפנות לבעלים או למנהל הרכש
+          כדי שיזינו את הפרטים בכרטיס הספק. אין במסך זה דרך לדווח על כך.
+
+  after:  לא הוזנו פרטי בנק לספק זה. הרישום כאן אינו מושפע מכך — המסך מתעד העברה שכבר יצאה
+          מהבנק — אך את פרטי החשבון יש להזין לקראת ההעברה הבאה בכרטיס הספק. ההזנה היא באחריות
+          הבעלים או מנהל הרכש; אין במסך זה דרך להזין אותם.
+
+BROWSER READING after the fix, same harness:
+
+  saysCannotTransfer : false
+  primaryDisabled    : false
+  bankNoteTone       : "note-info"
+
+Screenshot: PR08-GREEN-pay-dialog-1440x900.png (and -dark-). Read in PR08-SCREEN-READ.txt.

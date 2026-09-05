@@ -11,7 +11,7 @@ import { ConfirmDialog, DataTable, ErrorNote, ICON, Modal, Note, PageHeader, Ske
 import { PlanLimitNote } from '../components/PlanLimitNote';
 import { DocumentRemovalDialog } from '../components/DocumentRemovalDialog';
 import { ok } from '../lib/errors';
-import { bidiIsolate, fmtDate, fmtDateTime } from '../lib/format';
+import { fmtDate, fmtDateTime, ltrIsolate } from '../lib/format';
 import type { DocumentRow } from '../lib/types';
 import {
   DOCUMENT_KIND_OPTIONS,
@@ -34,6 +34,7 @@ import {
   documentStatusFilterFromParam,
   documentUiStatus,
   type DocumentStatusFilter,
+  type DocumentUiStatus,
 } from '../lib/documentStatus';
 import {
   DOCUMENT_PROCESSING_CHANGED_EVENT,
@@ -256,7 +257,7 @@ function RefileModal({ doc, target, onClose, onDone }: {
 
   return (
     <Modal open onClose={onClose} title={target === 'invoice' ? t('documents.text_6') : t('documents.text_7')} busy={busy} statusMessage={busy ? t('documents.text_8') : undefined}>
-      <p className="mb-3 truncate text-sm text-ink-soft">{t('documents.text_9')} <bdi>{doc.file_name}</bdi></p>
+      <p className="mb-3 truncate text-sm text-ink-soft">{t('documents.text_9')} <bdi dir="ltr">{doc.file_name}</bdi></p>
       <label className="mb-3 block">
         <span className="sr-only">{t('documents.text_10')}</span>
         <span className="relative block">
@@ -413,6 +414,35 @@ function UploadModal({ suppliers, onClose, onDone }: {
   );
 }
 
+/**
+ * The way IN to the one action that clears a scan-approval wait, on the row that is waiting.
+ *
+ * DOC-01. The button that releases the document lives on the review screen and nowhere else, and
+ * the library had no way of saying so: the row action menu offers "בדיקת מסמך" behind a click on
+ * a kebab, which is a place to look for something you already know is there. Nobody knew. Three of
+ * this tenant's documents had been at this gate for two days, and two more for 477 seconds, while
+ * the row told the reader to go and file them against an invoice.
+ *
+ * Rendered ONLY for that state. Every other state either moves by itself or is already offered a
+ * control, and a link on every row would be the same non-information the removed sub-lines were.
+ * The click is stopped from bubbling because the desktop row is itself clickable: without it the
+ * row's own handler and the link would both navigate, and React Router would be asked to go to the
+ * same place twice in one tick.
+ */
+function ScanApprovalLink({ doc, status }: { doc: { id: string }; status: DocumentUiStatus }) {
+  const { t } = useT();
+  if (status.state !== 'awaiting_scan') return null;
+  return (
+    <Link
+      className="link text-xs"
+      to={`/documents/${encodeURIComponent(doc.id)}/review`}
+      onClick={(event) => event.stopPropagation()}
+    >
+      {t('documentStatus.reviewScanApproval')}
+    </Link>
+  );
+}
+
 /** One register for every active document, served at two routes. `/documents` is all of it, and
  *  `/inbox` redirects here with `processing=unassigned` — capture and register are two views of one
  *  source of truth. `/documents/archive` sets `archive` and narrows the same query to
@@ -556,6 +586,24 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
   // Asking for it here is what makes the queue drain to "דורש בדיקה" by itself. The handler is
   // idempotent and short-circuits before the paid call, so a repeat costs one round trip.
   const interpretInFlight = useRef(new Set<string>());
+  /**
+   * DOC-11. The jobs this screen has ALREADY been answered for, successfully.
+   *
+   * `interpretInFlight` answers "is a request out right now", and it is released the instant the
+   * response lands. Nothing remembered that the answer had arrived. So the window between a
+   * successful call and the refetched status reaching this component was open to any effect pass
+   * — and the pass reads the OLD snapshot, where the job is still 'extracted'. It asked again.
+   * `interpret-document` refuses the second caller for one job with HTTP 409
+   * `interpretation_in_progress` (index.ts, `egressLease.idempotent`), correctly: the burst of
+   * three uploads the sweep measured kept the snapshot changing, so the window never closed and
+   * one 409 reached the log. Measured on the unfixed tree: nine.
+   *
+   * Success only. A FAILED interpretation is still retried three times and still raises the
+   * banner below — `documentsInboxInterpretAlert.spec.tsx` pins that, and it is unchanged. And a
+   * document sent round again gets a NEW job row with a new id (`reprocess_document`, 0045), so
+   * this set never blocks a genuine second reading.
+   */
+  const interpretSettled = useRef(new Set<string>());
   const interpretAttempts = useRef(new Map<string, number>());
   const interpretMounted = useRef(false);
   const [interpretRetryTick, setInterpretRetryTick] = useState(0);
@@ -575,6 +623,7 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
       .map((snapshot) => snapshot.job)
       .filter((job) => job?.status === 'extracted'
         && !interpretInFlight.current.has(job.id)
+        && !interpretSettled.current.has(job.id)
         && (interpretAttempts.current.get(job.id) ?? 0) < 3);
     if (!pending.length) return;
     let cancelled = false;
@@ -605,6 +654,9 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
           }
           continue;
         }
+        // Answered. Recorded BEFORE the refetch below, because the refetch is exactly the gap the
+        // second request used to slip through.
+        interpretSettled.current.add(job.id);
         interpretAttempts.current.delete(job.id);
         if (interpretFailure?.jobId === job.id) setInterpretFailure(null);
       }
@@ -802,7 +854,7 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
       render: (doc) => (
         <span className="flex min-w-0 items-center gap-2">
           <FileText size={ICON.sm} className="shrink-0 text-ink-faint" aria-hidden="true" />
-          <span className="min-w-0 truncate font-medium text-ink-body"><bdi>{doc.file_name}</bdi></span>
+          <span className="min-w-0 truncate font-medium text-ink-body"><bdi dir="ltr">{doc.file_name}</bdi></span>
         </span>
       ),
     },
@@ -841,9 +893,12 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
       // than by name, so ascending puts what waits on a person at the top. See USER_STATE_URGENCY.
       sortValue: (doc) => statusFor(doc).priority,
       render: (doc) => (
-        <DocumentStatusBadge status={statusFor(doc)} data-testid="document-processing-status"
-          data-document-id={doc.id}
-          data-stage={processing.data === null ? undefined : processing.snapshots[doc.id]?.stage ?? 'unprocessed'} />
+        <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+          <DocumentStatusBadge status={statusFor(doc)} data-testid="document-processing-status"
+            data-document-id={doc.id}
+            data-stage={processing.data === null ? undefined : processing.snapshots[doc.id]?.stage ?? 'unprocessed'} />
+          <ScanApprovalLink doc={doc} status={statusFor(doc)} />
+        </span>
       ),
     },
   ] as Array<Column<GalleryDocument> | null>).filter((column): column is Column<GalleryDocument> => column !== null);
@@ -988,12 +1043,13 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
           tableLabel={archive ? t('documents.text_62') : t('documents.text_63')}
           rowLabel={(doc) => t('documentsInboxTail.documentRowLabel', { fileName: doc.file_name })}
           onRowClick={(doc) => review(doc)}
-          mobileTitle={(doc) => <bdi>{doc.file_name}</bdi>}
+          mobileTitle={(doc) => <bdi dir="ltr">{doc.file_name}</bdi>}
           mobileTrailing={(doc) => (
-            <span className="flex flex-wrap justify-end gap-1">
+            <span className="flex flex-wrap items-center justify-end gap-1">
               <DocumentStatusBadge status={statusFor(doc)} data-testid="document-processing-status"
                 data-document-id={doc.id}
                 data-stage={processing.data === null ? undefined : processing.snapshots[doc.id]?.stage ?? 'unprocessed'} />
+              <ScanApprovalLink doc={doc} status={statusFor(doc)} />
             </span>
           )}
           rowActions={(doc) => {
@@ -1076,7 +1132,7 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
           survived every screenshot review. FSI and PDI measured 0px wide, so nothing is drawn. */}
       <ConfirmDialog open={!!rescueDoc} onClose={() => setRescueDoc(null)} onConfirm={(reason) => void rescue(reason)}
         title={t('documents.title_3')}
-        message={t('documentsInboxTail.rescueMessage', { fileName: bidiIsolate(rescueDoc?.file_name ?? '') })}
+        message={t('documentsInboxTail.rescueMessage', { fileName: ltrIsolate(rescueDoc?.file_name ?? '') })}
         confirmLabel={t('documents.confirmLabel')} requireReason busy={rescuing} />
 
       {/* The one dialog in this app that undoes a financial record nobody authorised by hand, so it
@@ -1088,7 +1144,7 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
         onConfirm={(reason) => void revertAutoAction(reason)}
         title={t('documents.title_4')}
         message={t('documentsInboxTail.revertMessage', {
-          fileName: bidiIsolate(revertDoc?.file_name ?? ''),
+          fileName: ltrIsolate(revertDoc?.file_name ?? ''),
           confidence: revertConfidence,
         })}
         confirmLabel={t('documents.confirmLabel_2')} danger requireReason busy={reverting} />
@@ -1098,7 +1154,7 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
           as destruction and the file is kept. */}
       <ConfirmDialog open={!!deleteDoc} onClose={() => setDeleteDoc(null)} onConfirm={() => void removeDoc()}
         title={t('documents.title_5')}
-        message={t('documentsInboxTail.deleteMessage', { fileName: bidiIsolate(deleteDoc?.file_name ?? '') })}
+        message={t('documentsInboxTail.deleteMessage', { fileName: ltrIsolate(deleteDoc?.file_name ?? '') })}
         confirmLabel={t('documents.confirmLabel_3')} danger busy={deleting} />
 
       <DocumentRemovalDialog

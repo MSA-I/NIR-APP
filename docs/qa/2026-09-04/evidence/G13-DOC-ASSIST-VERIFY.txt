@@ -1,0 +1,284 @@
+G13 CROSS-VERIFICATION — area DOC-* and ASSIST-*
+================================================
+Verifier branch : worktree-agent-a844b238c7c615be5
+Base commit     : 5a56770c ("chore(qa-sweep): the cross-verification wave opens, …")
+Date            : 05.09.2026
+Machine         : Windows, node_modules junctioned to the main checkout (no npm ci).
+Stack           : NOT held. `.claude/locks/supabase` names G13 verifier "SQL" as the holder.
+                  No `supabase db reset`, no `docker exec … psql`, no `npm run demo:restore`,
+                  no `ci-sql-suites.mjs` without `--list` was run. Nothing touched the stack.
+
+Rows taken : 18 FIXED rows (12 DOC-*, 6 ASSIST-*).
+Reached MET: 14.
+Stayed FIXED: 4 — DOC-03, DOC-04, DOC-08 (server proof, stack held by another verifier) and
+             DOC-02 is MET on its CLIENT half only, recorded as MET with the half named.
+             Corrected count: 15 rows carry a MET/partial-MET line; DOC-03, DOC-04 and DOC-08
+             stay FIXED. See the table.
+
+HOW EVERY RED WAS PRODUCED
+--------------------------
+The honest route from the verify brief, in its "best/acceptable" order. For each row the fixing
+commit was found with `git log --oneline -- <the file the row names>`, and a REVERSE patch of that
+commit's PRODUCT hunks only was generated straight from git —
+
+    git diff <fix> <fix>^ --output=<patch> -- <product files>
+    git apply <patch>
+
+— leaving the row's oracle at HEAD, running the oracle, then `git checkout -- <files>` and
+`git status` to prove the restore. No oracle and no spec was edited at any point. Three rows
+needed a narrower revert than the whole commit because later commits touch the same files; each is
+named below. Nothing was left modified: the tree is clean at the time of writing.
+
+RESULTS
+-------
+row        oracle                                                 RED (fail/pass)  GREEN  verdict
+---------- ------------------------------------------------------ ---------------- ------ --------
+DOC-01     src/pages/documentsScanApprovalGate.spec.tsx            6 / 0            6/6    MET
+DOC-02     src/components/document-review/filingReason.spec.ts     4 / 10           14/14  MET (client half)
+DOC-03     supabase/tests/p111 + migration 0324                    not run          —      FIXED (stack held)
+DOC-04     supabase/tests/p111 + migration 0324                    not run          —      FIXED (stack held)
+DOC-05     invoiceDraftFromDocument.spec.tsx + model.spec.ts        2 / 24           26/26  MET
+DOC-06     src/components/document-review/noApprovalRoute.spec.tsx 4 / 2            6/6    MET
+DOC-07     src/lib/fileNameIsolation.spec.ts + bidiText.spec.ts    1 / 6            7/7    MET (partial — see F1)
+DOC-08     supabase/tests/p111 + migration 0324                    not run          —      FIXED (stack held;
+                                                                                          client half is type-only —
+                                                                                          see F3)
+DOC-10     uploadDocument.spec.ts + storageObjectName.spec.ts      1 / 35           36/36  MET
+DOC-11     src/pages/documentsInboxInterpretBurst.spec.tsx         1 / 2            3/3    MET
+DOC-12     src/pages/receiptLinkFromInvoice.spec.tsx               2 / 3            5/5    MET
+DOC-13     src/pages/invoiceDraftFromDocument.spec.tsx             2 / 2            4/4    MET
+ASSIST-01  assistantHistoryAdoption.spec.tsx                       1 / 2            3/3    MET
+ASSIST-04  roleSuggestionsAreAnswerable.spec.tsx                   2 / 5            7/7    MET
+ASSIST-06  expensesReproducesCitedMetrics.spec.tsx                 3 / 2            5/5    MET
+ASSIST-07  paymentExposureWeekAhead.spec.ts                        3 / 3            6/6    MET
+ASSIST-09  priceRisesMeasuredZero.spec.ts                          2 / 2            4/4    MET
+ASSIST-12  accountantCreditVisibility.spec.tsx                     2 / 1            3/3    MET
+
+Two confirmation green runs before any revert, on the clean tree:
+  9 DOC spec files    -> 9 passed, 94 tests passed.
+  6 ASSIST spec files -> 6 passed, 28 tests passed.
+
+PER-ROW DETAIL — the revert, and the red's own words
+----------------------------------------------------
+DOC-01  fix 50188f6e. Reverted src/components/DocumentStatusBadge.tsx, src/lib/documentStatus.ts,
+        src/pages/DocumentsInbox.tsx (the i18n keys were LEFT in place — an unused key cannot
+        make the ladder answer, and reverting the dictionary to a commit that far back would have
+        stripped a dozen unrelated later strings).
+        RED: "expected 'unassigned' to be 'awaiting_scan'", "expected 3 to be less than 3", and
+        the four rendered cases. 6 failed, 0 passed.
+
+DOC-02  fix 82b18ff0, CLIENT HALF ONLY. Reverted model.ts, assessment.ts and both dictionaries.
+        Migration 0324 was left applied in the tree — I do not hold the stack and did not run it.
+        RED: "expected 'המערכת עצרה ולא יצרה רשומה. ההכרעה אצ…' to contain 'תאריך החשבונית'" and the
+        same for 'מספר החשבונית'; plus "expected [ 'invoice_date_missing', …(1) ] to deeply equal []"
+        from the coverage test that reads the SQL — a FOURTH failure the fixing agent did not have,
+        because in my red the server carries the three new codes while the client has none of them.
+        4 failed, 10 passed. The 10 are the ladder's other sentences, green in both runs.
+
+DOC-03  Server row. Its oracle is suite p111 against migration 0324 and there is NO client half to
+DOC-04  reproduce. The stack is held by another verifier, so neither side was run here. What I did
+        do is a static read of supabase/migrations/0324_the_price_the_reader_could_not_say.sql: it
+        is an ANCHORED replacement, it routes ONLY `unit_price` through `private.parse_price`, and
+        its own postflight raises if `line_total` ever leaves `interpretation_number` (0324:418-429).
+        That corroborates the row's narrative; it is NOT a red, and the rows stay FIXED.
+
+DOC-05  fix 7a5b1084. Reverted src/components/document-review/model.ts only.
+        RED: `toHaveValue('2026-07-31')` failed with an empty received value, and the model pin
+        failed on `normalizeInvoiceDate('31/07/26')`. 2 failed, 24 passed.
+        THE BRIEF'S QUESTION, ANSWERED: the oracle asserts the PARSED DATE, not merely a non-empty
+        field. invoiceDraftFromDocument.spec.tsx:135-136 is
+            expect(date).toHaveValue('2026-07-31');
+            expect(date).not.toHaveValue(todayISO());
+        — the second line excludes the today-fallback that IS the defect, by name. model.spec.ts:197
+        pins the same value and keeps three refusal controls beside it ('31/13/26', '31/07/2',
+        '31/07/206' -> ''), so the fix cannot have been "accept anything". The oracle is sound.
+
+DOC-06  fix 50188f6e. Reverted DocumentAssessmentPanel.tsx by patch, and removed the single
+        behavioural line `if (!hasApprovalRoute(read.document_type)) return false;` from
+        assessment.ts:623 by anchored edit (the whole-file patch conflicts with 03850372 and
+        82b18ff0, both later).
+        RED: "expected true to be false" on canSubmit twice, and
+        'Unable to find an element by: [data-testid="no-approval-route-next-step"]' twice.
+        4 failed, 2 passed — and those 2 are the file's controls, matching the fixing agent's own
+        "10 failed / 2 passed" across the two PR-18 spec files (6 from DOC-01 + 4 here = 10).
+
+DOC-07  fix 719d00af. Reverted src/pages/DocumentReview.tsx and
+        src/components/document-review/DocumentScanPreview.tsx. (DocumentsInbox.tsx's hunk from
+        that commit no longer applies — 50188f6e rewrote the same region — so it was left alone.)
+        RED: the scan named the site verbatim,
+            pages\DocumentReview.tsx:198  meta={<span …><bdi>{snapshot.document?.file_name …}</bdi>
+        1 failed, 6 passed. MET on that site. See finding F1: the SAME revert applied to
+        DocumentScanPreview.tsx:197 did NOT turn the scan red, and that is not a small detail.
+
+DOC-08  Server row. See finding F3 — I was asked to confirm the fixing agent's refusal to write a
+        client oracle, and I confirm it, with the reasoning reproduced independently. Stays FIXED.
+
+DOC-10  fix 719d00af. Reverted src/components/FileUpload.tsx only.
+        RED: "expected '_._2026-08.jpeg' not to be '_._2026-08.jpeg'" — character for character the
+        object key the row says the sweep measured behind its uuid. 1 failed, 35 passed.
+
+DOC-11  fix ebfa032a. Reverted src/pages/DocumentsInbox.tsx.
+        RED: "expected 9 to be +0" on `interpret.conflicts` — the same 9 conflicts the row records.
+        1 failed, 2 passed (the retry-on-failure neighbour green in both runs).
+
+DOC-12  fix a0d7483f. Reverted src/pages/InvoiceDetail.tsx.
+        RED: "expected [ '/invoices', …(2) ] to include '/receipts/a1000000-…'", twice.
+        2 failed, 3 passed — the three controls the row names (the order link above, the
+        accountant's plain text, App.tsx's declared roles) all green in both runs.
+
+DOC-13  fix 7a5b1084. Reverted src/pages/InvoiceNew.tsx only.
+        RED: "expected 'מע״מ (17.5%)' to be 'מע״מ'", twice. 2 failed, 2 passed — the blank-form
+        control green in both runs, exactly as the row states.
+
+ASSIST-01 fix 32df180e. Reverted src/lib/assistant/runSession.ts and src/components/AssistantPanel.tsx.
+        RED: 1 failed, 2 passed — the race test alone, its two neighbours green in both runs.
+
+ASSIST-04 fix 0de6dd3f. `roleExamples.ts` is NEW in that commit, so a file-level revert would have
+        deleted the module the oracle imports and produced an import error instead of a red.
+        Reconstructed the pre-fix accountant opening instead, by anchored edit, refusing unless the
+        anchor matched exactly once: 'assistantDialog.examplePurchaseSpend' ->
+        'assistantDialog.exampleInvoicesLastWeek' in the accountant list AND in EXAMPLE_ANSWERED_BY
+        (-> 'get_business_summary'), plus the dictionary key restored in he.ts and en.ts.
+        RED names the offence in full:
+            "כמה חשבוניות נקלטו ב־7 הימים האחרונים?  ->  get_business_summary (owner/office)"
+            "expected [ 'owner', 'office' ] to include 'accountant'"
+        2 failed, 5 passed — matching the fixing agent's record exactly.
+
+ASSIST-06 fix 1e925fa2. Reverted src/pages/Expenses.tsx and both dictionaries.
+        RED: "expected 'ריכוז הוצאות…' to contain '562.00'", '522.00', '96,702.29'. 3 failed,
+        2 passed. Checked the fixture: the invoices are 300 and 363, so the screen's own 663 cannot
+        stand in for any of the three cited figures. See F5 for the one weakness.
+
+ASSIST-07 fix 1e925fa2. Reverted supabase/functions/assistant/tools/getPaymentExposure.ts.
+        RED: "expected [ 4236, 500 ] to include 4736"; "expected [ 9, 5, 2, +0, 1, 4 ] to include 3";
+        "expected [ 100, 20 ] to include 120". 3 failed, 3 passed. The three controls the row names
+        are green in both runs, including "the cross-currency total 4,856 appears nowhere". See F6.
+
+ASSIST-09 fix 1e925fa2. Reverted supabase/functions/assistant/tools/getMonthlyPriceRises.ts.
+        RED: "expected null to be +0", twice. 2 failed, 2 passed — and the two that pass are the
+        mirror guards: a month that DID hold a rise relays the server's counts, and a FAILED read
+        is still a named failure and not a zero. This is the row where the guard matters most and
+        it is there.
+
+ASSIST-12 fix 27eeef96. Reverted src/pages/dashboards/AccountantDashboard.tsx.
+        RED: "expected '0' to contain '—'". 2 failed, 1 passed — the measured-zero control green in
+        both runs, as the row states.
+
+FINDINGS — ORACLES THAT DO NOT (FULLY) ASSERT THEIR FINDING
+-----------------------------------------------------------
+F1  DOC-07 · `src/lib/fileNameIsolation.spec.ts` IS BLIND TO A WHOLE CLASS OF RENDER SITE, AND
+    THERE IS A LIVE UNISOLATED FILE NAME BEHIND THE BLIND SPOT — ON THE ROW'S OWN SCREEN.
+    HIGHEST-VALUE ITEM IN THIS REPORT. Reported, not repaired.
+
+    The scan's site detector is
+        const READS_A_FILE_NAME = /\.(file_name|fileName)\b/;
+    It requires a DOT. A component that DESTRUCTURES the prop — `function C({ fileName })` — and
+    renders `{fileName}` matches nothing, so the scan never looks at it. Measured, not argued:
+    reverting `DocumentScanPreview.tsx:197` from `<bdi dir="ltr">{fileName}</bdi>` back to
+    `<bdi>{fileName}</bdi>` left the oracle GREEN. That site is one of the "25 file-name render
+    sites in 14 files" the row says it proved. It is unguarded.
+
+    The consequence is not hypothetical. The scan's own exemption list carries
+        { needle: 'fileName={', why: 'a prop handed to a component, which isolates at its own
+                                      render site' }
+    — a promise about a site the regex cannot read. `DocumentReviewWorkspace.tsx:193` passes
+    `fileName={snapshot.document.file_name}` into `DocumentSourceViewer`, and that component's
+    header, on the CURRENT FIXED TREE, is
+
+        src/components/document-review/DocumentSourceViewer.tsx:65
+        <p className="mt-1 break-words text-sm text-ink-muted">{fileName}</p>
+
+    No `<bdi>`, no `dir="ltr"`, no `ltrIsolate()` — no isolation of any kind. The route is
+    /documents/:documentId/review (App.tsx:403 -> DocumentReview.tsx:265/290 ->
+    DocumentReviewWorkspace.tsx:192), which is the screen DOC-07's row names as "the review screen
+    … included". So the row's claim that every file-name render site carries the explicit LTR
+    isolate is NOT true on the tree today, and the guard written to make that claim checkable
+    cannot see the counter-example. A Hebrew-mixed name here will render exactly the way the row's
+    own header describes: extension torn off and parked at the far margin.
+
+    Suggested repair for whoever owns it (NOT done here — a verifier who edits stops being one):
+    widen the detector to catch a bare `fileName` identifier inside JSX, or drop the `fileName={`
+    exemption and require the isolate at the hand-off, so the promise is enforced where it is made.
+
+F2  DOC-01 · the oracle has NO control. All six tests in `documentsScanApprovalGate.spec.tsx` fail
+    on the unfixed tree; nothing in the file passes in both runs. A broken harness — a bad import,
+    a mis-mocked provider — would produce a red that looks exactly like this one. It is mitigated
+    (the assertions name values: 'unassigned' vs 'awaiting_scan'), and the fixing agent's own RED
+    was a combined run whose 2 passing tests came from DOC-06's file. But as a standalone oracle
+    this file cannot tell a real red from a broken one. Recorded, not a blocker; the row is MET.
+
+F3  DOC-08 · THE FIXING AGENT'S JUDGEMENT IS CORRECT AND I DID NOT WRITE THE MISSING TEST.
+    I was asked to decide this for myself rather than take it on trust. Reproduced independently:
+
+    (a) The render is unconditional. `DocumentAssessmentPanel.tsx:560` is
+            <Cell>{fmtMoneyExact(line.unit_price, intakeCurrency)}</Cell>
+        inside `assessment.lines.map(...)`. There is no branch, no fallback, no guard between the
+        value and the cell. A component test that hands it a fixture line with unit_price 4.20
+        renders "4.20" on the unfixed tree too, and one with null renders "—" on the fixed tree.
+        Such a test would be green on both sides: proof-shaped and worthless, exactly as claimed.
+
+    (b) The client half of the fix carries NO runtime behaviour. Everything 82b18ff0 added to
+        `src/components/document-review/assessment.ts` is two OPTIONAL fields on the
+        `AssessmentLine` type — `unit_price_refusal?`, `unit_price_printed?` — plus their docblock.
+        Nothing reads them. There is no client code path whose OUTPUT changed.
+
+    I considered two client-side oracles that a determined author might reach for, and both fail:
+
+      - A CONTRACT PIN asserting `unit_price_refusal` exists on the type and is emitted by the SQL.
+        This WOULD be red on the unfixed tree — but it asserts a field NAME, not that the price is
+        read. It would stay green if `parse_price` were wired to the wrong column entirely. It
+        does not assert DOC-08's finding; it asserts that a rename happened.
+
+      - A TWO-READER PARITY TEST, feeding the raw cell `"4.20 ש\"ח"` through the panel's value and
+        through the client's own reader, asserting they agree. This would be RED ON THE FIXED TREE.
+        `src/components/document-review/model.ts:280` is still
+            const cleaned = value.replace(/[\s,₪]|[‎‏‪-‮]/g, '');
+        — whitespace, comma, shekel sign and bidi marks, and no currency word. Verified in the tree
+        today. So `lineItemArithmetic` still returns null for every such line, exactly as the row's
+        own residual states. It cannot serve as the green half of anything.
+
+    CONCLUSION: no client-side oracle distinguishes fixed from unfixed for this finding. The row is
+    correctly left without one and correctly left at FIXED. The residual it records — the client's
+    own price parser being blind to `ש"ח`, so the review screen's "lines whose arithmetic does not
+    add up" counter is silently inert on precisely the documents it was written for — is REAL,
+    verified here, and still open.
+
+F4  DOC-03 and DOC-04 have no client half at all. Nothing about them was reproduced here; only the
+    migration text was read. Their rows stay FIXED and say so.
+
+F5  ASSIST-06 · the oracle asserts the finding, but by page-wide string containment.
+    `expect(pageText()).toContain('562.00')` proves the figure appears SOMEWHERE in the rendered
+    text — not that it sits beside its own definition, nor in the right currency block, nor that it
+    is the canonical figure rather than a coincidence. It does distinguish fixed from unfixed here
+    (the fixture's invoices are 300 + 363 and none of 562 / 522 / 96,702.29 can be produced from
+    them), so the row is MET. But a later edit that printed the right number in the wrong place
+    would keep this green. Worth tightening to a labelled locator; not a defect today.
+
+F6  ASSIST-07 · the citation half of this row is a CONTROL, not the finding's assertion.
+    The test named "cites the screen state that reproduces the union" — the one that asserts
+    `/payment-requests?status=active&due=soon` is among `envelope.sources` — PASSED IN THE RED RUN.
+    The route was already a source before the fix. So what this oracle actually proves is that the
+    composed FACT (4,736 ILS, 120 USD, 3 requests) now exists in the envelope; it does NOT prove
+    that the cited route's population equals that composed figure. That cross-check needs the
+    screen and is not in the file. The finding as the row states it — the assistant answering 0
+    where the dashboard tile prints 4,236 — IS asserted, so the row is MET. Flagged because the
+    brief asked specifically whether the citation is checked against the claim: here it is not,
+    the two are asserted separately.
+
+WHAT WAS NOT RUN, AND WHY
+-------------------------
+- Suite p111, migration 0324, `supabase db reset`, `npm run demo:restore`, `ci-sql-suites.mjs`:
+  the local stack is single-occupancy and held by G13 verifier "SQL". Not run. Not queued for.
+- `npm run verify` whole and `npm run quality`: forbidden by both briefs for this wave.
+- No screenshot was taken. Nothing in this verification is a visual claim; every row above is a
+  vitest oracle. The screenshot gaps the DOC-02/03/04/08 rows record are the fixing agent's and
+  remain open — I did not close them and do not claim to have.
+- No `tsc --noEmit` full run: reverts were transient and the tree is restored; a typecheck of a
+  restored tree proves nothing this base commit's own CI did not already prove.
+
+RESTORE PROOF
+-------------
+After every red the reverted files were restored with `git checkout -- <files>` and `git status`
+was read. The final `git status --porcelain` is EMPTY apart from this evidence file and the
+docs/GATES.md rows this verifier edited. Zero-byte junk was swept from the repo root before commit.
+No product file and no spec file is modified by this branch.

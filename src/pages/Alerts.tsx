@@ -1,6 +1,6 @@
 import { useT } from '../lib/i18n/LocaleProvider';
 import type { TKey } from '../lib/i18n/t';
-import { useNavigate } from 'react-router';
+import { Link } from 'react-router';
 import { useEffect, useRef } from 'react';
 import { RefreshCw, ChevronLeft, ShieldCheck, TriangleAlert, BellOff } from 'lucide-react';
 import { useQuery } from '../lib/useQuery';
@@ -32,7 +32,6 @@ const SEVERITY_KEY: Record<AlertSeverity, TKey> = {
 
 export default function Alerts() {
   const { t, tDynamic } = useT();
-  const navigate = useNavigate();
   const { profile } = useAuth();
   const { data, loading, fetching, error, refetch } = useQuery<Summary>(() => buildSummary(), []);
   const [sevFilter, setSevFilter] = useParamState('severity');
@@ -138,8 +137,14 @@ export default function Alerts() {
           </Card>
         ) : shown.length > 0 ? (
           <Card pad={false} clip className="divide-y divide-line-soft">
+            {/* `DASH-12`: real <Link>s, not buttons wearing an onClick. This is the screen the
+                manager is told to work THROUGH, and a button has no href — so middle-click,
+                ⌘/Ctrl-click, "open in new tab" and the hover status bar are all absent, and the
+                queue can only be walked one item at a time, losing the page on every step. The
+                dashboard's own attention rows already decided this for rows pointing at the same
+                routes, and `ui.tsx` says so in as many words. */}
             {shown.map((a) => (
-              <button key={a.code} onClick={() => navigate(a.to)}
+              <Link key={a.code} to={a.to}
                 className="w-full text-start flex items-center gap-3 px-4 py-3 row-hover cursor-pointer">
                 <span className={`${SEVERITY_BADGE[a.severity]} shrink-0`}>{t(SEVERITY_KEY[a.severity])}</span>
                 <span className="min-w-0 flex-1">
@@ -147,7 +152,7 @@ export default function Alerts() {
                   <span className="block text-xs text-ink-muted mt-0.5">{t(a.detail.key as TKey, a.detail.vars)}</span>
                 </span>
                 <ChevronLeft size={ICON.sm} className="text-ink-ghost shrink-0" aria-hidden="true" />
-              </button>
+              </Link>
             ))}
           </Card>
         ) : data.alerts.length > 0 ? (
@@ -165,9 +170,16 @@ export default function Alerts() {
         )}
       </div>
 
-      {/* Naming what is not covered belongs on the screen, not only in the docs: a manager
-          who reads this page as complete would stop looking elsewhere. */}
+      {/* Naming what is and is not covered belongs on the screen, not only in the docs: a manager
+          who reads this page as complete would stop looking elsewhere.
+
+          `DASH-01` / ruling `#359`: the first sentence is a CLAIM the scan list now earns — every
+          condition the control centre counts is scanned here, out of the control centre's own read
+          model. The second names the three that are not, each with its reason, and the third keeps
+          the due-date limit it always carried. A claim of completeness is only worth printing
+          beside the list of what it excludes. */}
       <p className="text-xs text-ink-muted leading-relaxed">
+        {t('alerts.coverageNote')}{' '}
         {t('alerts.text_3')}{' '}
         {t('alerts.text_4')}
       </p>
@@ -191,8 +203,12 @@ export default function Alerts() {
           <ErrorNote message={feed.error} />
         ) : feedGroups && feedGroups.length > 0 ? (
           <Card pad={false} clip className="divide-y divide-line-soft">
+            {/* Same change, same reason, and safe to put in an href: `target_url` is refused at
+                write time unless it is a same-origin path — `0024:82-84`, `0068:255-257` and the
+                push twin beside it all reject an empty value, one that does not begin with `/`,
+                and one that begins with `//`. So the anchor cannot be pointed off-site by a row. */}
             {feedGroups.map((group) => (
-              <button key={group.key} onClick={() => navigate(group.latest.target_url)}
+              <Link key={group.key} to={group.latest.target_url}
                 className="w-full text-start flex items-center gap-3 px-4 py-3 row-hover cursor-pointer">
                 <span className={`${SEVERITY_BADGE[group.latest.severity]} shrink-0`}>
                   {t(SEVERITY_KEY[group.latest.severity])}
@@ -215,7 +231,7 @@ export default function Alerts() {
                   </span>
                 </span>
                 <ChevronLeft size={ICON.sm} className="text-ink-ghost shrink-0" aria-hidden="true" />
-              </button>
+              </Link>
             ))}
           </Card>
         ) : (

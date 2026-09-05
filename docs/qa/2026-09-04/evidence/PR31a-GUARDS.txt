@@ -1,0 +1,88 @@
+PR 31a — DASH-07 — the guards this change touches, plus a full typecheck.
+=======================================================================================
+npm run verify (whole) and npm run quality were NOT run: the campaign brief forbids it and runs one
+baseline verify on an idle machine. These are the individual guards the change can affect — new
+dictionary keys (i18n, orphan-keys, key-manifest, plurals), a new JSX text node (jsx-space), a new
+exported function and a new spec file (dead-code/knip), money and currency shape on a money screen,
+and the design tokens. All exit 0. `tsc --noEmit` exits 0, which matters because the workbook
+builder gained a required input and every caller had to be updated.
+
+---------------------------------------------------------------------------------------
+=== tsc --noEmit ===
+
+=== check:i18n === exit=0
+
+> inplace@0.1.0 check:i18n
+> node scripts/check-i18n.ts
+
+check:i18n passed: 65 file(s) still carry 923 Hebrew line(s), all at their pinned counts (65 documented exception(s)).
+
+=== check:orphan-keys === exit=0
+
+> inplace@0.1.0 check:orphan-keys
+> node scripts/check-orphan-keys.mjs
+
+check:orphan-keys passed: 6127 leaf key(s), 106 with no call site, pinned.
+
+=== check:key-manifest === exit=0
+
+> inplace@0.1.0 check:key-manifest
+> node scripts/check-key-manifest.mjs
+
+check:key-manifest passed: 5631 keys considered, 107 without a production call site — the same names as the baseline, none newly stranded, none spec-only.
+
+=== check:jsx-space === exit=0
+
+> inplace@0.1.0 check:jsx-space
+> node scripts/check-jsx-space.mjs
+
+check:jsx-space passed: 153 .tsx file(s), no glued translated expressions.
+
+=== check:plurals === exit=0
+
+> inplace@0.1.0 check:plurals
+> node scripts/check-plurals.mjs
+
+check:plurals passed: 78 counted phrase(s), 33 with a singular sibling, 45 pinned.
+
+=== check:dead-code === exit=0
+
+> inplace@0.1.0 check:dead-code
+> knip --config knip.json
+
+node.exe : Configuration hints (5)
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Configuration hints (5):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+playwright-core     knip.json  Remove from ignoreDependencies                               
+src/main.tsx        knip.json  Remove redundant entry pattern                               
+vite.config.ts      knip.json  Remove redundant entry pattern                               
+vitest.config.ts    knip.json  Remove redundant entry pattern                               
+.css                knip.json  Compiled extension excluded by project (imports not followed)
+
+=== check:money === exit=0
+
+> inplace@0.1.0 check:money
+> node scripts/check-money.ts
+
+check:money passed: 3 rules over src/**/*.ts(x), src/lib/format.ts exempt.
+
+=== check:currency === exit=0
+
+> inplace@0.1.0 check:currency
+> node scripts/check-currency.mjs
+
+GATE_CURRENCY_COLUMNS_OK — 84 numeric columns declared, all classified (40 money, 44 not money); carrier check enforced.
+GATE_CURRENCY_AGGREGATES_OK — money aggregates enforced from 0217 onward.
+GATE_CURRENCY_INTAKE_GUARD_OK — 0244_intake_says_when_it_could_not_check.sql still rejects an unrecognised currency as currency_unrecognised/error.
+
+=== check:tokens === exit=0
+
+> inplace@0.1.0 check:tokens
+> node scripts/check-design-tokens.ts
+
+check:tokens passed: 579 .ts/.tsx files with zero raw palette classes, zero hex literals, zero stock Tailwind shadows and zero references to a colour outside the 145 tokens @theme actually defines; src/index.css keeps every colour literal inside @theme and uses no rgb()/hsl(); 2 stylesheet(s) under src/, and the only one exempt from the token layer is styles/plan-card.css (OPEN-DECISIONS #296).
+

@@ -94,8 +94,13 @@ export function monthlyReportTemplateValues(input: ReportPeriodInput & {
   //
   // Both sides of the subtraction must range over the same invoices. If any invoice in the total
   // has no balance row, the credited figure is unanswerable and stays `—` rather than 0.
+  //
+  // A MONTH WITH NO INVOICES AT ALL IS THE SAME KIND OF ABSENCE (`EXP-03`). `reduce` over an empty
+  // array returns 0, and it reached the file as a literal `זיכויים שקוזזו | 0` sitting between
+  // four money fields the same empty month had correctly left unstated — one block, two answers to
+  // the same question. Nothing was measured, so there is no figure.
   const creditedRows = input.invoices.map((row) => row.balance ?? null);
-  const creditsRecognized = creditedRows.includes(null) || gross.mixed
+  const creditsRecognized = input.invoices.length === 0 || creditedRows.includes(null) || gross.mixed
     ? null
     : input.invoices.reduce((sum, row) => sum + (row.balance?.credited_amount ?? 0), 0);
 

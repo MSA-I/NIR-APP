@@ -1,0 +1,320 @@
+G13 CROSS-VERIFICATION — area DASH-* and EXP-*
+verifier branch: worktree-agent-afb4a33fd08afa5e9
+tree under test: 5a56770c (campaign branch worktree-qa-sweep-20260904), typecheck clean (tsc --noEmit, exit 0)
+date: 05.09.2026
+rows taken: 23 (DASH-01..DASH-13, EXP-01..EXP-10). None of them written by me.
+
+WHAT I RAN, AND WHAT I DID NOT
+  Ran: the eleven oracle spec files these rows name, plus the three sibling specs EXP-10 re-pointed
+       (workbook.spec.ts, exportTemplateWorkbook.spec.ts, monthlyReport.spec.ts), and `tsc --noEmit`.
+  Did NOT run: `npm run verify` whole, `npm run quality`, any check:* guard, any SQL suite, anything
+       touching the local Supabase stack. `.claude/locks/supabase` names a different G13 verifier as
+       holder and says in as many words that every other verifier in this wave "runs client oracles
+       only and must NOT touch the stack".
+  Did NOT run: any production query. DASH-07's data measurement is therefore taken as read, not
+       re-measured — see that row below.
+  Did NOT modify: any product file or any spec, permanently. Every revert below was applied, measured
+       and reversed, and `git status --porcelain` was empty before and after each one.
+
+HOW EACH RED WAS PRODUCED
+  Preferred route throughout: the reverse of the fixing commit's own diff, restricted to PRODUCT
+  files (`git diff <fix> <fix>^ -- <product paths>` then `git apply`), so the ORACLE stayed byte-
+  identical at HEAD on both sides and later commits to the same files were preserved. Where a later
+  commit had moved the same lines and the reverse patch would not apply, the file was checked out
+  wholesale at the fixing commit's parent instead; that is named per row, with what else it reverts.
+  No oracle was edited to make it fail.
+
+GREEN BASELINE — current tree, all fourteen files in one run (.tmp run green-final)
+  alertsControlCentreParity.spec.ts      34/34
+  alertsRowLinks.spec.tsx                 3/3
+  bankImportWorkbook.spec.ts             14/14
+  dashboardGlanceHonesty.spec.tsx         6/6
+  dashboardTileDestinations.spec.ts      17/17
+  documentExportArrival.spec.tsx          6/6
+  exportAbsenceAndWindow.spec.ts          7/7
+  exportProvenanceAndNaming.spec.tsx      7/7
+  exportTemplateWorkbook.spec.ts         13/13
+  monthlyReport.spec.ts                  34/34
+  onTimeThreshold.spec.tsx                6/6
+  productPurchaseBilledAbsence.spec.tsx   9/9
+  reportsProductWindow.spec.tsx           4/4
+  workbook.spec.ts                        8/8
+  TOTAL 168 passed / 0 failed
+
+===============================================================================================
+ROW BY ROW
+===============================================================================================
+
+DASH-01  ->  MET
+  oracle: npx vitest run src/lib/alertsControlCentreParity.spec.ts
+  red produced by: reverse patch of 3ebe2232 over src/lib/alerts.ts, src/pages/Alerts.tsx and both
+    dictionaries (applied clean, no 3-way needed).
+  RED  22 failed / 12 passed   GREEN  34 failed=0 / 34 passed
+  The 22/12 split is exactly the split the row records. Sample failures:
+    "the control centre counts open_exceptions and /alerts does not scan it: expected undefined to be defined"
+    "the control centre counts open_credits and /alerts does not scan it: expected undefined to be defined"
+    open_exceptions reads its OWN field: "expected undefined to be 19"
+  The 12 that pass are the declared controls (five already-scanned conditions, the zero-is-no-row
+  case, route reachability, severity order, both languages). Asserted per condition, never by a
+  count of rows: there is no hard-coded 14 anywhere in the file.
+  CONTROL ACROSS FILES: alertsRowLinks.spec.tsx stayed 3/3 green under this same revert, which is
+  what tells you the two /alerts rows are two separate fixes and not one.
+  CAVEAT, recorded not repaired — see the oracle-critique section: the nine control-centre
+  conditions are a HAND TRANSCRIPTION inside the spec, not read from Dashboard.tsx.
+
+DASH-02  ->  stays FIXED
+  oracle: npx vitest run src/pages/onTimeThreshold.spec.tsx
+  red produced by: reverse patch of 5572351c over src/components/supplier-metrics.tsx,
+    src/pages/Analytics.tsx and src/pages/Suppliers.tsx. The dictionaries were NOT reverted: their
+    hunks conflict with a later commit, and the behaviour lives in the three code files.
+  RED  5 failed / 1 passed   GREEN  6/6
+    "expected '95%' to be '—'" on /analytics AND on the supplier card — the finding itself
+    "Found multiple elements with the text: 95%" (the phone card carries it too)
+    "expected [ 'ספק דל מדגם', 'ספק מבוסס' ] to deeply equal [ 'ספק מבוסס', 'ספק דל מדגם' ]"
+    the header assertion also fails, because the header string interpolates the threshold the
+    reverted component no longer supplies — a consequence of the code revert, stated plainly.
+  The 1 pass is the right control: "prints the percentage at 5 receipts" is green on both sides.
+  WHY IT STAYS FIXED ANYWAY: the row's own status cell makes a screenshot a PRECONDITION for MET
+  ("Screenshot NOT taken: it needs a seeded signed-in session on the serialised local stack. The
+  verifying agent takes it before this row may reach MET"). The stack is held by another G13
+  verifier and this wave's verifiers are barred from it, so I could not take it. Red and green are
+  both reproduced and recorded here; only the screenshot is missing.
+
+DASH-03, DASH-04, DASH-05, DASH-06  ->  all four stay FIXED
+  oracle: npx vitest run src/pages/dashboardTileDestinations.spec.ts
+  GREEN 17/17.
+  THE RED CANNOT BE PRODUCED HONESTLY, AND THE REASON IS STRUCTURAL. Every symbol this oracle
+  measures through was CREATED BY THE FIX:
+    openInvoiceBalanceLink, lateDeliveriesLink, undatedOpenOrdersLink, purchasedThisMonthLink
+      (src/pages/Dashboard.tsx)  — inline JSX before 877968b4
+    invoiceListPredicates (src/pages/Invoices.tsx), receivingMatchesStatus (src/pages/Receiving.tsx),
+    orderMatchesListFilters (src/pages/Orders.tsx) — none of them existed before 877968b4
+  Two reverts were run, and both fail for a scaffolding reason rather than for the finding:
+    (a) reverse patch of 877968b4 over Dashboard.tsx only (3-way, clean, no markers):
+        suite FAILS TO COLLECT — "TypeError: openInvoiceBalanceLink is not a function", 0 tests run.
+    (b) reverse patch of 877968b4 over Invoices.tsx + Receiving.tsx only (applied clean), links left
+        fixed: 6 failed / 11 passed — but all six failures read
+        "TypeError: __vi_import_3__.invoiceListPredicates is not a function" and
+        "TypeError: __vi_import_2__.receivingMatchesStatus is not a function".
+        Not one of them is the set inequality the rows describe.
+    (c) Orders.tsx cannot be reverse-patched at all: the hunks conflict with e5665d69 and ebfa032a,
+        and a 3-way leaves conflict markers at three sites, which a verifier may not resolve.
+  The original agent knew this and says so in its own evidence header
+  (PR24-DASH-03-04-05-06-RED.txt, step 0: "neither the links nor the destination filters were
+  addressable, so the spec could not load. That is scaffolding, not a measurement"). It then built a
+  HYBRID tree by hand — destination filters at the fixed state, link builders returning the shipped
+  pre-fix URLs — and measured the red there. That hybrid exists on no commit. Reconstructing it
+  means editing product code, which makes the verifier an author.
+  So: green confirmed, fix confirmed load-bearing, finding NOT independently reproduced. The oracle
+  itself is good — it is set equality computed from two independent sides — but it has no unfixed
+  tree to run on.
+
+DASH-07  ->  MET (test half; the production measurement half is untouched and stays a measurement)
+  oracle: npx vitest run src/pages/productPurchaseBilledAbsence.spec.tsx
+  red produced by: reverse patch of eac39f41 over src/lib/productPurchaseWorkbook.ts,
+    src/pages/ProductPurchaseSummary.tsx and both dictionaries (applied clean).
+  RED  3 failed / 6 passed   GREEN  9/9   — the same 3/6 split the row records.
+    "Unable to find role=\"status\"" — on the screen, and again for the screen-reader assertion
+    the exported-workbook banner assertion fails with the note absent from row 2
+  The 6 passes are the declared controls, and they are the ones that matter for the campaign's
+  arithmetic rule: "the empty cells are em dashes, per row, and never a zero" is green on BOTH
+  sides, per row and per column, and would fail on a literal 0.
+  THE MEASUREMENT HALF IS NOT RE-RUN AND CANNOT BE RUN RED. The claim that public.invoice_lines and
+  public.invoice_line_matches hold zero rows across all five production organisations is a reading of
+  production, not a test; a reading cannot be inverted by removing a commit. I did not re-query
+  production (no token, and read-only re-measurement would only re-confirm the green side). That part
+  of the row rests on PR31a-DASH-07-MEASUREMENT.txt as written.
+
+DASH-08 and EXP-02  ->  both MET
+  oracle: npx vitest run src/pages/reportsProductWindow.spec.tsx
+  red produced by: reverse patch of c85f1de4 over src/pages/ProductPurchaseSummary.tsx and
+    src/pages/Reports.tsx (applied clean).
+  RED  4 failed / 0 passed   GREEN  4/4
+    href expected "/reports/products?from=2026-07-01&to=2026-07-31" and was not
+    the arrival screen's "מתאריך" expected 2020-01-01 and was not
+    both EXP-02 export assertions fail behind the same window read
+  NOTE: this file has NO control that passes on both sides. Everything in it depends on the window
+  being carried, so a broken harness here would look identical to a red. Recorded, not repaired.
+
+DASH-09, DASH-10, DASH-11, DASH-13  ->  all four MET
+  oracle: npx vitest run src/pages/dashboardGlanceHonesty.spec.tsx
+  red produced by: src/pages/Dashboard.tsx and src/lib/format.ts checked out at 27eeef96^ (the
+    reverse patch would not apply — e2b1c9de later touched Dashboard.tsx, 7 lines, and 3-way left
+    markers). Checking out at the parent additionally reverts those 7 a11y lines; that is the whole
+    of the extra blast radius and it is named here.
+  RUN 1 (Dashboard.tsx + format.ts at parent):  5 failed / 1 passed
+    DASH-09  "expected [ 'inherited-rtl', 'ltr' ] to have a length of 1 but got 2"
+    DASH-09  "expected [ <div …(2)></div> ] to deeply equal []"
+    DASH-11  "expected 'חיסכון משוער \u200f9 \u200f₪ · 0%' not to match /·\s*0%/"
+    DASH-13  "expected '/dashboard' to contain 'currency=USD'"
+    DASH-13  "expected '/dashboard?currency=USD…' to contain '\u200f300 \u200f$'"
+    DASH-10 PASSED in this run — the label it asserts lives in the dictionaries, which were still
+    at HEAD. That is a finding about the oracle, not about the fix; see the critique section.
+  RUN 2 (the same, plus both dictionaries and src/pages/Credits.tsx at 27eeef96^):  6 failed / 0 passed
+    DASH-10  "Unable to find an element with the text: /זיכויים שטרם קוזזו/"
+  GREEN  6/6.
+  Every message above is the message the row itself quotes, character for character where quoted.
+  DASH-11 is checked the right way round for the campaign's arithmetic rule: the assertion is
+  `not.toMatch(/·\s*0%/)` AND `toMatch(/0\.4%/)`, so a returning 0 fails on the negative assertion,
+  not merely on a missing element.
+
+DASH-12  ->  MET
+  oracle: npx vitest run src/pages/alertsRowLinks.spec.tsx
+  red produced by: reverse patch of 27eeef96 over src/pages/Alerts.tsx alone (applied clean).
+  RED  3 failed / 0 passed   GREEN  3/3
+    "expected [ null, null, null, null, null ] to deeply equal []"
+    "expected [ 'BUTTON', 'BUTTON', 'BUTTON', …(2) ] to deeply equal [ 'A', 'A', 'A', 'A', 'A' ]"
+    the feed row's href assertion fails too
+  The row quotes the same BUTTON array. The locator is guarded against triviality:
+  `expect(rows().length).toBeGreaterThanOrEqual(4)` runs before the href assertions.
+
+EXP-01, EXP-03, EXP-05, EXP-06  ->  all four MET
+  oracle: npx vitest run src/lib/exportAbsenceAndWindow.spec.ts
+  red produced by: reverse patch of d5b7f4b6 over monthlyReport.ts, reportTemplateExport.ts,
+    Expenses.tsx and both dictionaries (3-way, clean, no markers), PLUS src/lib/workbook.ts checked
+    out at d5b7f4b6^ because its reverse hunk conflicts with f414226f. That extra checkout also
+    reverts f414226f's neutralizer removal, which touches no cell in these fixtures.
+  RED  6 failed / 1 passed   GREEN  7/7
+    EXP-01  "expected '2026-08 · הופק 04.09.2026, 05:42' to contain 'אוגוסט 2026 · 01.08.2026–31.08.2026'"
+    EXP-01  "expected +0 to be '—'"      <- a WRONG VALUE, not a missing cell. The strongest of the four.
+    EXP-03  "expected undefined to be '—'" (twice)
+    EXP-05  "expected [ …(11) ] to include 'אין חשבוניות בחודש זה'"  <- 11 cells in the whole sheet,
+            which is the row's own "three header-only sheets" count read back
+    EXP-06  "expected 'ינואר 2020 · 01.01.2020–31.01.2020 · …' not to contain '01.01.2020'"
+  The 1 pass is the control "the generated workbooks recalculate clean", green on both sides.
+  SHAPE NOTE: EXP-03's two failures read `undefined`, i.e. the cell is ABSENT on the unfixed tree,
+  not holding a wrong value. Here that is legitimate — a blank cell is literally one of the three
+  spellings the finding names — but the message is weaker than the row's quoted `| 0`.
+
+EXP-04  ->  MET
+  oracle: npx vitest run src/pages/exportProvenanceAndNaming.spec.tsx
+  red produced by: src/pages/ProductPurchaseSummary.tsx checked out at f414226f^. A reverse patch
+    was impossible: src/lib/productPurchaseWorkbook.ts DID NOT EXIST before f414226f (it is the
+    builder the fix lifted out of the screen), and the screen's hunks conflict with eac39f41. The
+    parent checkout additionally reverts eac39f41's DASH-07 sentence, which this spec never asserts.
+  RED  3 failed / 4 passed   GREEN  7/7
+    "column \"מקור הכמות\": expected -1 to be greater than or equal to 0"   <- MISSING COLUMN
+    "expected +0 to be '—'"    (the exported canonical quantity)             <- WRONG VALUE
+    "expected '0' to be '—'"   (the same figure on the screen)               <- WRONG VALUE
+  Both halves of the row are exercised, and the fabricated-zero half fails as a wrong value on both
+  surfaces, which is the stronger claim. The provenance half fails as an absent column; the row's
+  own RED file quotes the same -1, so this is the shape the fix's author reported too.
+
+EXP-07  ->  MET
+  oracle: npx vitest run src/pages/exportProvenanceAndNaming.spec.tsx
+  red produced by: reverse patch of f414226f over src/pages/Expenses.tsx alone (applied clean).
+  RED  2 failed / 5 passed   GREEN  7/7
+    "expected 'expenses-2026-09-05.xlsx' to be 'expenses-2025-01-01-2026-12-31.xlsx'"
+    "expected 'expenses-2026-09-05' to be 'expenses-2025-01-01-2026-12-31'"  (stems, vs the PDF)
+  The row's quoted message names 2026-09-04 because it was produced yesterday; the assertion is
+  against today's date by construction, which is the point of the finding.
+
+EXP-08  ->  MET
+  oracle: npx vitest run src/components/document-review/documentExportArrival.spec.tsx
+  red produced by: reverse patch of f414226f over
+    src/components/document-review/DocumentReviewWorkspace.tsx alone (applied clean).
+  RED  4 failed / 2 passed   GREEN  6/6   — the same 4-of-6 split the row records.
+    all four: "Unable to find an element by: [data-testid=\"document-export-unavailable\"]"
+  SHAPE NOTE: all four reds are missing-element failures. That is appropriate here — the finding IS
+  that nothing on the destination explains anything — and the sweep's own probe
+  (`queryAllByRole('button', { name: /הורד|ייצוא|CSV|Excel|xlsx/i })` returning []) is asserted
+  BESIDE each sentence and is green on both sides, so the absence is measured, not assumed.
+
+EXP-09  ->  MET
+  oracle: npx vitest run src/lib/bankImportWorkbook.spec.ts
+  red produced by: src/lib/bankImportWorkbook.ts, public/templates/inplace-bank-import-v1.xlsx and
+    scripts/generate-bank-import-assets.mjs checked out at f414226f^ (f414226f is the newest commit
+    on all three, so this is exactly the unfixed state).
+  RED  4 failed / 10 passed   GREEN  14/14
+    "expected '' to contain 'תאריך התנועה'"        <- no guide sheet at all
+    "expected [ Array(2) ] to have a length of 3 but got 2"   <- no example row
+    "expected [Function] to throw an error"        <- nothing to refuse
+    "expected 1 to be greater than 1"              <- one sheet, not two
+  The control "is the file the module itself would build, cell for cell" is green on both sides,
+  which is the assertion that stops the shipped asset and the generator drifting apart.
+
+EXP-10  ->  MET
+  oracle: npx vitest run src/pages/exportProvenanceAndNaming.spec.tsx  (plus the three sibling
+    specs the row re-pointed: src/lib/workbook.spec.ts, src/lib/exportTemplateWorkbook.spec.ts,
+    src/lib/monthlyReport.spec.ts)
+  red produced by: reverse patch of f414226f over src/lib/workbook.ts and
+    src/lib/exportTemplateWorkbook.ts (applied clean).
+  RED  5 failed / 57 passed across the four files   GREEN  62/62 across the same four
+    exportProvenanceAndNaming  "expected [ Array(1) ] to deeply equal [ '- ס 10מזלג ורסאי ניצוצות כסף -אר' ]"
+    workbook.spec              "expected '\\'=HYPERLINK(\"http://x\",\"click\")' to be '=HYPERLINK(\"http://x\",\"click\")'"
+    exportTemplateWorkbook     "expected '\\'=HYPERLINK(\"http://x\")' to be '=HYPERLINK(\"http://x\")'"
+    monthlyReport (x2)         the same apostrophe, on the plain and the styled builder
+  The row's claim that the three sibling specs "were themselves the defect written down" is borne
+  out: they go red on the unfixed tree, which is what a re-pointed assertion has to do.
+
+===============================================================================================
+ORACLES THAT DO NOT FULLY ASSERT THEIR FINDING — the list the brief asks for, not left empty
+===============================================================================================
+
+1. DASH-03/04/05/06 — dashboardTileDestinations.spec.ts.
+   THE MOST IMPORTANT ITEM HERE. The oracle is sound on the fixed tree (set equality, two
+   independently computed sides, never counts) but its ENTIRE measurement surface was created by
+   the fix, so it has no unfixed tree to be red on. Its red is "the symbol does not exist", in every
+   honest revert. Anyone reading these four rows should read "the fix is load-bearing for the
+   oracle", not "the defect was reproduced".
+   Second, smaller: the `READ_BY` map (which query parameters each destination screen reads) is a
+   hand-maintained restatement. If /orders stopped reading `delivery`, that last describe would
+   still pass.
+
+2. DASH-01 — alertsControlCentreParity.spec.ts. The row claims "the two screens cannot silently
+   diverge again". The oracle does not enforce that. CONTROL_CENTRE is a nine-entry literal inside
+   the spec — condition, snapshot field, severity and destination all transcribed by hand, with
+   Dashboard.tsx line numbers only in a comment. Add a tenth attention row to the dashboard, or
+   change one of its destinations, and this file stays green. What it really asserts is "/alerts
+   scans these nine named conditions with their own figures", which IS the finding and is asserted
+   per condition — but it is not parity with the other surface.
+   (The route-reachability control IS derived from the real route table, and is genuinely tight.)
+
+3. DASH-10 — dashboardGlanceHonesty.spec.tsx. The oracle is a pure LABEL assertion: the row must
+   read "זיכויים שטרם קוזזו" and "זיכויים פתוחים" must be absent. It asserts nothing about the
+   population. Measured: with Dashboard.tsx reverted and the dictionaries left at HEAD, this test
+   PASSES. Only reverting the dictionary makes it red. The row's substantive claim — that the
+   dashboard, /credits, /analytics, the supplier card and the accountant's tile all count the same
+   three statuses — is not tested anywhere in this file, so a future change that moves one of those
+   predicates away from the others would not go red here.
+
+4. DASH-09 — same file. The finding is about which SIDE of the digits the currency marker lands on.
+   jsdom has no layout engine, so the oracle asserts the bidi CONTEXT instead, and the spec says so
+   in its header. That is the right proxy and the fix is real, but the user-visible claim rests on
+   an Edge per-character measurement (PR25-DASH-09-MARKER-MEASURED-*.txt) that I did not re-run and
+   that no test can re-run red. Read the row as "one bidi context, proven; marker side, measured".
+
+5. EXP-08 — documentExportArrival.spec.tsx, and DASH-07's claim assertion, and EXP-05: on the
+   unfixed tree these fail as MISSING ELEMENTS (`Unable to find role="status"`, `Unable to find an
+   element by: [data-testid=...]`, `to include 'אין חשבוניות בחודש זה'`), not as wrong values. In
+   all three the finding IS an absence of a sentence, so the shape is defensible — but a reader
+   should know the red says "the sentence is not there", which is a weaker signal than a value
+   mismatch and would also be produced by a renamed testid.
+
+6. EXP-03 — exportAbsenceAndWindow.spec.ts. Its two reds read `expected undefined to be '—'`: the
+   cell is ABSENT on the unfixed tree rather than holding the wrong value. The row's own text quotes
+   a literal `0` for `זיכויים שקוזזו`; on the revert I could construct, that cell is simply not
+   written. Both are the defect (the finding names a blank cell as one of the three spellings), but
+   the "SUM() treats it as zero" half of the oracle is only really exercised by EXP-01's
+   `expected +0 to be '—'`, which is the assertion doing the work.
+
+7. DASH-08 / EXP-02 — reportsProductWindow.spec.ts has NO control that passes on both sides. Every
+   one of its four tests depends on the window being carried, so a broken harness and a real red are
+   indistinguishable in that file.
+
+8. EXP-09 — the shipped template now carries an example row that the parser refuses BY NAME. The
+   spec covers the bookkeeper who types OVER the example. It does not cover the bookkeeper who
+   appends rows BELOW it and leaves it in place — that import is refused, correctly but silently as
+   far as this file is concerned. Noted as a residual of the design, not a defect in the oracle.
+
+NO INVERTED ORACLE FOUND. I read all eleven spec files against their rows' "what is wrong" and
+"oracle" columns. Every one asserts the direction its finding asks for; none demands the opposite.
+
+===============================================================================================
+DISCIPLINE
+===============================================================================================
+  Every revert was reversed and `git status --porcelain` verified empty afterwards; the final tree
+  is 5a56770c with no product or spec modification, `tsc --noEmit` exit 0 and the 168-test green
+  above re-run on it.
+  No vitest fork timeout occurred in any run; nothing here is an environmental result.
+  Working files were written under `.tmp/` (gitignored) and to the session scratchpad only.

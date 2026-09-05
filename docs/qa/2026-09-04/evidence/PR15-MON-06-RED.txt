@@ -1,0 +1,1802 @@
+MON-06 RED - /pay quotes a credit amount its own reader cannot show
+Tree: unfixed (worktree-qa-sweep-20260904 @ d9393233). Nothing reverted; the oracle was written first.
+Oracle: src/pages/payQueueCreditScope.spec.tsx
+Run: npx vitest run src/pages/payQueueCreditScope.spec.tsx
+Date: 2026-09-05
+
+EXPECTED SHAPE: 3 failed (the three findings) | 2 passed (both controls).
+The controls prove the harness renders the dialog and reads it: a red here would be a broken
+harness, not a finding.
+
+NOTE: the oracle was corrected once before this run. The literal for the empty-state sentence was
+first transcribed as 'no open credits for this supplier' in the wrong word order, taken from a
+console that mangles Hebrew. It was read back from he.ts as UTF-8 and corrected to the exact
+string, and BOTH sides were then re-run against the corrected file. This is that re-run.
+
+==============================================================================
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a4814cae145c411f6
+
+ × src/pages/payQueueCreditScope.spec.tsx > /pay — the credit figure and the credit list name their own populations > does not claim the supplier has no open credits when the read returned nothing 659ms
+   → expected <p …(1)></p> to be null
+ × src/pages/payQueueCreditScope.spec.tsx > /pay — the credit figure and the credit list name their own populations > says instead that this role cannot see the supplier credits 222ms
+   → Unable to find an element with the text: /חשבוניות מאושרות בלבד/. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+<div
+  aria-labelledby="_r_4_"
+  aria-modal="true"
+  class="dialog-panel-safe bg-surface rounded-t-2xl sm:rounded-2xl shadow-dialog w-full sm:max-w-lg flex flex-col focus:outline-none"
+  role="dialog"
+  tabindex="-1"
+>
+  <div
+    class="flex items-center justify-between px-5 py-4 border-b border-line-soft"
+  >
+    <h3
+      class="font-semibold text-ink focus:outline-none"
+      id="_r_4_"
+      tabindex="-1"
+    >
+      ביצוע העברה — חוות השדה
+    </h3>
+    <button
+      aria-label="סגירה"
+      class="btn-ghost p-1.5! min-w-11 min-h-11"
+      type="button"
+    >
+      <svg
+        aria-hidden="true"
+        class="lucide lucide-x"
+        fill="none"
+        height="17"
+        stroke="currentColor"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="2"
+        viewBox="0 0 24 24"
+        width="17"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path
+          d="M18 6 6 18"
+        />
+        <path
+          d="m6 6 12 12"
+        />
+      </svg>
+    </button>
+  </div>
+  <div
+    class="dialog-safe-body p-5 overflow-y-auto"
+  >
+    <div
+      class="space-y-4"
+    >
+      <div
+        class="rounded-2xl bg-surface-sunken p-3 sm:p-4 border border-line"
+      >
+        <div
+          class="flex items-center gap-2 text-sm font-medium text-ink-mid mb-1"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-landmark"
+            fill="none"
+            height="15"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="15"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M10 18v-7"
+            />
+            <path
+              d="M11.12 2.198a2 2 0 0 1 1.76.006l7.866 3.847c.476.233.31.949-.22.949H3.474c-.53 0-.695-.716-.22-.949z"
+            />
+            <path
+              d="M14 18v-7"
+            />
+            <path
+              d="M18 18v-7"
+            />
+            <path
+              d="M3 22h18"
+            />
+            <path
+              d="M6 18v-7"
+            />
+          </svg>
+           
+          פרטי חשבון להעברה
+        </div>
+        <div
+          class="text-sm text-ink-body text-start"
+          dir="ltr"
+        >
+          לא הוזנו פרטי בנק
+        </div>
+      </div>
+      <div
+        class="note-info "
+      >
+        <span
+          class="min-w-0 flex-1"
+        >
+          לא הוזנו פרטי בנק לספק זה. הרישום כאן אינו מושפע מכך — המסך מתעד העברה שכבר יצאה מהבנק — אך את פרטי החשבון יש להזין לקראת ההעברה הבאה
+           
+          בכרטיס הספק. ההזנה היא באחריות הבעלים או מנהל הרכש; אין במסך זה דרך להזין אותם.
+        </span>
+      </div>
+      <p
+        class="text-xs text-ink-muted"
+      >
+        הכפתור בתחתית המסך 
+        <b>
+          מתעד
+        </b>
+         העברה שכבר בוצעה בבנק — הוא אינו מבצע אותה. אין ללחוץ עליו לפני שההעברה נעשתה בפועל.
+      </p>
+      <dl
+        class="text-sm space-y-1.5 [&>div]:flex-wrap [&>div]:gap-x-4 [&>div]:gap-y-0.5"
+      >
+        <div
+          class="flex justify-between"
+        >
+          <dt
+            class="text-ink-muted"
+          >
+            סכום מאושר
+          </dt>
+          <dd
+            class="font-semibold num"
+          >
+            ‏299.00 ‏₪
+          </dd>
+        </div>
+        <div
+          class="flex justify-between"
+        >
+          <dt
+            class="text-ink-muted"
+          >
+            קיזוז זיכויים
+          </dt>
+          <dd
+            class="num"
+          >
+            ‏0.00 ‏₪
+          </dd>
+        </div>
+        <div
+          class="flex justify-between"
+        >
+          <dt
+            class="text-ink-muted"
+          >
+            סכום להעברה בפועל
+          </dt>
+          <dd
+            class="font-semibold num"
+          >
+            ‏299.00 ‏₪
+          </dd>
+        </div>
+        <div
+          class="flex justify-between"
+        >
+          <dt
+            class="text-ink-muted"
+          >
+            יתרה לתשלום בחשבוניות
+          </dt>
+          <dd
+            class="num"
+          >
+            ‏299.00 ‏₪
+          </dd>
+        </div>
+        <div
+          class="flex justify-between"
+        >
+          <dt
+            class="text-ink-muted"
+          >
+            תאריך יעד
+          </dt>
+          <dd>
+            12.09.2026
+          </dd>
+        </div>
+        <div
+          class="flex justify-between"
+        >
+          <dt
+            class="text-ink-muted"
+          >
+            חשבוניות
+          </dt>
+          <dd
+            dir="ltr"
+          >
+            3011
+          </dd>
+        </div>
+        <div
+          class="flex justify-between"
+        >
+          <dt
+            class="text-ink-muted"
+          >
+            אושר על ידי
+          </dt>
+          <dd>
+            בעל העסק
+          </dd>
+        </div>
+        <div
+          class="flex justify-between"
+        >
+          <dt
+            class="text-ink-muted"
+          >
+            מבוצע על ידי
+          </dt>
+          <dd>
+            רואת חשבון
+          </dd>
+        </div>
+        <div
+          class="flex justify-between gap-4"
+        >
+          <dt
+            class="text-ink-muted"
+          >
+            רישום ביומן
+          </dt>
+          <dd
+            class="text-start"
+          >
+            ביצוע תשלום והסיבה
+          </dd>
+        </div>
+        <div
+          class="note-alert "
+        >
+          <span
+            class="min-w-0 flex-1"
+          >
+            <strong>
+              אושר באישור חריג ללא קיזוז הזיכוי.
+            </strong>
+             
+            הזיכויים הפתוחים בסך 
+            <span
+              class="num"
+            >
+              ‏50.00 ‏₪
+            </span>
+             לא קוזזו אוטומטית.
+            <span
+              class="block mt-1"
+            >
+              סיבת אישור החריגה:
+               
+              הזיכוי ייושב מול הספק בנפרד
+            </span>
+          </span>
+        </div>
+      </dl>
+      <div
+        class="rounded-2xl bg-surface-sunken p-3 sm:p-4 "
+      >
+        <h3
+          class="text-sm font-medium text-ink-soft"
+        >
+          זיכויים זמינים לקיזוז
+        </h3>
+        <p
+          class="mt-2 text-sm text-ink-muted"
+        >
+          אין זיכויים פתוחים לספק זה
+        </p>
+      </div>
+      <hr
+        class="border-line-soft"
+      />
+      <div
+        class="grid grid-cols-1 gap-3 sm:grid-cols-2"
+      >
+        <div>
+          <label
+            class="label"
+            for="payment-execution-date"
+          >
+            תאריך ביצוע
+          </label>
+          <input
+            class="input"
+            id="payment-execution-date"
+            type="date"
+            value="2026-09-05"
+          />
+        </div>
+        <div>
+          <label
+            class="label"
+            for="payment-execution-amount"
+          >
+            סכום החוב שנפרע (ILS)
+          </label>
+          <input
+            class="input num"
+            id="payment-execution-amount"
+            readonly=""
+            type="number"
+            value="299"
+          />
+        </div>
+        <div>
+          <label
+            class="label"
+            for="payment-settlement-currency"
+          >
+            מטבע חשבון הבנק
+          </label>
+          <select
+            class="input num"
+            dir="ltr"
+            id="payment-settlement-currency"
+          >
+            <option
+              value="ILS"
+            >
+              ILS
+            </option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label
+          class="label"
+          for="payment-execution-reference"
+        >
+          אסמכתת העברה *
+        </label>
+        <input
+          class="input num"
+          dir="ltr"
+          id="payment-execution-reference"
+          value=""
+        />
+      </div>
+      <div>
+        <label
+          class="label"
+          for="payment-execution-notes"
+        >
+          הערות
+        </label>
+        <input
+          class="input"
+          id="payment-execution-notes"
+          value=""
+        />
+      </div>
+      <div>
+        <label
+          class="label"
+          for="payment-execution-reason"
+        >
+          סיבת ביצוע / אישור הפעולה (רשות)
+        </label>
+        <input
+          class="input"
+          id="payment-execution-reason"
+          value=""
+        />
+      </div>
+      <div
+        class="flex flex-wrap justify-end gap-2"
+      >
+        <button
+          class="btn-secondary"
+        >
+          ביטול
+        </button>
+        <button
+          class="btn-primary"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-circle-check"
+            fill="none"
+            height="15"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="15"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <circle
+              cx="12"
+              cy="12"
+              r="10"
+            />
+            <path
+              d="m9 12 2 2 4-4"
+            />
+          </svg>
+           
+          ההעברה בוצעה
+        </button>
+      </div>
+    </div>
+  </div>
+  <div
+    aria-live="polite"
+    class="sr-only"
+  />
+</div>
+ × src/pages/payQueueCreditScope.spec.tsx > /pay — the credit figure and the credit list name their own populations > marks the quoted override figure as the approver view at approval 187ms
+   → Unable to find an element with the text: /נמדד ברגע האישור/. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+<div
+  aria-labelledby="_r_8_"
+  aria-modal="true"
+  class="dialog-panel-safe bg-surface rounded-t-2xl sm:rounded-2xl shadow-dialog w-full sm:max-w-lg flex flex-col focus:outline-none"
+  role="dialog"
+  tabindex="-1"
+>
+  <div
+    class="flex items-center justify-between px-5 py-4 border-b border-line-soft"
+  >
+    <h3
+      class="font-semibold text-ink focus:outline-none"
+      id="_r_8_"
+      tabindex="-1"
+    >
+      ביצוע העברה — חוות השדה
+    </h3>
+    <button
+      aria-label="סגירה"
+      class="btn-ghost p-1.5! min-w-11 min-h-11"
+      type="button"
+    >
+      <svg
+        aria-hidden="true"
+        class="lucide lucide-x"
+        fill="none"
+        height="17"
+        stroke="currentColor"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="2"
+        viewBox="0 0 24 24"
+        width="17"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path
+          d="M18 6 6 18"
+        />
+        <path
+          d="m6 6 12 12"
+        />
+      </svg>
+    </button>
+  </div>
+  <div
+    class="dialog-safe-body p-5 overflow-y-auto"
+  >
+    <div
+      class="space-y-4"
+    >
+      <div
+        class="rounded-2xl bg-surface-sunken p-3 sm:p-4 border border-line"
+      >
+        <div
+          class="flex items-center gap-2 text-sm font-medium text-ink-mid mb-1"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-landmark"
+            fill="none"
+            height="15"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="15"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M10 18v-7"
+            />
+            <path
+              d="M11.12 2.198a2 2 0 0 1 1.76.006l7.866 3.847c.476.233.31.949-.22.949H3.474c-.53 0-.695-.716-.22-.949z"
+            />
+            <path
+              d="M14 18v-7"
+            />
+            <path
+              d="M18 18v-7"
+            />
+            <path
+              d="M3 22h18"
+            />
+            <path
+              d="M6 18v-7"
+            />
+          </svg>
+           
+          פרטי חשבון להעברה
+        </div>
+        <div
+          class="text-sm text-ink-body text-start"
+          dir="ltr"
+        >
+          לא הוזנו פרטי בנק
+        </div>
+      </div>
+      <div
+        class="note-info "
+      >
+        <span
+          class="min-w-0 flex-1"
+        >
+          לא הוזנו פרטי בנק לספק זה. הרישום כאן אינו מושפע מכך — המסך מתעד העברה שכבר יצאה מהבנק — אך את פרטי החשבון יש להזין לקראת ההעברה הבאה
+           
+          בכרטיס הספק. ההזנה היא באחריות הבעלים או מנהל הרכש; אין במסך זה דרך להזין אותם.
+        </span>
+      </div>
+      <p
+        class="text-xs text-ink-muted"
+      >
+        הכפתור בתחתית המסך 
+        <b>
+          מתעד
+        </b>
+         העברה שכבר בוצעה בבנק — הוא אינו מבצע אותה. אין ללחוץ עליו לפני שההעברה נעשתה בפועל.
+      </p>
+      <dl
+        class="text-sm space-y-1.5 [&>div]:flex-wrap [&>div]:gap-x-4 [&>div]:gap-y-0.5"
+      >
+        <div
+          class="flex justify-between"
+        >
+          <dt
+            class="text-ink-muted"
+          >
+            סכום מאושר
+          </dt>
+          <dd
+            class="font-semibold num"
+          >
+            ‏299.00 ‏₪
+          </dd>
+        </div>
+        <div
+          class="flex justify-between"
+        >
+          <dt
+            class="text-ink-muted"
+          >
+            קיזוז זיכויים
+          </dt>
+          <dd
+            class="num"
+          >
+            ‏0.00 ‏₪
+          </dd>
+        </div>
+        <div
+          class="flex justify-between"
+        >
+          <dt
+            class="text-ink-muted"
+          >
+            סכום להעברה בפועל
+          </dt>
+          <dd
+            class="font-semibold num"
+          >
+            ‏299.00 ‏₪
+          </dd>
+        </div>
+        <div
+          class="flex justify-between"
+        >
+          <dt
+            class="text-ink-muted"
+          >
+            יתרה לתשלום בחשבוניות
+          </dt>
+          <dd
+            class="num"
+          >
+            ‏299.00 ‏₪
+          </dd>
+        </div>
+        <div
+          class="flex justify-between"
+        >
+          <dt
+            class="text-ink-muted"
+          >
+            תאריך יעד
+          </dt>
+          <dd>
+            12.09.2026
+          </dd>
+        </div>
+        <div
+          class="flex justify-between"
+        >
+          <dt
+            class="text-ink-muted"
+          >
+            חשבוניות
+          </dt>
+          <dd
+            dir="ltr"
+          >
+            3011
+          </dd>
+        </div>
+        <div
+          class="flex justify-between"
+        >
+          <dt
+            class="text-ink-muted"
+          >
+            אושר על ידי
+          </dt>
+          <dd>
+            בעל העסק
+          </dd>
+        </div>
+        <div
+          class="flex justify-between"
+        >
+          <dt
+            class="text-ink-muted"
+          >
+            מבוצע על ידי
+          </dt>
+          <dd>
+            רואת חשבון
+          </dd>
+        </div>
+        <div
+          class="flex justify-between gap-4"
+        >
+          <dt
+            class="text-ink-muted"
+          >
+            רישום ביומן
+          </dt>
+          <dd
+            class="text-start"
+          >
+            ביצוע תשלום והסיבה
+          </dd>
+        </div>
+        <div
+          class="note-alert "
+        >
+          <span
+            class="min-w-0 flex-1"
+          >
+            <strong>
+              אושר באישור חריג ללא קיזוז הזיכוי.
+            </strong>
+             
+            הזיכויים הפתוחים בסך 
+            <span
+              class="num"
+            >
+              ‏50.00 ‏₪
+            </span>
+             לא קוזזו אוטומטית.
+            <span
+              class="block mt-1"
+            >
+              סיבת אישור החריגה:
+               
+              הזיכוי ייושב מול הספק בנפרד
+            </span>
+          </span>
+        </div>
+      </dl>
+      <div
+        class="rounded-2xl bg-surface-sunken p-3 sm:p-4 "
+      >
+        <h3
+          class="text-sm font-medium text-ink-soft"
+        >
+          זיכויים זמינים לקיזוז
+        </h3>
+        <p
+          class="mt-2 text-sm text-ink-muted"
+        >
+          אין זיכויים פתוחים לספק זה
+        </p>
+      </div>
+      <hr
+        class="border-line-soft"
+      />
+      <div
+        class="grid grid-cols-1 gap-3 sm:grid-cols-2"
+      >
+        <div>
+          <label
+            class="label"
+            for="payment-execution-date"
+          >
+            תאריך ביצוע
+          </label>
+          <input
+            class="input"
+            id="payment-execution-date"
+            type="date"
+            value="2026-09-05"
+          />
+        </div>
+        <div>
+          <label
+            class="label"
+            for="payment-execution-amount"
+          >
+            סכום החוב שנפרע (ILS)
+          </label>
+          <input
+            class="input num"
+            id="payment-execution-amount"
+            readonly=""
+            type="number"
+            value="299"
+          />
+        </div>
+        <div>
+          <label
+            class="label"
+            for="payment-settlement-currency"
+          >
+            מטבע חשבון הבנק
+          </label>
+          <select
+            class="input num"
+            dir="ltr"
+            id="payment-settlement-currency"
+          >
+            <option
+              value="ILS"
+            >
+              ILS
+            </option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label
+          class="label"
+          for="payment-execution-reference"
+        >
+          אסמכתת העברה *
+        </label>
+        <input
+          class="input num"
+          dir="ltr"
+          id="payment-execution-reference"
+          value=""
+        />
+      </div>
+      <div>
+        <label
+          class="label"
+          for="payment-execution-notes"
+        >
+          הערות
+        </label>
+        <input
+          class="input"
+          id="payment-execution-notes"
+          value=""
+        />
+      </div>
+      <div>
+        <label
+          class="label"
+          for="payment-execution-reason"
+        >
+          סיבת ביצוע / אישור הפעולה (רשות)
+        </label>
+        <input
+          class="input"
+          id="payment-execution-reason"
+          value=""
+        />
+      </div>
+      <div
+        class="flex flex-wrap justify-end gap-2"
+      >
+        <button
+          class="btn-secondary"
+        >
+          ביטול
+        </button>
+        <button
+          class="btn-primary"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-circle-check"
+            fill="none"
+            height="15"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="15"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <circle
+              cx="12"
+              cy="12"
+              r="10"
+            />
+            <path
+              d="m9 12 2 2 4-4"
+            />
+          </svg>
+           
+          ההעברה בוצעה
+        </button>
+      </div>
+    </div>
+  </div>
+  <div
+    aria-live="polite"
+    class="sr-only"
+  />
+</div>
+ ✓ src/pages/payQueueCreditScope.spec.tsx > /pay — the credit figure and the credit list name their own populations > CONTROL — still prints the override amount and its reason 157ms
+ ✓ src/pages/payQueueCreditScope.spec.tsx > /pay — the credit figure and the credit list name their own populations > CONTROL — a measured zero stays a measured zero 115ms
+node.exe : 
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/payQueueCreditScope.spec.tsx > /pay — the credit figure and the credit list name their own 
+populations > does not claim the supplier has no open credits when the read returned nothing
+AssertionError: expected <p …(1)></p> to be null
+
+- Expected:
+null
+
++ Received:
+<p
+  class="mt-2 text-sm text-ink-muted"
+>
+  אין זיכויים פתוחים לספק זה
+</p>
+
+ ❯ src/pages/payQueueCreditScope.spec.tsx:174:50
+    172|     render(wrap(<AccountantPaymentQueue />));
+    173|     const dialog = await openDialog();
+    174|     expect(dialog.queryByText(NO_CREDITS_EXIST)).toBeNull();
+       |                                                  ^
+    175|   });
+    176|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  src/pages/payQueueCreditScope.spec.tsx > /pay — the credit figure and the credit list name their own 
+populations > says instead that this role cannot see the supplier credits
+TestingLibraryElementError: Unable to find an element with the text: /חשבוניות מאושרות בלבד/. This could be because 
+the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make 
+your matcher more flexible.
+
+Ignored nodes: comments, script, style
+<div
+  aria-labelledby="_r_4_"
+  aria-modal="true"
+  class="dialog-panel-safe bg-surface rounded-t-2xl sm:rounded-2xl shadow-dialog w-full sm:max-w-lg 
+flex flex-col focus:outline-none"
+  role="dialog"
+  tabindex="-1"
+>
+  <div
+    class="flex items-center justify-between px-5 py-4 border-b border-line-soft"
+  >
+    <h3
+      class="font-semibold text-ink focus:outline-none"
+      id="_r_4_"
+      tabindex="-1"
+    >
+      ביצוע העברה — חוות השדה
+    </h3>
+    <button
+      aria-label="סגירה"
+      class="btn-ghost p-1.5! min-w-11 min-h-11"
+      type="button"
+    >
+      <svg
+        aria-hidden="true"
+        class="lucide lucide-x"
+        fill="none"
+        height="17"
+        stroke="currentColor"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="2"
+        viewBox="0 0 24 24"
+        width="17"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path
+          d="M18 6 6 18"
+        />
+        <path
+          d="m6 6 12 12"
+        />
+      </svg>
+    </button>
+  </div>
+  <div
+    class="dialog-safe-body p-5 overflow-y-auto"
+  >
+    <div
+      class="space-y-4"
+    >
+      <div
+        class="rounded-2xl bg-surface-sunken p-3 sm:p-4 border border-line"
+      >
+        <div
+          class="flex items-center gap-2 text-sm font-medium text-ink-mid mb-1"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-landmark"
+            fill="none"
+            height="15"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="15"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M10 18v-7"
+            />
+            <path
+              d="M11.12 2.198a2 2 0 0 1 1.76.006l7.866 3.847c.476.233.31.949-.22.949H3.474c-.53 
+0-.695-.716-.22-.949z"
+            />
+            <path
+              d="M14 18v-7"
+            />
+            <path
+              d="M18 18v-7"
+            />
+            <path
+              d="M3 22h18"
+            />
+            <path
+              d="M6 18v-7"
+            />
+          </svg>
+           
+          פרטי חשבון להעברה
+        </div>
+        <div
+          class="text-sm text-ink-body text-start"
+          dir="ltr"
+        >
+          לא הוזנו פרטי בנק
+        </div>
+      </div>
+      <div
+        class="note-info "
+      >
+        <span
+          class="min-w-0 flex-1"
+        >
+          לא הוזנו פרטי בנק לספק זה. הרישום כאן אינו מושפע מכך — המסך מתעד העברה שכבר יצאה מהבנק — אך את פרטי 
+החשבון יש להזין לקראת ההעברה הבאה
+           
+          בכרטיס הספק. ההזנה היא באחריות הבעלים או מנהל הרכש; אין במסך זה דרך להזין אותם.
+        </span>
+      </div>
+      <p
+        class="text-xs text-ink-muted"
+      >
+        הכפתור בתחתית המסך 
+        <b>
+          מתעד
+        </b>
+         העברה שכבר בוצעה בבנק — הוא אינו מבצע אותה. אין ללחוץ עליו לפני שההעברה נעשתה בפועל.
+      </p>
+      <dl
+        class="text-sm space-y-1.5 [&>div]:flex-wrap [&>div]:gap-x-4 [&>div]:gap-y-0.5"
+      >
+        <div
+          class="flex justify-between"
+        >
+          <dt
+            class="text-ink-muted"
+          >
+            סכום מאושר
+          </dt>
+          <dd
+            class="font-semibold num"
+          >
+            ‏299.00 ‏₪
+          </dd>
+        </div>
+        <div
+          class="flex justify-between"
+        >
+          <dt
+            class="text-ink-muted"
+          >
+            קיזוז זיכויים
+          </dt>
+          <dd
+            class="num"
+          >
+            ‏0.00 ‏₪
+          </dd>
+        </div>
+        <div
+          class="flex justify-between"
+        >
+          <dt
+            class="text-ink-muted"
+          >
+            סכום להעברה בפועל
+          </dt>
+          <dd
+            class="font-semibold num"
+          >
+            ‏299.00 ‏₪
+          </dd>
+        </div>
+        <div
+          class="flex justify-between"
+        >
+          <dt
+            class="text-ink-muted"
+          >
+            יתרה לתשלום בחשבוניות
+          </dt>
+          <dd
+            class="num"
+          >
+            ‏299.00 ‏₪
+          </dd>
+        </div>
+        <div
+          class="flex justify-between"
+        >
+          <dt
+            class="text-ink-muted"
+          >
+            תאריך יעד
+          </dt>
+          <dd>
+            12.09.2026
+          </dd>
+        </div>
+        <div
+          class="flex justify-between"
+        >
+          <dt
+            class="text-ink-muted"
+          >
+            חשבוניות
+          </dt>
+          <dd
+            dir="ltr"
+          >
+            3011
+          </dd>
+        </div>
+        <div
+          class="flex justify-between"
+        >
+          <dt
+            class="text-ink-muted"
+          >
+            אושר על ידי
+          </dt>
+          <dd>
+            בעל העסק
+          </dd>
+        </div>
+        <div
+          class="flex justify-between"
+        >
+          <dt
+            class="text-ink-muted"
+          >
+            מבוצע על ידי
+          </dt>
+          <dd>
+            רואת חשבון
+          </dd>
+        </div>
+        <div
+          class="flex justify-between gap-4"
+        >
+          <dt
+            class="text-ink-muted"
+          >
+            רישום ביומן
+          </dt>
+          <dd
+            class="text-start"
+          >
+            ביצוע תשלום והסיבה
+          </dd>
+        </div>
+        <div
+          class="note-alert "
+        >
+          <span
+            class="min-w-0 flex-1"
+          >
+            <strong>
+              אושר באישור חריג ללא קיזוז הזיכוי.
+            </strong>
+             
+            הזיכויים הפתוחים בסך 
+            <span
+              class="num"
+            >
+              ‏50.00 ‏₪
+            </span>
+             לא קוזזו אוטומטית.
+            <span
+              class="block mt-1"
+            >
+              סיבת אישור החריגה:
+               
+              הזיכוי ייושב מול הספק בנפרד
+            </span>
+          </span>
+        </div>
+      </dl>
+      <div
+        class="rounded-2xl bg-surface-sunken p-3 sm:p-4 "
+      >
+        <h3
+          class="text-sm font-medium text-ink-soft"
+        >
+          זיכויים זמינים לקיזוז
+        </h3>
+        <p
+          class="mt-2 text-sm text-ink-muted"
+        >
+          אין זיכויים פתוחים לספק זה
+        </p>
+      </div>
+      <hr
+        class="border-line-soft"
+      />
+      <div
+        class="grid grid-cols-1 gap-3 sm:grid-cols-2"
+      >
+        <div>
+          <label
+            class="label"
+            for="payment-execution-date"
+          >
+            תאריך ביצוע
+          </label>
+          <input
+            class="input"
+            id="payment-execution-date"
+            type="date"
+            value="2026-09-05"
+          />
+        </div>
+        <div>
+          <label
+            class="label"
+            for="payment-execution-amount"
+          >
+            סכום החוב שנפרע (ILS)
+          </label>
+          <input
+            class="input num"
+            id="payment-execution-amount"
+            readonly=""
+            type="number"
+            value="299"
+          />
+        </div>
+        <div>
+          <label
+            class="label"
+            for="payment-settlement-currency"
+          >
+            מטבע חשבון הבנק
+          </label>
+          <select
+            class="input num"
+            dir="ltr"
+            id="payment-settlement-currency"
+          >
+            <option
+              value="ILS"
+            >
+              ILS
+            </option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label
+          class="label"
+          for="payment-execution-reference"
+        >
+          אסמכתת העברה *
+        </label>
+        <input
+          class="input num"
+          dir="ltr"
+          id="payment-execution-reference"
+          value=""
+        />
+      </div>
+      <div>
+        <label
+          class="label"
+          for="payment-execution-notes"
+        >
+          הערות
+        </label>
+        <input
+          class="input"
+          id="payment-execution-notes"
+          value=""
+        />
+      </div>
+      <div>
+        <label
+          class="label"
+          for="payment-execution-reason"
+        >
+          סיבת ביצוע / אישור הפעולה (רשות)
+        </label>
+        <input
+          class="input"
+          id="payment-execution-reason"
+          value=""
+        />
+      </div>
+      <div
+        class="flex flex-wrap justify-end gap-2"
+      >
+        <button
+          class="btn-secondary"
+        >
+          ביטול
+        </button>
+        <button
+          class="btn-primary"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-circle-check"
+            fill="none"
+            height="15"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="15"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <circle
+              cx="12"
+              cy="12"
+              r="10"
+            />
+            <path
+              d="m9 12 2 2 4-4"
+            />
+          </svg>
+           
+          ההעברה בוצעה
+        </button>
+      </div>
+    </div>
+  </div>
+  <div
+    aria-live="polite"
+    class="sr-only"
+  />
+</div>
+ ❯ Object.getElementError ../../../node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/pages/payQueueCreditScope.spec.tsx:181:19
+    179|     const dialog = await openDialog();
+    180|     // Anchored on the reason, not on decoration: the role's horizon i…
+    181|     expect(dialog.getByText(/חשבוניות מאושרות בלבד/)).toBeTruthy();
+       |                   ^
+    182|   });
+    183|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  src/pages/payQueueCreditScope.spec.tsx > /pay — the credit figure and the credit list name their own 
+populations > marks the quoted override figure as the approver view at approval
+TestingLibraryElementError: Unable to find an element with the text: /נמדד ברגע האישור/. This could be because the 
+text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your 
+matcher more flexible.
+
+Ignored nodes: comments, script, style
+<div
+  aria-labelledby="_r_8_"
+  aria-modal="true"
+  class="dialog-panel-safe bg-surface rounded-t-2xl sm:rounded-2xl shadow-dialog w-full sm:max-w-lg 
+flex flex-col focus:outline-none"
+  role="dialog"
+  tabindex="-1"
+>
+  <div
+    class="flex items-center justify-between px-5 py-4 border-b border-line-soft"
+  >
+    <h3
+      class="font-semibold text-ink focus:outline-none"
+      id="_r_8_"
+      tabindex="-1"
+    >
+      ביצוע העברה — חוות השדה
+    </h3>
+    <button
+      aria-label="סגירה"
+      class="btn-ghost p-1.5! min-w-11 min-h-11"
+      type="button"
+    >
+      <svg
+        aria-hidden="true"
+        class="lucide lucide-x"
+        fill="none"
+        height="17"
+        stroke="currentColor"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="2"
+        viewBox="0 0 24 24"
+        width="17"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path
+          d="M18 6 6 18"
+        />
+        <path
+          d="m6 6 12 12"
+        />
+      </svg>
+    </button>
+  </div>
+  <div
+    class="dialog-safe-body p-5 overflow-y-auto"
+  >
+    <div
+      class="space-y-4"
+    >
+      <div
+        class="rounded-2xl bg-surface-sunken p-3 sm:p-4 border border-line"
+      >
+        <div
+          class="flex items-center gap-2 text-sm font-medium text-ink-mid mb-1"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-landmark"
+            fill="none"
+            height="15"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="15"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M10 18v-7"
+            />
+            <path
+              d="M11.12 2.198a2 2 0 0 1 1.76.006l7.866 3.847c.476.233.31.949-.22.949H3.474c-.53 
+0-.695-.716-.22-.949z"
+            />
+            <path
+              d="M14 18v-7"
+            />
+            <path
+              d="M18 18v-7"
+            />
+            <path
+              d="M3 22h18"
+            />
+            <path
+              d="M6 18v-7"
+            />
+          </svg>
+           
+          פרטי חשבון להעברה
+        </div>
+        <div
+          class="text-sm text-ink-body text-start"
+          dir="ltr"
+        >
+          לא הוזנו פרטי בנק
+        </div>
+      </div>
+      <div
+        class="note-info "
+      >
+        <span
+          class="min-w-0 flex-1"
+        >
+          לא הוזנו פרטי בנק לספק זה. הרישום כאן אינו מושפע מכך — המסך מתעד העברה שכבר יצאה מהבנק — אך את פרטי 
+החשבון יש להזין לקראת ההעברה הבאה
+           
+          בכרטיס הספק. ההזנה היא באחריות הבעלים או מנהל הרכש; אין במסך זה דרך להזין אותם.
+        </span>
+      </div>
+      <p
+        class="text-xs text-ink-muted"
+      >
+        הכפתור בתחתית המסך 
+        <b>
+          מתעד
+        </b>
+         העברה שכבר בוצעה בבנק — הוא אינו מבצע אותה. אין ללחוץ עליו לפני שההעברה נעשתה בפועל.
+      </p>
+      <dl
+        class="text-sm space-y-1.5 [&>div]:flex-wrap [&>div]:gap-x-4 [&>div]:gap-y-0.5"
+      >
+        <div
+          class="flex justify-between"
+        >
+          <dt
+            class="text-ink-muted"
+          >
+            סכום מאושר
+          </dt>
+          <dd
+            class="font-semibold num"
+          >
+            ‏299.00 ‏₪
+          </dd>
+        </div>
+        <div
+          class="flex justify-between"
+        >
+          <dt
+            class="text-ink-muted"
+          >
+            קיזוז זיכויים
+          </dt>
+          <dd
+            class="num"
+          >
+            ‏0.00 ‏₪
+          </dd>
+        </div>
+        <div
+          class="flex justify-between"
+        >
+          <dt
+            class="text-ink-muted"
+          >
+            סכום להעברה בפועל
+          </dt>
+          <dd
+            class="font-semibold num"
+          >
+            ‏299.00 ‏₪
+          </dd>
+        </div>
+        <div
+          class="flex justify-between"
+        >
+          <dt
+            class="text-ink-muted"
+          >
+            יתרה לתשלום בחשבוניות
+          </dt>
+          <dd
+            class="num"
+          >
+            ‏299.00 ‏₪
+          </dd>
+        </div>
+        <div
+          class="flex justify-between"
+        >
+          <dt
+            class="text-ink-muted"
+          >
+            תאריך יעד
+          </dt>
+          <dd>
+            12.09.2026
+          </dd>
+        </div>
+        <div
+          class="flex justify-between"
+        >
+          <dt
+            class="text-ink-muted"
+          >
+            חשבוניות
+          </dt>
+          <dd
+            dir="ltr"
+          >
+            3011
+          </dd>
+        </div>
+        <div
+          class="flex justify-between"
+        >
+          <dt
+            class="text-ink-muted"
+          >
+            אושר על ידי
+          </dt>
+          <dd>
+            בעל העסק
+          </dd>
+        </div>
+        <div
+          class="flex justify-between"
+        >
+          <dt
+            class="text-ink-muted"
+          >
+            מבוצע על ידי
+          </dt>
+          <dd>
+            רואת חשבון
+          </dd>
+        </div>
+        <div
+          class="flex justify-between gap-4"
+        >
+          <dt
+            class="text-ink-muted"
+          >
+            רישום ביומן
+          </dt>
+          <dd
+            class="text-start"
+          >
+            ביצוע תשלום והסיבה
+          </dd>
+        </div>
+        <div
+          class="note-alert "
+        >
+          <span
+            class="min-w-0 flex-1"
+          >
+            <strong>
+              אושר באישור חריג ללא קיזוז הזיכוי.
+            </strong>
+             
+            הזיכויים הפתוחים בסך 
+            <span
+              class="num"
+            >
+              ‏50.00 ‏₪
+            </span>
+             לא קוזזו אוטומטית.
+            <span
+              class="block mt-1"
+            >
+              סיבת אישור החריגה:
+               
+              הזיכוי ייושב מול הספק בנפרד
+            </span>
+          </span>
+        </div>
+      </dl>
+      <div
+        class="rounded-2xl bg-surface-sunken p-3 sm:p-4 "
+      >
+        <h3
+          class="text-sm font-medium text-ink-soft"
+        >
+          זיכויים זמינים לקיזוז
+        </h3>
+        <p
+          class="mt-2 text-sm text-ink-muted"
+        >
+          אין זיכויים פתוחים לספק זה
+        </p>
+      </div>
+      <hr
+        class="border-line-soft"
+      />
+      <div
+        class="grid grid-cols-1 gap-3 sm:grid-cols-2"
+      >
+        <div>
+          <label
+            class="label"
+            for="payment-execution-date"
+          >
+            תאריך ביצוע
+          </label>
+          <input
+            class="input"
+            id="payment-execution-date"
+            type="date"
+            value="2026-09-05"
+          />
+        </div>
+        <div>
+          <label
+            class="label"
+            for="payment-execution-amount"
+          >
+            סכום החוב שנפרע (ILS)
+          </label>
+          <input
+            class="input num"
+            id="payment-execution-amount"
+            readonly=""
+            type="number"
+            value="299"
+          />
+        </div>
+        <div>
+          <label
+            class="label"
+            for="payment-settlement-currency"
+          >
+            מטבע חשבון הבנק
+          </label>
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 2 passed (5)
+   Start at  06:07:10
+   Duration  6.76s (transform 1.45s, setup 731ms, import 2.69s, tests 1.35s, environment 1.67s)
+
+          <select
+            class="input num"
+            dir="ltr"
+            id="payment-settlement-currency"
+          >
+            <option
+              value="ILS"
+            >
+              ILS
+            </option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label
+          class="label"
+          for="payment-execution-reference"
+        >
+          אסמכתת העברה *
+        </label>
+        <input
+          class="input num"
+          dir="ltr"
+          id="payment-execution-reference"
+          value=""
+        />
+      </div>
+      <div>
+        <label
+          class="label"
+          for="payment-execution-notes"
+        >
+          הערות
+        </label>
+        <input
+          class="input"
+          id="payment-execution-notes"
+          value=""
+        />
+      </div>
+      <div>
+        <label
+          class="label"
+          for="payment-execution-reason"
+        >
+          סיבת ביצוע / אישור הפעולה (רשות)
+        </label>
+        <input
+          class="input"
+          id="payment-execution-reason"
+          value=""
+        />
+      </div>
+      <div
+        class="flex flex-wrap justify-end gap-2"
+      >
+        <button
+          class="btn-secondary"
+        >
+          ביטול
+        </button>
+        <button
+          class="btn-primary"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-circle-check"
+            fill="none"
+            height="15"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="15"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <circle
+              cx="12"
+              cy="12"
+              r="10"
+            />
+            <path
+              d="m9 12 2 2 4-4"
+            />
+          </svg>
+           
+          ההעברה בוצעה
+        </button>
+      </div>
+    </div>
+  </div>
+  <div
+    aria-live="polite"
+    class="sr-only"
+  />
+</div>
+ ❯ Object.getElementError ../../../node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/pages/payQueueCreditScope.spec.tsx:189:19
+    187|     // Without this clause the 50.00 above the empty list reads as a l…
+    188|     // be able to reconcile, which is the whole of MON-06.
+    189|     expect(dialog.getByText(/נמדד ברגע האישור/)).toBeTruthy();
+       |                   ^
+    190|   });
+    191|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+

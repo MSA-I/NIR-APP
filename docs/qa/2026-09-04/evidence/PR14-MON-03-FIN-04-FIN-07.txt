@@ -1,0 +1,263 @@
+PR 14 — MON-03 (high) / FIN-04 (medium) / FIN-07 (medium)
+=========================================================
+Branch worktree: .claude/worktrees/agent-a4ddfa2e0c205b10b, cut from worktree-qa-sweep-20260904
+Migration 0320 · SQL suite p113 (both assigned by the coordinator; no number was drawn)
+Written 2026-09-05.
+
+PART 0 — THE FINDING'S OWN DIAGNOSIS IS WRONG, MEASURED
+-------------------------------------------------------
+FIN-04 says: "a phantom '$ 0' balance row on a supplier with NO DOLLAR ACTIVITY".
+MON-03 says that reading is INVERTED. MON-03 is right. Measured read-only against the
+production project (rkftlbctohswhbbiaqin) through scripts/db-query.ps1, 2026-09-05, on the
+very supplier the sweep photographed (aa000000-0000-4000-8000-000000000013):
+
+  currency  review_status  invoices  total     paid      open_balance
+  ILS       approved       1         900.000   750.000   150.000
+  USD       received       1         300.000   0         300.000
+
+The supplier owes 300 dollars. The dollar invoice is `received`, not `approved`. So the
+accountant's `$ 0` is not a phantom row over an empty currency — it is a FALSE STATEMENT OF
+SETTLEMENT printed over a real debt, to the one person whose job is to reconcile against a bank
+statement. The sweep's own screenshot (out/finance/20-finsup-0013.png) shows exactly the two
+lines this table predicts: 150 ILS, and $ 0 where 300 stands.
+
+PART 1 — THE MECHANISM, CONFIRMED IN THE MIGRATION TEXT
+-------------------------------------------------------
+supabase/migrations/0218_balances_are_read_per_currency.sql, read in full:
+
+  :88-93   p0_invoice_balance_rows_by_currency() — the accountant arm carries
+             `and (auth_role() = 'owner' or (auth_role() = 'accountant'
+                   and i.review_status = 'approved'))`
+  :118-130 p0_supplier_balance_rows_by_currency() — joins public.invoices with NO review
+             predicate, `left join balances b on b.invoice_id = i.id`, and
+             `coalesce(sum(b.balance_in_currency), 0)::numeric(14,3)`.
+
+For the accountant, an unapproved invoice therefore produces an invoices row with no balance
+row, and the coalesce fills the hole with 0. The ledger row's diagnosis is exact.
+
+PART 2 — ANCESTRY: CHECKED, NOT ASSUMED
+----------------------------------------
+`pg_get_functiondef` read from PRODUCTION before the patch was written:
+
+  p0_supplier_balance_rows_by_currency()
+    md5(replace(prosrc, e'\r','')) = 5d2fbb0deeb160fbf9071ac3aec4d264
+    length(prosrc) = 639   position(e'\r' in prosrc) > 0 = false
+    body = byte-for-byte 0218's, LF only
+
+  p0_invoice_balance_rows_by_currency()
+    md5 = 0d028d12e873bf4d3eaf92f5cda8af81, length 1217, no CR
+
+So for THIS function 0218 really is the ancestor — no later migration has touched it. That was
+established by reading the live body rather than by grepping migrations, because the campaign
+has already been bitten by a function that looked like its creating migration and had in fact
+been patched four times since. The patch is still ANCHORED rather than re-declared: a
+re-declaration from 0218 would silently restore whatever a later migration might have added,
+and nothing in the migration text would say so.
+
+Also measured while there, and NOT changed by this PR (see RESIDUALS):
+  proconfig = {search_path=public}   prosecdef = true   provolatile = s
+  proacl    = {postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+  public.invoices.total_amount IS NOT NULL   (this is what makes the coalesce provably dead)
+
+PART 3 — THE FIX
+-----------------
+supabase/migrations/0320_a_currency_this_role_cannot_value.sql — ONE anchored DO block, TWO
+anchors on one definition, each with its occurrence count asserted = 1, executed once:
+
+  (1)  `  left join balances b on b.invoice_id = i.id`
+    -> `  join balances b on b.invoice_id = i.id`
+  (2)  `         coalesce(sum(b.balance_in_currency), 0)::numeric(14,3),`
+    -> `         sum(b.balance_in_currency)::numeric(14,3),`
+
+Every row the function emits is now one the caller's OWN read valued. A currency this role
+cannot value emits no row, which is the same answer 0218 already gave for a supplier with no
+invoices, and components/Money.tsx:67 already draws that as an em dash. Anchor (2) is removed
+rather than left dead because it is half of the named mechanism.
+
+A5: private.scope_definer_enforcements is re-pinned from pg_proc with a new scope_proof; the
+hash is COMPUTED, never written as a literal.
+
+DRY RUN OF THE PATCH, no database involved: the two anchors were parsed back OUT of the
+migration file and applied to the live body captured in PART 2.
+
+  anchor 1 occurrences in the live body: 1  OK
+  anchor 2 occurrences in the live body: 1  OK
+  resulting body:
+      select s.id,
+             i.currency,
+             sum(b.balance_in_currency)::numeric(14,3),
+             count(b.invoice_id) filter (where b.balance_in_currency > 0)
+      from public.suppliers s
+      join public.invoices i
+        on i.org_id = s.org_id and i.supplier_id = s.id and i.deleted_at is null
+       and i.financial_role = 'payable'
+       and (i.unit_id is null or i.unit_id = any(public.auth_scopes()))
+      join balances b on b.invoice_id = i.id
+      where s.org_id = auth_org() and auth_role() in ('owner', 'accountant')
+      group by s.id, i.currency
+  the migration's own sentinels, checked against that result:
+      has sum(b.balance_in_currency)::numeric(14,3) : true
+      has left join balances                        : false
+      has coalesce(sum(b.balance_in_currency)       : false
+      and the positive sentinel is ABSENT from the ORIGINAL body : true
+
+That last line is the one that matters: the sentinel is a property the patch CREATES, so the
+assertion cannot pass on a body that was never patched. `coalesce(sum(b.balance_in_currency),
+0)::numeric(14,3)` does not contain `sum(b.balance_in_currency)::numeric` — the `, 0)` sits
+between — which is why testing only for the ABSENCE of the old shape would have been worthless.
+
+`i.currency` is deliberately NOT rewritten to `b.currency`. After an inner join the two are the
+same value by construction (the invoice reader selects `i.currency` for the same invoice), so
+the change would be two more anchors for no behaviour at all.
+
+THE OWNER'S FIGURES CANNOT MOVE, and this is structural rather than hopeful: the four
+predicates the supplier reader puts on public.invoices (same org, deleted_at is null,
+financial_role = 'payable', null-or-auth_scopes unit) are exactly the four the invoice reader
+applies, and the owner's arm adds nothing else — so for an owner every joined invoice already
+had a balance row and INNER drops nothing. p113 proves it on the guarded path anyway.
+
+PART 4 — FIN-07: THE LABEL, NEVER THE POPULATION
+-------------------------------------------------
+FIN-07 is the same mechanism seen from the dashboard: 790 to the accountant, 11,582 to the
+owner, under one identical label. The fix is the OPPOSITE of the instinct — widening the
+accountant's read so the two agree would be a privilege leak. Nothing was widened. Changed:
+
+  he/en accountantDashboard.fmtMoneyRounded_2
+    'יתרת חשבוניות פתוחות'  ->  'יתרת חשבוניות פתוחות — מאושרות בלבד'
+    'Balance of open invoices' -> 'Balance of open invoices — approved only'
+  he/en invoiceList.spliceApprovedScope   (NEW key)
+    'יתרה (מאושרות)' / 'Balance (approved)'
+  src/pages/Invoices.tsx — the balance column header is spliceApprovedScope for the accountant
+    and stays `splice` ('יתרה') for every other role that gets the column.
+
+RED, seen on the unfixed tree (src/pages/scopedBalanceLabels.spec.tsx, npx vitest run):
+
+  x accountant control room: the open-balance KPI names its scope instead of the owner label
+    AssertionError: expected <div ...(1)></div> to be null
+    - Expected: null
+    + Received: <div class="text-xs font-medium text-ink-muted"> יתרת חשבוניות פתוחות </div>
+    at src/pages/scopedBalanceLabels.spec.tsx:142:56
+
+  x accountant invoice list: the balance column names the population it can be totalled over
+    TestingLibraryElementError: Unable to find an element with the text: יתרה (מאושרות)
+    at src/pages/scopedBalanceLabels.spec.tsx:155:19
+
+  v owner invoice list: the header stays unqualified, because nothing narrowed it
+    THE CONTROL. It passed on the unfixed tree, which is what says the two reds above are the
+    finding and not a broken harness.
+
+  Test Files  1 failed (1) · Tests  2 failed | 1 passed (3)
+
+The oracle was written BEFORE the label change; nothing was reverted to manufacture this red.
+One correction was made mid-flight and BOTH sides were re-run against the corrected file: the
+first draft used findByText/getByText and hit "Found multiple elements with the text: N-OPEN"
+(the list renders the desktop table and the mobile cards into one document), which made the
+control fail for a harness reason. Switched to findAllByText/getAllByText/queryAllByText and
+re-ran the red from scratch — the red quoted above is against the corrected assertions.
+
+GREEN, after the change, same file, same command:
+  Test Files  1 passed (1) · Tests  3 passed (3)
+
+Neighbouring specs that read these screens, re-run after the change:
+  invoiceBalanceZero · serverListScreens · mobileColumnScreens · dashboardGlanceHonesty ·
+  dashboardDensity · dashboards/accountantCreditVisibility · supplierCardHonesty ·
+  financialSupplierContract
+  -> Test Files 8 passed (8) · Tests 47 passed (47)
+
+PART 5 — SQL SUITE p113
+------------------------
+supabase/tests/p113_a_currency_this_role_cannot_value.sql, registered in
+scripts/check-quality-gates.ps1 as the LAST SQL suite, immediately after p108 (default role
+postgres; the whole file is one transaction ending in rollback, so it commits no fixture and no
+reset step is added). Appended rather than filed beside its per-currency relatives p80-p93 on
+purpose: inserting mid-sequence renumbers every later ordinal and turns a one-suite addition
+into a 129-line baseline diff, which is exactly the noise that trains reviewers to skip the
+file check:baseline-drift asks them to read. Appended, the baseline diff is the one added
+entry. Order is otherwise free here — the suite commits nothing, so no later suite can observe
+that it ran.
+
+Fixture, a faithful copy of the production row measured in PART 0:
+  A  ILS 150 approved   +  USD 300 NOT approved     <- the MON-03 supplier
+  B  ILS 640 approved   +  USD 200 approved         <- control: a currency the role CAN value
+  C  ILS 400 approved, paid 400 -> balance 0.000    <- control: a MEASURED zero stays a zero
+  D  USD 500 NOT approved only                      <- FIN-04 as a whole card
+
+Every reading is taken with `set local role authenticated` and a real request.jwt.claim.sub, as
+the owner and then as the accountant, through the VIEW the client reads — so RLS, the view
+grant, security_invoker and the role arms are all in the path. A reading taken as postgres would
+prove nothing. The fixtures are written with no end-user subject on purpose: that is what
+p1_financial_command_guard lets through, and the approvals still go through
+set_invoice_review_status as an authenticated owner because 0099 forbids materialising an
+approved invoice any other way.
+
+Assertions are PER ROW, never by count: each (supplier, currency) is looked up on its own AND
+the whole row set is enumerated as one string carrying every amount and every open-invoice
+count. Expected:
+
+  owner_all_rows       A/ILS=150.000/1 A/USD=300.000/1 B/ILS=640.000/1 B/USD=200.000/1
+                       C/ILS=0.000/0 D/USD=500.000/1        (CONTROL — unchanged by 0320)
+  accountant_all_rows  A/ILS=150.000/1 B/ILS=640.000/1 B/USD=200.000/1 C/ILS=0.000/0
+  accountant_a_usd     'no row'          (today: '0.000/0' — the defect)
+  accountant_d_usd     'no row'          (today: '0.000/0')
+  accountant_b_usd     '200.000/1'       CONTROL — nothing the role may value was hidden
+  accountant_c_ils     '0.000/0'         CONTROL — a measured zero must not become an em dash
+  owner_a_merged       '0'               150 and 300 are never one row of 450
+  accountant_a_usd_leak 'none'           the accountant gets neither the $300 nor a zero for it
+
+A final coverage block raises if any expectation had no reading at all, so a suite whose
+readings silently stopped being recorded cannot pass on an empty comparison.
+
+NOT YET RUN — see PART 7. p113 and the migration need the local Supabase stack, which this
+agent does not hold.
+
+PART 6 — GUARDS RUN (individually, not `npm run verify` whole)
+---------------------------------------------------------------
+PASS  check:anchored-replacements  307 migrations, 109 read a live body, 0 new unnormalised
+PASS  check:exemptions             243 migrations re-assert A1/A3/A5; pin 96 matches
+PASS  check:renumber-closure       307 migrations, 458 dollar tags, 750 filename refs resolve
+PASS  check:suite-manifest         128 entries, 124 suites, agrees with ci-sql-suites.mjs --list
+        (seen RED first: "1 entry is in the gate but not in the baseline: + p113" — then
+         re-baselined with --write in this same commit, which is what the guard asks for)
+PASS  check:i18n · check:plurals · check:orphan-keys · check:key-manifest · check:jsx-space
+PASS  check:money · check:currency · check:decision-numbers · check:debt-numbers
+PASS  check:exception-labels · check:plan-labels
+PASS  npx tsc --noEmit (clean)
+
+FAIL  check:migration-numbers   "a NEW gap opened in the sequence: 0315->0320 — 4 missing"
+FAIL  check:gate-controls       2 of 49 controls, both downstream of the same gap:
+                                "deleting the HIGHEST migration is caught (it makes no gap)"
+                                "the real migration sequence still passes"
+
+THIS IS A CAMPAIGN ARTIFACT, NOT A DEFECT IN THIS CHANGE, and it was proved rather than
+asserted: 0320 was moved out of supabase/migrations, both guards were re-run, and both passed
+("306 migrations, 0001-0315, no duplicate, no new gap" / "49 controls, every guard failed
+exactly when it should"); 0320 was then moved back. 0316 and 0317 belong to the OTHER live
+campaign (docs/ux-remediation-documents-assistant), 0318 to PR 17 and 0319 to PR 5+6 — see
+.claude/locks/numbers. The gap closes when the coordinator has landed those; it cannot be
+closed from this branch, and HISTORICAL_GAPS was deliberately NOT touched.
+
+NOT RUN, and why: `npm run verify` whole and `npm run quality` — the standing brief reserves
+those for one baseline run on an idle machine. `check:contrast`, `check:tokens`,
+`check:typography`, `check:appearance-scope` — no token, stylesheet or appearance surface was
+touched. `check:baseline-drift` — it needs a merge base with origin/main, and this branch is a
+worktree copy of the campaign branch rather than of origin/main, so it would measure the whole
+campaign rather than this change.
+
+PART 7 — WHAT STILL NEEDS THE LOCAL STACK
+------------------------------------------
+This agent is second in the .claude/locks/supabase queue and did NOT take the lock. Everything
+above was done without it. What remains, in order:
+
+  1. supabase db reset (migrations through 0320 applied)  — proves 0320 applies at all, that
+     both anchor counts are 1 against the LOCAL body, and that its own assertion block passes.
+  2. p113 RED: run the suite against the tree with 0320 held back. Expect
+     accountant_a_usd '0.000/0' and accountant_d_usd '0.000/0' where 'no row' is required,
+     accountant_all_rows carrying A/USD=0.000/0 and D/USD=0.000/0, and every owner_* and the
+     three accountant controls PASSING in that same run.
+  3. p113 GREEN: same suite with 0320 applied.
+  4. Screenshots, headed, 1440x900, READ: /finance/suppliers/<the two-currency supplier> and
+     /dashboard as the accountant, before and after. The `$ 0` line must become an em dash and
+     the KPI label must carry its scope.
+  5. npm run demo:restore before handing the stack back.
+
+Nothing in PART 3, 4 or 5 has been reported as verified against a database. It has not been.

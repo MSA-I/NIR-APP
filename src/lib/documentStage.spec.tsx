@@ -57,13 +57,17 @@ describe('שבעת השלבים שורדים מתחת לתצוגה', () => {
 
 describe('הסינון והתג מבוססים על אותו מצב קנוני', () => {
   it('מציג אפשרויות שאינן מאחדות מצבים סותרים', () => {
+    // `awaiting_scan` joined the list with DOC-01: the manual scan-approval gate is its own
+    // canonical state, and a state no filter can name is a state nobody sweeps up — three of this
+    // tenant's documents had been sitting at that gate for two days when the sweep found them.
     expect(DOCUMENT_STATUS_FILTERS.map(({ value }) => value)).toEqual([
-      'stuck', 'failed', 'processing', 'review', 'unassigned', 'assigned',
+      'stuck', 'failed', 'processing', 'awaiting_scan', 'review', 'unassigned', 'assigned',
     ]);
     render(<ProcessingFilterSelect value="all" onChange={() => {}} />);
     const options = [...screen.getByTestId('documents-processing-filter').querySelectorAll('option')];
     expect(options.map((option) => option.textContent)).toEqual([
-      'הכול', 'עיבוד תקוע', 'העיבוד נכשל', 'בעיבוד או בהמתנה', 'נדרשת בדיקה', 'לא משויך', 'משויך',
+      'הכול', 'עיבוד תקוע', 'העיבוד נכשל', 'בעיבוד או בהמתנה', 'ממתין לאישור סריקה',
+      'נדרשת בדיקה', 'לא משויך', 'משויך',
     ]);
   });
 

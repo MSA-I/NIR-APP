@@ -4,7 +4,11 @@ import { useState } from 'react';
 import { Link } from 'react-router';
 import { Settings as SettingsIcon, Users, MailPlus, Send, Ban, KeyRound, ClipboardCheck, ImageUp, Download, Undo2, UserCog, LogOut } from 'lucide-react';
 import { MIN_PASSWORD_LENGTH, passwordProblemOf } from '../lib/password';
-import { VAT_RATE_MAX, VAT_RATE_MIN, isVatRateInRange } from '../lib/inputBounds';
+import {
+  BANK_MATCH_DAYS_MIN, BANK_MATCH_DAYS_STEP, VAT_RATE_MAX, VAT_RATE_MIN,
+  isBankMatchWindowInRange, isVatRateInRange,
+} from '../lib/inputBounds';
+import { organizationVatRate } from '../lib/vatRate';
 import { OPTIONAL_REASON_LABEL_KEY, reasonOr } from '../lib/reason';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
@@ -20,7 +24,8 @@ import {
   ASSIGNABLE_ROLES, INVITABLE_ROLES, INVITATION_COLUMNS, invitationStatusOf,
   sendInvite, resendInvite, revokeInvite, type Invitation,
 } from '../lib/invitations';
-import { isActiveRole, type ActiveRole, type Profile } from '../lib/types';
+import { isActiveRole, type ActiveRole, type OrganizationPerson, type Profile } from '../lib/types';
+import { ORGANIZATION_PEOPLE_COLUMNS, PROFILE_COLUMNS } from '../lib/accountColumns';
 import { CurrencyTolerancesPanel } from '../components/CurrencyTolerancesPanel';
 import { SupportContact } from '../components/SupportContact';
 import {
@@ -83,7 +88,7 @@ export default function Settings() {
   const isOffice = profile?.role === 'owner' || profile?.role === 'office';
   const toast = useToast();
   const [orgName, setOrgName] = useState(org?.name ?? '');
-  const [vatRate, setVatRate] = useState(org?.vat_rate?.toString() ?? '18');
+  const [vatRate, setVatRate] = useState(String(organizationVatRate(org?.vat_rate)));
   const [matchDays, setMatchDays] = useState(org?.settings?.bank_match_days?.toString() ?? '7');
   const [busy, setBusy] = useState(false);
   const [logoPath, setLogoPath] = useState(org?.logo_path ?? null);
@@ -116,8 +121,30 @@ export default function Settings() {
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [passwordBusy, setPasswordBusy] = useState(false);
 
+  // Named columns, not `*`. The roster draws four fields; `*` fetched every column the table
+  // has, which handed this screen each colleague's `backup_email` -- the address they nominated
+  // to recover their account -- for nothing. See src/lib/accountColumns.ts.
   const { data: users, loading, error, refetch } = useQuery<Profile[]>(async () =>
-    unwrap(await supabase.from('profiles').select('*').order('full_name')));
+    unwrap(await supabase.from('profiles').select(PROFILE_COLUMNS).order('full_name')));
+
+  /**
+   * The telephone numbers, and the reason they are a SECOND read rather than four more characters
+   * in the one above.
+   *
+   * Migration 0319 revoked the column privilege on `profiles.phone` from every client role,
+   * because a column privilege is the only thing that can hide a column and because all three
+   * product roles are one database role -- so "owner yes, office no" can only be said by a view
+   * that reads with its owner's privileges and carries its own predicate. That view is
+   * `organization_people_directory`, and office and accountant get zero rows from it.
+   *
+   * It is an ENRICHMENT and never the roster. Between the moment this bundle ships and the moment
+   * the migration is applied the view does not exist, and a roster that depended on it would be
+   * empty rather than one column short. `error` is deliberately not surfaced: a screen that shows
+   * a red note because a column is missing would be louder than the fact deserves.
+   */
+  const { data: directory } = useQuery<OrganizationPerson[]>(async () =>
+    unwrap(await supabase.from('organization_people_directory').select(ORGANIZATION_PEOPLE_COLUMNS)));
+  const phones = directory ? new Map(directory.map((person) => [person.id, person.phone])) : null;
 
   const { data: invitations, refetch: refetchInvites } = useQuery<Invitation[]>(async () =>
     unwrap(await supabase.from('invitations').select(INVITATION_COLUMNS).order('created_at', { ascending: false })));
@@ -182,12 +209,24 @@ export default function Settings() {
       toast(t('settings.vatRateOutOfRange'), 'error');
       return;
     }
+    /* `OWN-13`. The field beside the VAT rate had no bound of any kind, so this function wrote
+       `-30` (a window that inverts and can never contain a date), `7.5` (a fraction `Date.UTC`
+       truncates) and, from an empty box, the `0` that `Number('')` produces — the narrowest
+       window there is, stored as though somebody had chosen it. This refuses all three. It is
+       NOT the mirror of a server constraint the way the VAT check above is: there is none to
+       mirror, `organizations.settings` carries no CHECK, and a ceiling is an owner's answer that
+       is still open. See `inputBounds.ts` for what is derived and what is deliberately absent. */
+    const days = Number(matchDays);
+    if (matchDays.trim() === '' || !isBankMatchWindowInRange(days)) {
+      toast(t('settings.matchDaysOutOfRange'), 'error');
+      return;
+    }
     setBusy(true);
     // merge, don't replace — settings also carries keys this screen doesn't edit
     // (e.g. invite_expiry_days, read by invitation_expiry_days() in migration 0007)
     const settings: Record<string, unknown> = {
       ...(org?.settings ?? {}),
-      bank_match_days: Number(matchDays),
+      bank_match_days: days,
     };
     /* THE TOLERANCE KEYS ARE NOT WRITTEN HERE, and the spread above is why that is safe: this
        screen no longer names them, so they travel through untouched. It used to save
@@ -511,7 +550,14 @@ export default function Settings() {
       sortValue: (u) => u.full_name ?? '',
     },
     { key: 'role', header: t('settings.text_15'), render: (u) => roleLabels[u.role] ?? u.role, sortValue: (u) => u.role },
-    { key: 'phone', header: t('settings.text_16'), className: 'num', render: (u) => <span dir="ltr">{u.phone ?? '—'}</span> },
+    /* The column exists only when the directory answered. A `—` in every cell would be a claim
+       that nobody has a number on file, which is a different and untrue statement from "this
+       reader was not served the column" -- and that is exactly the state during the minutes
+       between the bundle shipping and 0319 being applied. */
+    ...(phones ? [{
+      key: 'phone', header: t('settings.text_16'), className: 'num',
+      render: (u: Profile) => <span dir="ltr">{phones.get(u.id) ?? '—'}</span>,
+    } satisfies Column<Profile>] : []),
     {
       key: 'status', header: t('settings.text_17'), mobileLabel: null,
       render: (u) => (u.active ? <span className="badge-done">{t('settings.text_18')}</span> : <span className="badge-idle">{t('settings.text_19')}</span>),
@@ -564,7 +610,17 @@ export default function Settings() {
               here as one field labelled `(₪)`, which was three separate untruths: the business may
               not keep its books in shekels, the same key holds a value per currency (#288), and
               three sibling tolerances had no field at all. A day range is not an amount and stays. */}
-          <div><label className="label" htmlFor="settings-match-days">{t('settings.setMatchDays')}</label><input id="settings-match-days" type="number" className="input num" value={matchDays} disabled={!canWrite} onChange={(e) => setMatchDays(e.target.value)} /></div>
+          {/* A floor and a unit, and deliberately no ceiling: `docs/OPEN-DECISIONS.md` row 3
+              records the default window and no maximum, and there is no server bound to mirror,
+              so the hint says what the number DOES instead of asserting a limit nobody set. */}
+          <div>
+            <label className="label" htmlFor="settings-match-days">{t('settings.setMatchDays')}</label>
+            <input id="settings-match-days" type="number" min={BANK_MATCH_DAYS_MIN} step={BANK_MATCH_DAYS_STEP}
+              className="input num" value={matchDays} disabled={!canWrite}
+              aria-describedby="settings-match-days-hint"
+              onChange={(e) => setMatchDays(e.target.value)} />
+            <p id="settings-match-days-hint" className="mt-1 text-sm text-ink-muted">{t('settings.setMatchDaysHint')}</p>
+          </div>
         </div>
         {canWrite && <div className="flex justify-end"><button className="btn-primary" disabled={busy} onClick={() => void saveOrg()}>{t('settings.saveOrg')}</button></div>}
       </Card>
@@ -754,13 +810,16 @@ export default function Settings() {
                 `.th`/`.td` with `scope`, and a focusable, named scroll region. */}
             <div className="table-scroll overflow-x-auto [contain:layout]" role="region" aria-label={t('settings.aria_label')} tabIndex={0}>
               <table className="w-full">
-                <thead className="table-head"><tr><th scope="col" className="th">{t('settings.text_34')}</th><th scope="col" className="th">{t('settings.text_35')}</th><th scope="col" className="th">{t('settings.text_36')}</th><th scope="col" className="th">{t('settings.text_37')}</th></tr></thead>
+                {/* Same rule as the roster's phone column: the column exists only when the owner
+                    directory answered, because a `—` in every cell would say these people had no
+                    number rather than that this reader was not served the column. */}
+                <thead className="table-head"><tr><th scope="col" className="th">{t('settings.text_34')}</th><th scope="col" className="th">{t('settings.text_35')}</th>{phones && <th scope="col" className="th">{t('settings.text_36')}</th>}<th scope="col" className="th">{t('settings.text_37')}</th></tr></thead>
                 <tbody className="divide-y divide-line-soft">
                   {archived.map((u) => (
                     <tr key={u.id}>
                       <td className="td font-medium">{u.full_name}</td>
                       <td className="td">{roleLabels[u.role] ?? u.role}</td>
-                      <td className="td" dir="ltr">{u.phone ?? '—'}</td>
+                      {phones && <td className="td" dir="ltr">{phones.get(u.id) ?? '—'}</td>}
                       <td className="td"><span className="badge-idle">{t('settings.text_38')}</span></td>
                     </tr>
                   ))}
@@ -880,13 +939,32 @@ export default function Settings() {
         onConfirm={() => { const pending = pendingSensitive; setPendingSensitive(null); pending?.run(); }}
         onCancel={() => setPendingSensitive(null)}
       />
+      {/* ONE dialog for three actions, so the step-up is a conditional prop rather than a constant.
+          The owner's offboarding ruling (`OPEN-DECISIONS.md` → "הכרעת בעלים ל־Offboarding וייצוא
+          דייר" — a prose section, not a numbered table row) requires the closure request and its
+          cancellation to happen "לאחר אימות מחדש", and `skipWhenFresh` defaults to `true` — which
+          meant that gate was skipped exactly when someone had just signed in and walked to
+          settings: one click, no dialog, the whole organisation read-only for thirty days
+          (`OWN-01`, `RTL-A11Y-01`, sweep 04.09.2026).
+          The export link keeps the skip. Fetching a file the owner is already entitled to is not
+          the org-wide switch, and re-prompting for it is ceremony the ruling never asked for. */}
       <ReauthModal
         open={offboardingAction !== null}
+        skipWhenFresh={offboardingAction === 'download'}
         title={offboardingAction === 'request'
           ? t('settings.text_53')
           : offboardingAction === 'cancel'
             ? t('settings.text_54')
             : t('settings.text_55')}
+        /* What is about to change, before the shared "why a password" sentence. The step-up is the
+           only confirmation these two actions get — the ruling gives them no reason field and no
+           second dialog — so this sentence is where the read-only switch and the 30-day
+           cancellation window (`0103:89`) are actually stated. */
+        details={offboardingAction === 'request'
+          ? t('settings.offboardingRequestDetails')
+          : offboardingAction === 'cancel'
+            ? t('settings.offboardingCancelDetails')
+            : undefined}
         onConfirm={() => {
           const action = offboardingAction;
           setOffboardingAction(null);

@@ -1,0 +1,497 @@
+PR 13a — PERM-03 and PERM-05 — MEASUREMENT BEFORE CHANGE
+=========================================================
+Agent branch: worktree-agent-a0a8e1750a571c769
+Measured:     2026-09-05, against the LIVE production project rkftlbctohswhbbiaqin.
+Path:         scripts/db-query.ps1 -ProjectRef rkftlbctohswhbbiaqin -AllowProduction  (read-only;
+              not covered by the local-stack lock), plus one live REST reproduction through
+              https://rkftlbctohswhbbiaqin.supabase.co as owner@gamos.demo and accountant@gamos.demo
+              (13.08.2026 owner permission, CLAUDE.md).
+Written to:   NOTHING. Every statement below is a read, an EXPLAIN, or a SET LOCAL that expires with
+              its own transaction. No migration, no index, no policy, no trigger was created,
+              altered or dropped. Two probe statements ran as role `authenticated` and were
+              deliberately allowed to be cancelled; they touched no table.
+
+VERDICT, both rows: CORRECT BEHAVIOUR / NOT THIS QUERY. No code change is proposed by this PR.
+  PERM-03 — the index IS in use, the statement completes far inside the timeout, and the HTTP 500s
+            were an instance-wide stall that hit ten unrelated query shapes the same way.
+  PERM-05 — two Auth requests, two rows. The rollout log records the set AND the restore, the
+            trigger is per-row with a WHEN clause, and p4_flags_identity.sql proves one-for-one.
+
+WHAT THIS FILE DOES NOT CLAIM
+  - It cannot recover the query plan that was in effect at 2026-09-03 21:42-21:45, when the sweep
+    saw the 500s. `last_autoanalyze` on public.audit_logs is 2026-09-03 22:55:40+00, i.e. AFTER the
+    failures, so the statistics have moved since. A plan flip at that moment is not excluded by
+    anything below; it is only made unnecessary as an explanation, because a mechanism that DOES
+    reproduce is named and measured.
+  - pg_stat_statements on this server does NOT record statements cancelled by statement_timeout
+    (proved below), so the two failing calls left no server-side timing anywhere.
+  - No local stack was touched and no gate was run. This PR carries no migration and no suite.
+
+
+================================================================================================
+PART 1 — PERM-03
+"The owner cannot reliably read the new password-change audit rows: 2 of 3 attempts returned
+ HTTP 500 statement timeout, while the accountant read the same 2 rows first try."
+Oracle: EXPLAIN (ANALYZE, BUFFERS) on the owner's read shows the index in use and the statement
+        completes inside the timeout on three consecutive attempts.
+================================================================================================
+
+1.1 THE SURFACE, READ FROM THE LIVE DATABASE (not from a migration file)
+-----------------------------------------------------------------------
+pg_get_viewdef('public.audit_log_read_model'):
+    SELECT id, org_id, user_id, action, entity_type, entity_id, old_values, new_values,
+           reason, created_at, correlation_id, causation_id,
+           scope_domain, scope_class, legal_entity_id
+      FROM audit_logs;
+pg_class.reloptions:  security_invoker=on, security_barrier=on
+
+The one policy on public.audit_logs (pg_policy):
+    audit_select :: ((org_id = auth_org())
+      AND (auth_role() = ANY (ARRAY['owner'::user_role, 'accountant'::user_role]))
+      AND (((scope_class = 'legal_entity'::text) AND (legal_entity_id = ANY (auth_scopes())))
+        OR ((scope_class = 'cross_scope'::text) AND (scope_domain = 'organization_identity_platform'::text))
+        OR ((scope_class = 'cross_scope'::text) AND (scope_domain = 'financial_accounting'::text)
+            AND (EXISTS (SELECT 1 FROM org_units root
+                          WHERE ((root.org_id = audit_logs.org_id)
+                             AND (root.unit_type = 'root'::org_unit_type)
+                             AND (root.id = ANY (auth_scopes())))))) ))
+
+Every index on public.audit_logs (pg_indexes), live:
+    audit_entity_idx            btree (entity_type, entity_id)
+    audit_invitation_rate_idx   btree (org_id, user_id, created_at DESC) WHERE action = 'invitation_delivery_requested'
+    audit_logs_causation_idx    btree (causation_id)   WHERE causation_id IS NOT NULL
+    audit_logs_correlation_idx  btree (correlation_id) WHERE correlation_id IS NOT NULL
+    audit_logs_cross_scope_idx  btree (org_id, scope_domain, created_at DESC) WHERE scope_class = 'cross_scope'
+    audit_logs_legal_entity_idx btree (org_id, legal_entity_id, created_at DESC) WHERE legal_entity_id IS NOT NULL
+    audit_logs_org_created_idx  btree (org_id, created_at DESC)
+    audit_logs_org_idx          btree (org_id)
+    audit_logs_pkey             UNIQUE btree (id)
+There is NO index on `action`, apart from the partial one pinned to a different action value.
+
+The three functions in the policy (pg_proc), all three the same shape:
+    auth_org()    STABLE SECURITY DEFINER  cost=100  leakproof=false
+    auth_role()   STABLE SECURITY DEFINER  cost=100  leakproof=false
+    auth_scopes() STABLE SECURITY DEFINER  cost=100  leakproof=false
+
+Shape of the data behind the read:
+    public.audit_logs                                 27,533 rows / 44 MB heap / 50 MB total
+    of which scope_class='cross_scope'                27,319
+    of which scope_domain='organization_identity_platform'  27,269
+    of which action='password_changed'                     2   ( 0.0073 % )
+    top actions: insert x11933 · delete x9308 · update x3525 · document_processing_claimed x1984
+    `action` column type: text.  The `=` operator on text is LEAKPROOF (pg_proc.proleakproof = t).
+    That last fact is load-bearing — see 1.3.
+
+
+1.2 THE EXPLAIN — run as role `authenticated` with the owner's own JWT subject
+------------------------------------------------------------------------------
+Guarded path, per the campaign brief: SET LOCAL ROLE authenticated after
+set_config('request.jwt.claims', '{"sub":"273d686e-f15e-4af7-a4ee-d21269e5b6a0","role":"authenticated",...}').
+The plan below therefore has RLS in it; a run as `postgres` would have shown nothing.
+Query shape is the one the sweep issued:
+    /rest/v1/audit_log_read_model?action=eq.password_changed&select=id,user_id,reason,created_at&limit=10
+
+    current_user=authenticated
+
+    Limit  (cost=0.54..89608.33 rows=1 width=73) (actual time=8.850..67.107 rows=2 loops=1)
+      Output: audit_log_read_model.id, audit_log_read_model.user_id, audit_log_read_model.reason, audit_log_read_model.created_at
+      Buffers: shared hit=2318
+      ->  Subquery Scan on audit_log_read_model  (cost=0.54..89608.33 rows=1 width=73) (actual time=8.849..67.105 rows=2 loops=1)
+            Output: audit_log_read_model.id, audit_log_read_model.user_id, audit_log_read_model.reason, audit_log_read_model.created_at
+            Buffers: shared hit=2318
+            ->  Index Scan using audit_logs_org_idx on public.audit_logs  (cost=0.54..89608.32 rows=1 width=345) (actual time=8.848..67.102 rows=2 loops=1)
+                  Output: audit_logs.id, NULL::uuid, audit_logs.user_id, NULL::text, NULL::text, NULL::uuid, NULL::jsonb, NULL::jsonb, audit_logs.reason, audit_logs.created_at, NULL::uuid, NULL::uuid, NULL::text, NULL::text, NULL::uuid
+                  Index Cond: (audit_logs.org_id = auth_org())
+                  Filter: ((audit_logs.action = 'password_changed'::text) AND (auth_role() = ANY ('{owner,accountant}'::user_role[])) AND (((audit_logs.scope_class = 'legal_entity'::text) AND (audit_logs.legal_entity_id = ANY (auth_scopes()))) OR ((audit_logs.scope_class = 'cross_scope'::text) AND (audit_logs.scope_domain = 'organization_identity_platform'::text)) OR ((audit_logs.scope_class = 'cross_scope'::text) AND (audit_logs.scope_domain = 'financial_accounting'::text) AND (ANY (audit_logs.org_id = (hashed SubPlan 2).col1)))))
+                  Rows Removed by Filter: 26506
+                  Buffers: shared hit=2318
+                  SubPlan 2
+                    ->  Index Scan using org_units_one_root_per_org on public.org_units root  (cost=0.40..2.88 rows=1 width=16) (never executed)
+                          Output: root.org_id
+                          Index Cond: (root.org_id = auth_org())
+                          Filter: (root.id = ANY (auth_scopes()))
+    Query Identifier: -1042683128214745679
+    Planning:
+      Buffers: shared hit=1258
+    Planning Time: 10.520 ms
+    Execution Time: 67.168 ms
+    -- wall including EXPLAIN overhead: 81.4 ms
+
+
+1.3 READING THE PLAN — the four questions the row asks
+-------------------------------------------------------
+IS THE INDEX USED?  YES. `Index Scan using audit_logs_org_idx`, Index Cond `org_id = auth_org()`.
+  The read is not a sequential scan and never was in any sample taken here.
+
+WHICH PREDICATE IS NOT SERVED BY AN INDEX?  `action = 'password_changed'`. It appears under
+  `Filter:`, not under `Index Cond:`, because no index on this table leads with or includes
+  `action` for this value. The read therefore walks all 26,508 index entries for the tenant and
+  discards 26,506 of them.
+
+WHY THAT IS NOT AS BAD AS IT LOOKS, AND WHY THE ROW'S HINT ABOUT THE EXISTING INDEX RESOLVES.
+  `text = text` is leakproof, so PostgreSQL assigns the client's filter security_level 0 and is
+  free to order it by cost. It sits FIRST in the Filter list, ahead of `auth_role()`,
+  `auth_scopes()` and the EXISTS. So the three SECURITY DEFINER functions and SubPlan 2 are
+  evaluated only for the 2 rows that survive — SubPlan 2 reads `(never executed)`. 26,508 rows are
+  rejected at roughly 2.5 microseconds each. That is why 26k discarded rows cost 67 ms and not 8 s.
+
+  The index the row said already exists for the cross-scope path is `audit_logs_cross_scope_idx`,
+  and it is healthy — it just is not reachable from this query. Its predicate,
+  `scope_class = 'cross_scope'`, appears in the query only INSIDE the three-branch OR of the RLS
+  qual, so it is not implied by the query and the planner may not assume it. Written out by hand
+  the planner takes it immediately:
+
+    -- C. the SAME read, with the cross-scope predicate written out by hand
+    Limit  (cost=0.66..88493.43 rows=1 width=73) (actual time=56.245..1623.926 rows=2 loops=1)
+      Buffers: shared hit=5509
+      ->  Subquery Scan on audit_log_read_model  (cost=0.66..88493.43 rows=1 width=73) (actual time=56.244..1623.923 rows=2 loops=1)
+            Buffers: shared hit=5509
+            ->  Index Scan using audit_logs_cross_scope_idx on audit_logs  (cost=0.66..88493.42 rows=1 width=345) (actual time=56.243..1623.920 rows=2 loops=1)
+                  Index Cond: ((org_id = auth_org()) AND (scope_domain = 'organization_identity_platform'::text))
+                  Filter: ((action = 'password_changed'::text) AND (auth_role() = ANY ('{owner,accountant}'::user_role[])) AND (((scope_class = 'legal_entity'::text) AND (legal_entity_id = ANY (auth_scopes()))) OR ((scope_class = 'cross_scope'::text) AND (scope_domain = 'organization_identity_platform'::text)) OR ((scope_class = 'cross_scope'::text) AND (scope_domain = 'financial_accounting'::text) AND (ANY (org_id = (hashed SubPlan 2).col1)))))
+                  Rows Removed by Filter: 26242
+                  Buffers: shared hit=5509
+                  SubPlan 2
+                    ->  Index Scan using org_units_one_root_per_org on org_units root  (cost=0.40..2.88 rows=1 width=16) (never executed)
+                          Index Cond: (org_id = auth_org())
+                          Filter: (id = ANY (auth_scopes()))
+    Planning:
+      Buffers: shared hit=1267
+    Planning Time: 46.025 ms
+    Execution Time: 1623.977 ms
+
+  Note what that run ALSO shows, and it is the most important number in this file: the same
+  statement, on the same data, seconds after the 67 ms run, took 1,623.9 ms — and its PLANNING TIME
+  went from 10.5 ms to 46.0 ms at the same time. Planning does not read the table. A predicate
+  cannot make planning 4.4x slower. Execution and planning inflating together is the signature of
+  the whole instance stalling, and it is the mechanism section 1.5 identifies.
+
+WHAT IS THE ACTUAL ROW COUNT AND ACTUAL TIME?  rows=2, Execution Time 67.168 ms, 2,318 shared
+  buffer hits, ZERO shared reads. The 44 MB table sits inside a 224 MB shared_buffers; this read
+  never goes to disk.
+
+
+1.4 THE ORACLE — three consecutive attempts, inside the timeout
+----------------------------------------------------------------
+Run A — as role `authenticated`, owner JWT, statement_timeout ARMED at 8s at statement level
+(the role's real setting; `ALTER ROLE authenticated SET statement_timeout = '8s'`, read from
+pg_roles.rolconfig). Three separate round trips:
+
+    attempt 1: ran_as=authenticated timeout_armed=8s rows_returned=2 elapsed_ms=68.4
+    attempt 2: ran_as=authenticated timeout_armed=8s rows_returned=2 elapsed_ms=21.2 .. 22.8
+    attempt 3: ran_as=authenticated timeout_armed=8s rows_returned=2 elapsed_ms=21.2
+    (elapsed_ms is measured inside the backend from statement_timestamp(); the 2.0-2.5 s HTTP
+     round trip is the Management API layer and is not the query.)
+
+Run B — the REAL path the finding used: sign in over /auth/v1/token?grant_type=password, then
+GET the REST route with the session's own token. Both roles, three consecutive attempts each,
+with two controls:
+
+    owner@gamos.demo: signed in, HTTP 200 in 787 ms
+       A password filter (the finding)    attempt 1: HTTP 200 in 1431 ms  rows=2
+       A password filter (the finding)    attempt 2: HTTP 200 in  334 ms  rows=2
+       A password filter (the finding)    attempt 3: HTTP 200 in  324 ms  rows=2
+       B same view, NO filter (control)   attempt 1: HTTP 200 in  327 ms  rows=10
+       B same view, NO filter (control)   attempt 2: HTTP 200 in  313 ms  rows=10
+       B same view, NO filter (control)   attempt 3: HTTP 200 in  317 ms  rows=10
+       C base table, no view (control)    attempt 1: HTTP 200 in  449 ms  rows=50
+       C base table, no view (control)    attempt 2: HTTP 200 in  852 ms  rows=50
+       C base table, no view (control)    attempt 3: HTTP 200 in  319 ms  rows=50
+    accountant@gamos.demo: signed in, HTTP 200 in 1124 ms
+       A password filter (the finding)    attempt 1: HTTP 200 in  321 ms  rows=2
+       A password filter (the finding)    attempt 2: HTTP 200 in  320 ms  rows=2
+       A password filter (the finding)    attempt 3: HTTP 200 in  321 ms  rows=2
+       B same view, NO filter (control)   attempt 1: HTTP 200 in  313 ms  rows=10
+       B same view, NO filter (control)   attempt 2: HTTP 200 in  305 ms  rows=10
+       B same view, NO filter (control)   attempt 3: HTTP 200 in  311 ms  rows=10
+       C base table, no view (control)    attempt 1: HTTP 200 in  310 ms  rows=50
+       C base table, no view (control)    attempt 2: HTTP 200 in  320 ms  rows=50
+       C base table, no view (control)    attempt 3: HTTP 200 in  319 ms  rows=50
+
+ORACLE MET on both halves: the index is in use, and the statement completes inside the timeout on
+three consecutive attempts — twice over, on two independent paths.
+
+The controls carry the argument further than the oracle needed to. Control C, the plain base-table
+read the finding cited as its healthy baseline (470 ms then), took 852 ms on its second attempt —
+LONGER than the query that is supposed to be the sick one. And the accountant, whose "first try
+succeeded" was offered as the contrast, is now within 13 ms of the owner on the identical route.
+There is no owner-versus-accountant difference to explain: the RLS branch that admits these rows,
+`scope_class='cross_scope' AND scope_domain='organization_identity_platform'`, does not consult the
+role beyond `auth_role() = ANY('{owner,accountant}')`, which both satisfy.
+
+COULD THE TIMEOUT BE REPRODUCED?  NO. Six owner attempts across two paths, zero failures. Stated
+plainly rather than papered over: I could not make it fail. What the plan predicts is in 1.5.
+
+
+1.5 WHAT THE 500s ACTUALLY WERE — measured, not inferred
+---------------------------------------------------------
+The `authenticated` role carries statement_timeout=8s (pg_roles.rolconfig; `anon` 3s, `authenticator`
+8s). Anything that reaches 8 s is cancelled with SQLSTATE 57014 and PostgREST returns HTTP 500 —
+which is the exact error the sweep recorded.
+
+pg_stat_statements has been accumulating since 2026-07-15. Counting query shapes whose MINIMUM
+execution is under 50 ms and whose MAXIMUM lands in the 7.0-8.2 s band — i.e. shapes that are
+normally instant and have nonetheless been cancelled at the wall:
+
+    TEN distinct shapes. In descending call count:
+
+      0.38 ms min -> 7473.5 ms max (calls=51515) | select "public"."check_plan_request"()
+     10.00 ms min -> 7023.1 ms max (calls=40949) | select private.dispatch_document_interpretations()
+      0.13 ms min -> 7628.6 ms max (calls=19331) | ...pgrst RPC (p_lease_owner, p_lease_seconds)
+      0.30 ms min -> 7264.0 ms max (calls=778)   | ...payments id/amount/currency/paid_date
+      5.51 ms min -> 7817.2 ms max (calls=318)   | ...supplier_balances supplier_id/open_balance
+      8.06 ms min -> 7847.1 ms max (calls=158)   | ...pgrst RPC (p_window_days)
+     21.58 ms min -> 7001.9 ms max (calls=152)   | ...supplier_balances_by_currency
+      6.02 ms min -> 7887.1 ms max (calls=84)    | ...pgrst RPC (p_job_id, p_extraction_id, p_actor_id)
+     18.96 ms min -> 7585.4 ms max (calls=68)    | ...pgrst RPC (p_run_id, p_conversation_id, ...)
+     25.79 ms min -> 7278.0 ms max (calls=55)    | ...pgrst RPC (p_job_id, p_extraction_id, ...)
+
+The first line is the one that settles it. `public.check_plan_request()` is this project's
+PostgREST `db_pre_request` hook (`pgrst.db_pre_request=public.check_plan_request` on role
+`authenticator`). It runs as a SEPARATE STATEMENT before EVERY REST request, in the same
+transaction, and its body is a GUC read plus, for authenticated callers, a lookup in
+`private.plan_api_capability_rules`. Its three pg_stat_statements entries:
+
+    calls=333057  min=0.05 ms  mean= 0.39 ms  max=1270.9 ms  stddev=  8.4
+    calls= 51515  min=0.38 ms  mean=21.36 ms  max=7473.5 ms  stddev=147.9
+    calls=    95  min=0.06 ms  mean= 3.89 ms  max= 154.2 ms  stddev= 18.6
+
+A hook whose median is a fraction of a millisecond has been observed taking 7.47 seconds. When it
+does, the request is cancelled before the user's own query is ever planned, and the client is told
+`57014 canceling statement due to statement timeout` with nothing naming which statement was
+cancelled. That is indistinguishable, from the browser, from the read itself timing out.
+
+The instance is micro-class: max_connections=60, shared_buffers=224MB, effective_cache_size=384MB,
+work_mem=2184kB. `shared_read` is 0 on every audit statement listed here, so this is not disk I/O;
+it is CPU/scheduler contention on a small box, and it hits whatever is in flight.
+
+The finding's own sentence — "it is not the table and it is not the session, it is this view plus
+this filter" — is refuted by measurement in three independent ways:
+  (i)   The SAME view WITHOUT the filter is HEAVIER, not lighter. The exact-count variant PostgREST
+        issues for a `Prefer: count=exact` header reads the whole tenant history twice:
+            Aggregate  (cost=89545.47..89545.48 rows=1 width=8) (actual time=617.570..617.572 rows=1 loops=1)
+              Buffers: shared hit=29910
+              ->  Index Scan using audit_logs_org_idx on audit_logs  (cost=0.54..89542.22 rows=260 width=344) (actual time=2.407..612.961 rows=26508 loops=1)
+                    Index Cond: (org_id = auth_org())
+                    Buffers: shared hit=29910
+            Planning Time: 3.057 ms
+            Execution Time: 617.965 ms
+        29,910 buffers against the filtered read's 2,318 — thirteen times the work — and it has
+        never been cancelled. In pg_stat_statements that shape reads
+        calls=3 min=1303.4 mean=1900.2 max=2806.1 ms, all successful.
+  (ii)  The accountant's identical read of the identical rows through the identical view is
+        24.5 / 30.3 ms server-side (pg_stat_statements, calls=2). Same view, same filter, same
+        barrier, same policy branch.
+  (iii) Ten unrelated shapes, including a pre-request hook that touches none of this, peak at the
+        same 8 s wall.
+
+WHY THE SWEEP'S FAILING CALLS LEFT NO SERVER-SIDE TRACE, PROVED RATHER THAN ASSUMED.
+The sweep's exact query shape is in pg_stat_statements exactly once:
+
+    calls=1 min=1400.1 mean=1400.1 max=1400.1 stddev=0.0 hit=2297 read=0
+    | WITH pgrst_source AS ( SELECT "audit_log_read_model"."id", ."user_id", ."reason", ."created_at"
+        FROM "public"."audit_log_read_model" WHERE ."action" = $1 LIMIT $2 OFFSET $3 ) SELECT $4::b...
+
+One call, 1400.1 ms — which matches the sweep's own successful sample (`password_rows_2 = HTTP 200
+after 2369 ms` end-to-end, i.e. ~1.4 s in the backend plus PostgREST, the pre-request hook and the
+network). The two cancelled calls are absent, and that is not an anomaly. Measured directly, on
+this server, as role `authenticated`:
+
+    -- probe 1: SET LOCAL statement_timeout='300ms'; select 1 /* perm03_cancel_probe_9c4e */ from pg_sleep(3)
+    EXPECTED FAILURE: ERROR: 57014: canceling statement due to statement timeout
+    -- probe 2, a separate connection:
+    cancel_probe_row = (no pgss row)
+    VERDICT = pg_stat_statements does NOT record a statement cancelled by statement_timeout
+
+So `calls=1` is exactly what a run of "one success, two cancellations" leaves behind here. The
+number is consistent with the finding's narrative; it just is not evidence about the predicate.
+
+
+1.6 PERM-03 — CONCLUSION AND THE FIX THAT IS DELIBERATELY NOT MADE
+-------------------------------------------------------------------
+No index is added. No predicate is rewritten. The plan is the proof, per the row's own instruction.
+
+The option was costed and rejected on the measurement, not on effort. An index on
+`(org_id, action, created_at DESC)` would turn the 26,508-row walk into a 2-row lookup and take the
+read from 67 ms to under a millisecond. It would not have prevented a single one of the observed
+500s, because the observed 500s are an 8 s wall that ten shapes hit, one of which does no table
+work at all. Adding an index to a query that is already 67 ms, in response to a failure it did not
+cause, is precisely the unmeasured change this campaign exists to stop — and it would leave the
+real cause in place, where it will produce the same HTTP 500 on the next screen someone looks at.
+
+TWO RESIDUALS, RECORDED RATHER THAN SILENTLY FIXED. Neither is claimed as PERM-03's defect and
+neither is closed here; both want a DEBT section number, which this PR was not given.
+
+  R1 — INSTANCE-WIDE STALLS. Ten query shapes with sub-50 ms minimums have been cancelled at the
+       8 s `authenticated` ceiling, `check_plan_request()` among them at 7,473.5 ms on a 0.39 ms
+       mean. Every REST call in the product passes through that hook, so while it stalls the whole
+       API returns HTTP 500. This is the same class of event as ASSIST-11 in this sweep
+       (`management_dashboard_snapshot` intermittently times out) and as the previously recorded
+       502 on `my_subscription`. It is a capacity/observability item on a micro-class instance,
+       not a defect in any one query, and it is the actual cause of PERM-03 as filed.
+
+  R2 — THE AUDIT READ SCALES WITH TENANT HISTORY. Any filter on `action` walks the tenant's whole
+       audit history behind the leakproof comparison: today 26,508 rows and 2,318 buffers for a
+       2-row answer, and it grows linearly. It is cheap now and will not stay cheap. Related, and
+       already filed: OWN-11 (the ledger is hard-capped at 400 rows with no paging). If a future
+       screen filters this view by `action` over a larger tenant, the composite index above is the
+       answer — proposed then, on a measurement taken then.
+
+
+================================================================================================
+PART 2 — PERM-05
+"Two password_changed audit rows 1.4 s apart for the same user — either the deploy set the
+ password twice or one mutation writes two rows."
+Oracle: each `password_changed` row ties back to exactly one Auth request.
+================================================================================================
+
+2.1 THE TWO ROWS, READ FROM PRODUCTION
+---------------------------------------
+Both rows in public.audit_logs where action='password_changed'. These are the only two in the
+entire table (27,533 rows):
+
+  85413c21-2c01-478d-9160-ad83ad1d94ef | 2026-09-03 21:42:57.546511+00
+      user_id       = 273d686e-f15e-4af7-a4ee-d21269e5b6a0
+      entity        = auth.users / 273d686e-f15e-4af7-a4ee-d21269e5b6a0
+      scope         = cross_scope / organization_identity_platform
+      reason        = 'הסיסמה של המשתמש הוחלפה'
+      correlation_id = null   causation_id = null   old_values = null   new_values = null
+
+  4f4d5bc8-3fe4-485d-a25b-3fe2dc138aac | 2026-09-03 21:42:58.985191+00
+      user_id       = 273d686e-f15e-4af7-a4ee-d21269e5b6a0
+      entity        = auth.users / 273d686e-f15e-4af7-a4ee-d21269e5b6a0
+      scope         = cross_scope / organization_identity_platform
+      reason        = 'הסיסמה של המשתמש הוחלפה'
+      correlation_id = null   causation_id = null   old_values = null   new_values = null
+
+  Interval: 1.438680 s.  273d686e-... is the OWNER of org 11111111-1111-4111-8111-111111111111
+  (public.profiles: role=owner, active=true) — as the finding said.
+
+
+2.2 CAN ONE MUTATION WRITE TWO ROWS? NO — the live trigger, read from the database
+-----------------------------------------------------------------------------------
+pg_trigger on auth.users, user triggers only: COUNT = 1, name = audit_password_change.
+pg_get_triggerdef:
+
+    CREATE TRIGGER audit_password_change AFTER UPDATE ON auth.users
+    FOR EACH ROW
+    WHEN (((old.encrypted_password)::text IS DISTINCT FROM (new.encrypted_password)::text))
+    EXECUTE FUNCTION private.audit_auth_password_change()
+
+FOR EACH ROW, one row affected per GoTrue update, one INSERT in the function body (no loop, no
+second insert path). There is no second trigger on the table that could file a duplicate. So two
+rows require two UPDATE statements in which `encrypted_password` genuinely differed.
+
+supabase/tests/p4_flags_identity.sql section (g), lines 1014-1070, asserts exactly that and asserts
+the two ways it could have been wrong — per row, never by a table-wide count:
+  :1026-1038  one UPDATE of encrypted_password  -> `count(*) = 1` for that entity_id, with org_id,
+              user_id, entity_type and a non-null reason all pinned in the same predicate.
+  :1050-1058  an UPDATE of last_sign_in_at       -> still `count(*) = 1`
+              ("a sign-in was recorded as a password change")
+  :1063-1070  an UPDATE of raw_user_meta_data    -> still `count(*) = 1`
+              ("a metadata update was recorded as a password change")
+The row's citation of `p4_flags_identity.sql:1025` is accurate; :1025-1028 is the UPDATE that the
+first assertion measures.
+
+
+2.3 THE TIE-BACK — two Auth requests, recorded before the sweep ever ran
+-------------------------------------------------------------------------
+docs/ROLLOUT-0291-0314-20260904.md, section 5 "הראיות", line 123-124, written by the rollout that
+applied 0293 on 2026-09-03:
+
+    - **שינוי סיסמה + `0293`:** שורות `password_changed` ‏0 → 1 אחרי שינוי אמיתי → 2 אחרי ההחזרה.
+      הסיסמה המקורית הוחזרה **ואומתה בכניסה בפועל**.
+
+    ["Password change + 0293: `password_changed` rows 0 -> 1 after a real change -> 2 after the
+      restore. The original password was restored AND verified by an actual sign-in."]
+
+Two mutations, counted one at a time as they happened: the rollout set the owner's password to
+prove 0293's trigger fires, then restored the original and proved the restore by signing in with
+it. Two Auth requests. Two rows. 1.439 s apart is the interval between a set and its restore, which
+is what that line describes.
+
+Corroboration from the auth schema itself: `auth.users` for the owner shows
+recovery_sent_at = 2026-09-03 22:19:34.777262+00 — 37 minutes AFTER these rows, so no recovery flow
+is involved in them; and GoTrue's own user UPDATE statement
+(`UPDATE "users" AS users SET ... "encrypted_password" = $6 ...`) stands at calls=11 / rows=11 in
+pg_stat_statements across the whole retention window, i.e. GoTrue writes this table rarely and
+individually.
+
+VERDICT: CORRECT BEHAVIOUR. Each row ties back to one Auth request. PERM-05 is not a defect and no
+trigger change is proposed. This is the outcome the ledger row and plan section A6 both anticipated.
+
+
+2.4 THE ONE THING THAT DID NOT HOLD UP, and the residual it leaves
+--------------------------------------------------------------------
+Migration 0293's own header rejects `auth.audit_log_entries` as a reconciliation source because it
+records a password change as `user_modified` with no field naming which attribute changed. That
+reasoning stands, and production adds a harder fact to it:
+
+    select count(*) from auth.audit_log_entries                       -> 0
+    select count(*) ... where payload->>'action' = 'user_modified'    -> 0
+    min/max created_at                                                -> null
+
+The table is EMPTY in production. There is no GoTrue-side event log to tie to at all.
+
+  R3 — A `password_changed` ROW CARRIES NO TIE-BACK HANDLE. Both rows have correlation_id = null,
+       causation_id = null, old_values = null and new_values = null, and `auth.audit_log_entries`
+       is empty. The columns exist on the view (`correlation_id`, `causation_id` are selected by
+       `audit_log_read_model`) and indexes exist for them
+       (audit_logs_correlation_idx, audit_logs_causation_idx — both at scans=0), so the surface is
+       there and unused for this row class. Today the ONLY thing that can answer "which Auth
+       request wrote this row" is a prose line in a rollout document. That was sufficient here
+       because the rollout wrote one down; the next time two rows appear 1.4 s apart, whoever asks
+       will have nothing inside the product to answer with, and will file PERM-05 again.
+
+       This is NOT PERM-05's defect and is deliberately not fixed here: 0293 states in its own
+       header that the trigger cannot see who made the HTTP call, and giving the row a request
+       identifier is a design question about what GoTrue can be made to pass into its transaction —
+       an owner-level decision with a migration behind it, not a diagnosis. Recorded for the
+       coordinator; it wants a DEBT section number this PR does not hold.
+
+
+================================================================================================
+APPENDIX — every statement issued against production, and what it did
+================================================================================================
+READS ONLY. In order:
+  01  pg_get_viewdef / pg_class.reloptions / pg_policy / pg_indexes / two counts on audit_logs
+  02  pg_proc for auth_org, auth_role, auth_scopes (volatility, cost, leakproof, secdef, body)
+  03  current_user, statement_timeout, pg_roles.rolconfig, public.profiles, the two password rows,
+      cross-scope and identity row counts, user_scope_closure count
+  04  pg_attribute + pg_operator: the type of `action` and the leakproofness of its `=`
+  05  SET LOCAL ROLE authenticated; select current_user   (confirms the role switch and that it
+      reverts with the implicit transaction)
+  06  EXPLAIN (ANALYZE, BUFFERS, VERBOSE) of the owner's read, as role authenticated   [section 1.2]
+  07  three timed executions of the read inside one DO block  (superseded by 18 — see below)
+  08  pg_stat_statements filtered to audit_log_read_model, plus the slowest shapes overall
+  09  version(), the 7.0-8.2 s cliff population, pg_stat_database.stats_reset, sizes, GUCs
+  10  auth.audit_log_entries in the deploy window, auth.users for the owner, pg_get_triggerdef
+  11  auth.audit_log_entries totals and actions, pg_stat_statements for encrypted_password writers
+  12  a first attempt at the cancellation probe — INVALID, see the note below
+  13  pg_get_functiondef(check_plan_request), its pgss rows, the sub-50 ms-to-the-wall population,
+      pg_stat_activity, max_connections
+  14  SET LOCAL statement_timeout='300ms'; select 1 /* marker */ from pg_sleep(3)  -> 57014, on
+      purpose, as role authenticated
+  15  pg_stat_statements looked up by that marker  -> no row   [proves 1.5's last claim]
+  16  EXPLAIN (ANALYZE, BUFFERS) of the hand-written cross-scope variant and of the count variant
+  17  pg_stat_user_tables / pg_stat_user_indexes / action histogram / sizes / GUCs
+  18  three separate round trips, each SET LOCAL ROLE authenticated + SET LOCAL statement_timeout
+      = '8s' + the read   [section 1.4 run A]
+  REST  one Node script: password grant for owner@gamos.demo and accountant@gamos.demo, then 9 GETs
+      per role   [section 1.4 run B]
+
+CORRECTION MADE MID-FLIGHT, stated because the campaign requires it. Statement 07 set
+`statement_timeout` INSIDE a DO block. statement_timeout is armed once per top-level statement, so
+it was never in force for the EXECUTEs within — that run measured the query correctly (12.4 /
+12.8 / 19.4 ms) but did NOT test the timeout. Statement 12 failed for the same reason and returned
+a misleading 22P02 from an unrelated array-literal error. Both were discarded and replaced: 14/15
+arm the timeout at statement level and do reproduce a 57014, and 18 is the three-attempt oracle
+re-run with the timeout genuinely armed. The numbers quoted in sections 1.4 and 1.5 are from the
+corrected runs only.
+
+NOT RUN, and why:
+  - No local Supabase stack command of any kind. The lock (.claude/locks/supabase) is held by PR 17
+    and this work needed nothing from it.
+  - No `npm run verify`, no `npm run quality`, no gate script. This PR changes no code, no
+    migration and no suite, so there is no guard whose subject matter it touches.
+  - No write to production. No index created. No policy or trigger altered.

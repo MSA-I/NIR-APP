@@ -1,0 +1,91 @@
+PR 10 — REQ-01 — the /payment-requests approval panel, read at 1440x900.
+System Edge through playwright-core 1.62.1, deviceScaleFactor 2, reducedMotion: reduce, locale he-IL,
+static server on 127.0.0.1:5381 (not 5199, which belongs to the project and possibly to another agent).
+
+HOW THESE WERE RENDERED, AND WHAT THAT DOES AND DOES NOT PROVE.
+The shared local Supabase stack is held by another agent this wave, so nothing here was rendered
+against a database. `PaymentRequestDetail` was mounted in jsdom against hand-written fixtures — the
+same MSW fixtures the oracle uses — and the markup it produced was written to .tmp and served to a
+real browser together with the product's OWN built stylesheet (`vite build` into .tmp/dist, the
+Tailwind v4 output from `src/index.css`). So the colours, the disabled state, the RTL layout and the
+type are the product's; the DATA is fixture data. These images prove WHAT THE COMPONENT DRAWS for a
+given server answer. They do not prove what the server answers — that is `p1_transition_payment_request`
+and it is untouched by this PR.
+No git state was changed to produce them. The harness spec that emitted the markup lived in the tree
+for the length of the run and was deleted; `.tmp/` is gitignored.
+NOT rendered: the live tenant, the list screen behind the modal, and 390px — REQ-01 is not a mobile
+finding and the panel it names is this modal.
+
+------------------------------------------------------------------------------------------------
+PR10-GREEN-approval-blocked-1440x900.png            the defect's own case, after the fix
+------------------------------------------------------------------------------------------------
+Fixture: request #21, 90.00 ILS, one linked invoice LIVE-E2E-6430D260 whose review_status is
+`received`; signals `unapproved_invoice_count: 1`, `paid_invoice_count: 0`, `over_allocated_invoice_count: 0`.
+That is the row the sweep opened.
+
+READ, top to bottom:
+  דרישת תשלום #21 — משק ירוק — ירקות ופירות
+  [ממתינה לאישור]  90.00 ₪   יעד: 12.09.2026
+  חשבוניות מקושרות
+    חשבונית LIVE-E2E-6430D260 · 01.08.2026  [טרם אושרה]        90.00 ₪
+  (alert) הדרישה ממתינה לאישור החשבונית LIVE-E2E-6430D260 לתשלום. עד שתאושר, האישור ייחסם בשרת.
+  בדיקות לפני אישור
+  (alert) לא ניתן לאשר את הדרישה במצבה הנוכחי.
+          חסימה אחת · אזהרה אחת
+          הדרישה כוללת חשבונית שטרם אושרה לתשלום
+          פירוט הבדיקות (2)
+  [ אישור הדרישה ]  [ ביטול ]
+
+The button row is the finding. BEFORE, in the same fixture (see the DOM dump in
+PR10-REQ-01-RED.txt, lines 210-241): `<button class="btn-danger">אישור למרות האזהרות</button>` — no
+`disabled` attribute, crimson, sitting directly under a panel that says approval is impossible, and
+calling the blocking check a warning.
+
+AFTER, measured off the live DOM in the browser (PR10-screen-read.json):
+  text        "אישור הדרישה"
+  aria-label  "אישור חסום — חשבונית בדרישה טרם אושרה לתשלום. יש לאשר אותה לתשלום תחילה."
+  class       btn-secondary
+  disabled    true
+  background  oklch(0.966 0.011 195)   — the muted surface, not the crimson btn-danger
+Only one approval control renders, it is closed, and its accessible name carries the reason and the
+step. The exceptional credit route is not offered at all, which is deliberate: `0073:639-663` re-runs
+the identical barrier, so offering it would be a second door to the same refusal.
+`ביטול` stays enabled — it is the only move the state machine still allows from here.
+
+Read as a picture, not only as a DOM: the closed button reads as closed. It is pale against the
+panel, its label sits in muted ink, and the one saturated control left on the row is the destructive
+`ביטול`, which is the correct hierarchy — there is nothing here to press hopefully.
+
+TWO OBSERVATIONS, neither introduced by this PR, both left alone on purpose:
+1. Two red boxes now stack: PR 7's dependency sentence (which invoice) and the checks panel (that AN
+   invoice is unapproved). That is one fact in two boxes, which is the shape the owner ruled against
+   on 19.08.2026 — but the naming sentence is `REQ-02`'s landed oracle and removing or folding it
+   would break a green row. Flagged for whoever reviews the wave, not touched here.
+2. The disabled `btn-secondary` label sits at low contrast. That is the shared disabled style and
+   the `overAllocated` precedent renders identically; it is a token question, not this row's.
+
+------------------------------------------------------------------------------------------------
+PR10-GREEN-approval-open-control-1440x900.png       the door that must STAY open
+------------------------------------------------------------------------------------------------
+Fixture: identical request, invoice 9001 `approved`, `unapproved_invoice_count: 0`, no criticals —
+one warning only (the bank-transfer probe is `unavailable`).
+
+READ:
+  בדיקות לפני אישור
+  (await) אין ממצא חוסם. יש אזהרות שכדאי לעבור עליהן לפני האישור.
+          אזהרה אחת · פירוט הבדיקות (1)
+  [ אישור הדרישה ]  [ ביטול ]
+
+  text "אישור הדרישה" · class btn-primary · disabled FALSE · background oklch(0.3366 0.058 209)
+
+The approval stays open and stays the primary action. This is the half a fix like this gets wrong:
+closing a button is only correct where the server refuses ABSOLUTELY, and `review_status <> 'approved'`
+is the one arm on this panel that does. A warning is still a warning.
+
+WHY NO THIRD IMAGE FOR THE "already paid" CRITICAL. `invoice_paid_*` fires on `balance <= 0`
+(`0219:342`), and an allocation above that same balance is exactly what `over_allocated_invoice_count`
+counts, with the identical expression (`0219:409-423`) the approval barrier uses. So a paid invoice
+carrying a positive allocation always arrives with `over_allocated_invoice_count >= 1` and is already
+closed by `overAllocated` (0146). A fixture with `paid_invoice_count: 1` and
+`over_allocated_invoice_count: 0` is a combination the server cannot produce, and rendering one would
+have been a picture of a state that does not exist.

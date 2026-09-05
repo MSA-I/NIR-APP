@@ -1,0 +1,54 @@
+PR23 — the checks this branch ran, and the ones it deliberately did not
+
+$ npx tsc --noEmit
+  (clean)
+
+$ npm run check:assistant-no-send
+  assistant-no-send: OK
+
+$ npm run check:assistant-tool-schemas
+  check:assistant-tool-schemas passed: 18 tool declaration(s); every property is required, so strict mode accepts them.
+
+$ npm run check:i18n
+  check:i18n passed: 64 file(s) still carry 911 Hebrew line(s), all at their pinned counts (64 documented exception(s)).
+
+$ npm run check:orphan-keys
+  check:orphan-keys passed: 6057 leaf key(s), 106 with no call site, pinned.
+
+$ npm run check:plurals
+  check:plurals passed: 76 counted phrase(s), 31 with a singular sibling, 45 pinned.
+
+$ npm run check:plan-labels
+  check:plan-labels passed: 37 Hebrew label(s) match their seeded row.
+
+$ npm run check:key-manifest
+  check:key-manifest passed: 5567 keys considered, 107 without a production call site — the same names as the baseline, none newly stranded, none spec-only.
+
+$ npm run check:typography
+  Typography contract passed (557 source files).
+
+$ npm run check:jsx-space
+  check:jsx-space passed: 153 .tsx file(s), no glued translated expressions.
+
+$ npm run check:dead-code
+  (clean)
+
+$ npx vitest run  (the whole unit suite)
+  RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a94afa0d4fae1a715
+  
+  Not implemented: navigation to another Document
+  Not implemented: navigation to another Document
+  Not implemented: navigation to another Document
+  Not implemented: navigation to another Document
+  
+   Test Files  267 passed (267)
+        Tests  2651 passed (2651)
+     Start at  17:22:55
+     Duration  108.60s (transform 91.45s, setup 236.19s, import 241.19s, tests 310.31s, environment 619.34s)
+
+NOT RUN, ON PURPOSE:
+  npm run verify   — its 32 sub-commands include guards this branch does not touch, and
+                     the coordinator asked for the named subset instead.
+  npm run quality  — the heavy integration gate; single-occupancy on this machine.
+  any SQL suite    — scripts/ci-sql-suites.mjs without --list RESETS the local database,
+                     and another agent holds that stack for this wave.

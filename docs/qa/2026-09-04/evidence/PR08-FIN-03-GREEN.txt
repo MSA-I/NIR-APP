@@ -1,0 +1,42 @@
+PR 08 — GREEN — FIN-03
+
+  npx vitest run src/pages/payQueueSettledBalance.spec.tsx src/pages/payQueueBalanceArithmetic.spec.ts
+
+  Test Files  2 passed (2)
+       Tests  12 passed (12)
+
+Full run: docs/qa/2026-09-04/evidence/PR08-RUN-GREEN.txt
+
+The four assertions this row owns now pass:
+
+  ✓ marks a queued request whose invoices are already settled
+  ✓ shows the invoice live balance beside the approved amount in the dialog
+  ✓ draws the em dash, not a zero, when the balance could not be read
+  ✓ surfaces the open duplicate-payment exception the product already holds
+
+THREE ANSWERS, NOT TWO. The third assertion is the half that could have been lost: when
+`invoice_balances_by_currency` returns NO ROW the figure is `—`, not `0.00`, and the settled mark
+does NOT appear. A row absent means the reader's role may not value that invoice (0218); printing
+that as a settled zero would make "paid in full" and "could not be read" the same statement on an
+execution screen. Same rule as the balance column on /invoices (FIN-09/MON-09), decided in one
+place — `paymentRequestBalance`.
+
+`payQueueBalanceArithmetic.spec.ts` pins the three ways the number itself goes wrong, none of
+which a one-invoice fixture can reach: a partial answer summed as if it were whole, an invoice the
+request names twice counted twice, and a floating-point remainder (0.1 + 0.2 - 0.3 = 5.55e-17)
+that would hide the settled mark forever.
+
+BROWSER READING, same harness as the RED, after the fix:
+
+  queue card 1 : "נקי וזוהר · 300.00 ₪ · מאושרת · לתשלום עד 10.09.2026 · חשבונית אחת ·
+                  יתרה לתשלום בחשבוניות 0.00 ₪ · החשבוניות כבר נפרעו · קיים חריג פתוח"
+  queue card 2 : "חוות השדה · 299.00 ₪ · … · יתרה לתשלום בחשבוניות 0.00 ₪ · החשבוניות כבר נפרעו"
+  dialog       : "המערכת פתחה חריג על הדרישה הזו. כדאי לקרוא אותו לפני רישום ההעברה:
+                  חשד לתשלום כפול · חשד לדרישת תשלום כפולה — #12 · נקי וזוהר · פתיחת החריג"
+                 "…סכום להעברה בפועל 300.00 ₪ / יתרה לתשלום בחשבוניות 0.00 ₪…"
+  showsBalanceLabel : true
+  showsException    : true
+
+Screenshots read and compared: PR08-GREEN-pay-queue-1440x900.png,
+PR08-GREEN-pay-dialog-1440x900.png, PR08-GREEN-pay-dialog-dark-1440x900.png. See
+PR08-SCREEN-READ.txt.

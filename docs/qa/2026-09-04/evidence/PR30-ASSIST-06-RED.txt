@@ -1,0 +1,83 @@
+﻿
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-afd3bd9c7823f7049
+
+ ❯ src/pages/expensesReproducesCitedMetrics.spec.tsx (5 tests | 3 failed) 419ms
+     × shows the approved gross the assistant quotes 193ms
+     × shows the net the assistant quotes 63ms
+     × shows the commitment the assistant quotes 48ms
+node.exe : 
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/expensesReproducesCitedMetrics.spec.tsx > ASSIST-06 — the cited screen holds the claim it is cited for > shows the approved gross the assistant quotes
+AssertionError: expected 'ריכוז הוצאותריכוז ההוצאות לפי ספק ולפ…' to contain '562.00'
+
+Expected: "562.00"
+Received: "ריכוז הוצאותריכוז ההוצאות לפי ספק ולפי קטגוריה בטווח תאריכים נבחר, לצפייה, להדפסה ולייצוא. ייצוא Excel הורדת PDF הדפסההחודשחודש קודם3 חודשיםשנהמ־עדדיווח · REPORTריכוז הוצאותארגון בדיקה · 
+05.08.2026 – 04.09.2026סה״כ הוצאות בטווח‏663‏₪05.08.2026 – 04.09.2026מספר חשבוניות2חשבוניות שאינן מחוקות בטווחממוצע לחשבונית‏332‏₪סה״כ חלקי מספר החשבוניות, בכל מטבע בנפרדהוצאות לפי ספקמשק ירוק1 
+חשבוניות · 54.8% מהסך ב-ILS‏363.00‏₪חוות השדה1 חשבוניות · 45.2% מהסך ב-ILS‏300.00‏₪ספקחשבוניותסה״כ% מהסךמשק ירוק1‏363.00‏₪54.8%חוות השדה1‏300.00‏₪45.2%2 רשומותפירוט מוצרים לפי קטגוריהמידע משלים 
+מהזמנות מקושרות; אינו מחליף את סכומי החשבוניות בטבלת הספקים.הצג פירוטחשבוניות מקושרות בסך — מתוך ‏663‏₪. הסכומים למטה הם ערכי פריטי ההזמנה במחירי snapshot.אין בטווח חשבוניות עם הזמנה מקושרת ופריטי 
+קטגוריה."
+
+ ❯ src/pages/expensesReproducesCitedMetrics.spec.tsx:117:24
+    115|     renderExpenses();
+    116|     await screen.findAllByText('חוות השדה');
+    117|     expect(pageText()).toContain('562.00');
+       |                        ^
+    118|   });
+    119|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  src/pages/expensesReproducesCitedMetrics.spec.tsx > ASSIST-06 — the cited screen holds the claim it is cited for > shows the net the assistant quotes
+AssertionError: expected 'ריכוז הוצאותריכוז ההוצאות לפי ספק ולפ…' to contain '522.00'
+
+Expected: "522.00"
+Received: "ריכוז הוצאותריכוז ההוצאות לפי ספק ולפי קטגוריה בטווח תאריכים נבחר, לצפייה, להדפסה ולייצוא. ייצוא Excel הורדת PDF הדפסההחודשחודש קודם3 חודשיםשנהמ־עדדיווח · REPORTריכוז הוצאותארגון בדיקה · 
+05.08.2026 – 04.09.2026סה״כ הוצאות בטווח‏663‏₪05.08.2026 – 04.09.2026מספר חשבוניות2חשבוניות שאינן מחוקות בטווחממוצע לחשבונית‏332‏₪סה״כ חלקי מספר החשבוניות, בכל מטבע בנפרדהוצאות לפי ספקמשק ירוק1 
+חשבוניות · 54.8% מהסך ב-ILS‏363.00‏₪חוות השדה1 חשבוניות · 45.2% מהסך ב-ILS‏300.00‏₪ספקחשבוניותסה״כ% מהסךמשק ירוק1‏363.00‏₪54.8%חוות השדה1‏300.00‏₪45.2%2 רשומותפירוט מוצרים לפי קטגוריהמידע משלים 
+מהזמנות מקושרות; אינו מחליף את סכומי החשבוניות בטבלת הספקים.הצג פירוטחשבוניות מקושרות בסך — מתוך ‏663‏₪. הסכומים למטה הם ערכי פריטי ההזמנה במחירי snapshot.אין בטווח חשבוניות עם הזמנה מקושרת ופריטי 
+קטגוריה."
+
+ ❯ src/pages/expensesReproducesCitedMetrics.spec.tsx:124:24
+    122|     renderExpenses();
+    123|     await screen.findAllByText('חוות השדה');
+    124|     expect(pageText()).toContain('522.00');
+       |                        ^
+    125|   });
+    126|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  src/pages/expensesReproducesCitedMetrics.spec.tsx > ASSIST-06 — the cited screen holds the claim it is cited for > shows the commitment the assistant quotes
+AssertionError: expected 'ריכוז הוצאותריכוז ההוצאות לפי ספק ולפ…' to contain '96,702.29'
+
+Expected: "96,702.29"
+Received: "ריכוז הוצאותריכוז ההוצאות לפי ספק ולפי קטגוריה בטווח תאריכים נבחר, לצפייה, להדפסה ולייצוא. ייצוא Excel הורדת PDF הדפסההחודשחודש קודם3 חודשיםשנהמ־עדדיווח · REPORTריכוז הוצאותארגון בדיקה · 
+05.08.2026 – 04.09.2026סה״כ הוצאות בטווח‏663‏₪05.08.2026 – 04.09.2026מספר חשבוניות2חשבוניות שאינן מחוקות בטווחממוצע לחשבונית‏332‏₪סה״כ חלקי מספר החשבוניות, בכל מטבע בנפרדהוצאות לפי ספקמשק ירוק1 
+חשבוניות · 54.8% מהסך ב-ILS‏363.00‏₪חוות השדה1 חשבוניות · 45.2% מהסך ב-ILS‏300.00‏₪ספקחשבוניותסה״כ% מהסךמשק ירוק1‏363.00‏₪54.8%חוות השדה1‏300.00‏₪45.2%2 רשומותפירוט מוצרים לפי קטגוריהמידע משלים 
+מהזמנות מקושרות; אינו מחליף את סכומי החשבוניות בטבלת הספקים.הצג פירוטחשבוניות מקושרות בסך — מתוך ‏663‏₪. הסכומים למטה הם ערכי פריטי ההזמנה במחירי snapshot.אין בטווח חשבוניות עם הזמנה מקושרת ופריטי 
+קטגוריה."
+
+ ❯ src/pages/expensesReproducesCitedMetrics.spec.tsx:131:24
+    129|     renderExpenses();
+    130|     await screen.findAllByText('חוות השדה');
+    131|     expect(pageText()).toContain('96,702.29');
+       |                        ^
+    132|   });
+    133|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 2 passed (5)
+   Start at  17:35:59
+   Duration  3.77s (transform 921ms, setup 556ms, import 1.38s, tests 419ms, environment 1.17s)
+
+

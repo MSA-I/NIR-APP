@@ -26,6 +26,7 @@ import { DOCUMENT_PROCESSING_CHANGED_EVENT, useDocumentProcessing } from '../lib
 import { useQuery, unwrap } from '../lib/useQuery';
 import {
   attemptUiStatus,
+  priceReviewPriceKind,
   recoveryInvokeErrorMessage,
   selectPrimaryOperationalIssue,
   type OperationalAttemptState,
@@ -104,7 +105,12 @@ const PRICE_ACTION_KEYS: Record<string, TKey> = {
 
 function attemptFilterKey(attempt: DocumentControlAttempt): Exclude<AttemptFilter, 'all'> {
   const status = attemptUiStatus(attempt);
-  if (status.state === 'failed' || status.state === 'stuck' || status.state === 'review') return 'attention';
+  // `awaiting_scan` belongs with `review` and not in the residual bucket, for the reason
+  // `documentStatus.ts` gives when it ranks the two together: both are work that stopped and waits
+  // on a person. It reached this line as the residual before OWN-08 and would have gone on falling
+  // through to `completed` after it — a document nobody has looked at, filed under „הושלם".
+  if (status.state === 'failed' || status.state === 'stuck'
+    || status.state === 'review' || status.state === 'awaiting_scan') return 'attention';
   if (status.state === 'processing') return 'processing';
   return 'completed';
 }
@@ -172,6 +178,18 @@ export default function DocumentOperations() {
       stuck_reason: snapshot.job.stuck_reason ?? null,
     }] : []), [attemptNames, currentProcessing.snapshots]);
   const currentIssue = useMemo(() => selectPrimaryOperationalIssue(currentIssues), [currentIssues]);
+  /**
+   * How many DOCUMENTS the price rows come from — the unit the tile above counts in.
+   *
+   * OWN-07: the screen answered "how much is waiting for your decision" twice, with 40 and 737,
+   * and neither figure said what it was counting. They measure different things — the tile counts
+   * documents whose latest job is `review`, the table counts price-list lines — so the fix is that
+   * each says which, never that one query is widened until they agree.
+   */
+  const priceReviewDocuments = useMemo(
+    () => new Set((priceReviews.data ?? []).map((row) => row.document_id)).size,
+    [priceReviews.data],
+  );
   const filteredAttempts = useMemo(() => (attempts.data ?? []).filter((attempt) =>
     filter === 'all' || attemptFilterKey(attempt) === filter), [attempts.data, filter]);
 
@@ -260,7 +278,7 @@ export default function DocumentOperations() {
       // `invoice-2026-08 סופי.pdf` renders in this RTL cell as `pdf.יפוס invoice-2026-08` — the
       // extension torn off the name and parked at the far margin. Pure-Hebrew and pure-Latin names
       // are unaffected, which is why the defect survived: it needs both scripts in one name.
-      render: (row) => <span className="font-medium text-ink"><bdi>{row.file_name}</bdi></span>,
+      render: (row) => <span className="font-medium text-ink"><bdi dir="ltr">{row.file_name}</bdi></span>,
     },
     {
       key: 'status', header: t('documentOps.text_6'), priority: 1,
@@ -280,7 +298,7 @@ export default function DocumentOperations() {
   const priceReviewColumns: Column<PriceReviewRow>[] = [
     {
       key: 'document', header: t('documentOps.text_9'), priority: 1, sortValue: (row) => row.file_name,
-      render: (row) => <span><strong className="block text-ink"><bdi>{row.file_name}</bdi></strong><span className="text-xs text-ink-muted">{row.supplier_name ?? t('documentOps.text_10')}</span></span>,
+      render: (row) => <span><strong className="block text-ink"><bdi dir="ltr">{row.file_name}</bdi></strong><span className="text-xs text-ink-muted">{row.supplier_name ?? t('documentOps.text_10')}</span></span>,
     },
     {
       key: 'decision', header: t('documentOps.text_11'), priority: 1,
@@ -292,7 +310,33 @@ export default function DocumentOperations() {
     },
     {
       key: 'price', header: t('documentOps.text_16'), priority: 2, className: 'num',
-      render: (row) => <span className="num">{fmtMoneyRounded(row.current_unit_price, row.currency)} ← {fmtMoneyRounded(row.proposed_unit_price, row.currency)}</span>,
+      // The arrow is drawn only where BOTH sides exist. Everywhere else the cell shows the one
+      // figure it has — or the em dash the constitution requires — and says in words which half is
+      // missing and why. Production had 737 rows in this queue and not one with both prices: the
+      // pair was a shape the data never took, and rendering it unconditionally turned four
+      // different facts into one uninformative `— ← —` (OWN-02).
+      render: (row) => {
+        const kind = priceReviewPriceKind(row);
+        if (kind === 'pair') {
+          return <span className="num">{fmtMoneyRounded(row.current_unit_price, row.currency)} ← {fmtMoneyRounded(row.proposed_unit_price, row.currency)}</span>;
+        }
+        const noteKey: TKey = kind === 'empty_run'
+          ? 'documentOps.priceNoLines'
+          : kind === 'proposed_only'
+            ? 'documentOps.priceNoPrevious'
+            : kind === 'current_only'
+              ? 'documentOps.priceNoProposal'
+              : 'documentOps.priceNotRead';
+        const figure = kind === 'proposed_only'
+          ? row.proposed_unit_price
+          : kind === 'current_only' ? row.current_unit_price : null;
+        return (
+          <span className="num">
+            {fmtMoneyRounded(figure, row.currency)}
+            <span className="block text-xs text-ink-muted">{t(noteKey)}</span>
+          </span>
+        );
+      },
     },
   ];
 
@@ -373,7 +417,7 @@ export default function DocumentOperations() {
             <p id="document-control-attention-title" className="flex items-center gap-1.5 text-xs font-semibold">
               <AlertTriangle size={ICON.xs} aria-hidden="true" /> {t('documentOps.mostUrgentItem')}
             </p>
-            <h2 className="mt-1 truncate text-lg font-semibold text-ink"><bdi>{currentIssue.file_name}</bdi></h2>
+            <h2 className="mt-1 truncate text-lg font-semibold text-ink"><bdi dir="ltr">{currentIssue.file_name}</bdi></h2>
             <p className="mt-1">{(() => {
               const key = attemptUiStatus(currentIssue).descriptionKey;
               return key ? t(key) : null;
@@ -433,7 +477,15 @@ export default function DocumentOperations() {
       </section>
 
       <section aria-labelledby="document-control-price-title" className="space-y-3">
-        <h2 id="document-control-price-title" className="section-title">{t('documentOps.text_31')}</h2>
+        <div>
+          <h2 id="document-control-price-title" className="section-title">{t('documentOps.text_31')}</h2>
+          {/* Rendered only when there is something to describe: with an empty queue the table's own
+              empty state already says there is nothing here, and „0 מסמכים" would be a sentence
+              about a table that is not on screen. */}
+          {priceReviewDocuments > 0 && (
+            <p className="mt-1 text-sm text-ink-soft">{t('documentOps.priceQueueUnit', { count: priceReviewDocuments })}</p>
+          )}
+        </div>
         {priceReviews.loading && !priceReviews.data ? <SkeletonTable title={false} cols={4} /> : (
           <DataTable rows={priceReviews.data ?? []} columns={priceReviewColumns} pageSize={10}
             tableLabel={t('documentOps.tableLabel_2')}

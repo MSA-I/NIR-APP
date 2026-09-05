@@ -20,7 +20,7 @@ type Row = Omit<CreditRequest, 'supplier' | 'invoice'> & {
 };
 
 export default function Credits() {
-  const { t } = useT();
+  const { statusLabel, t } = useT();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const { profile, org, organizationAccess } = useAuth();
@@ -64,7 +64,10 @@ export default function Credits() {
   const columns: Column<Row>[] = [
     { key: 'num', header: t('credits.numberHeader'), sortValue: (r) => r.number, render: (r) => `#${r.number}` },
     { key: 'supplier', header: t('credits.text'), sortValue: (r) => r.supplier.name, render: (r) => r.supplier.name },
-    { key: 'reason', header: t('credits.statusLabel'), render: (r) => CREDIT_REASON[r.reason] },
+    // `CREDIT_REASON` maps a stored value to a DICTIONARY KEY, so rendering it directly puts
+    // `creditReason_returned` in the cell. `statusLabel` is the resolver every other label-only map
+    // on this screen already goes through (`FIN-05`).
+    { key: 'reason', header: t('credits.statusLabel'), render: (r) => statusLabel(CREDIT_REASON[r.reason]) },
     { key: 'amount', header: t('credits.fmtMoneyExact'), className: 'num', sortValue: (r) => r.amount, render: (r) => fmtMoneyExact(r.amount, r.currency) },
     { key: 'invoice', header: t('credits.text_2'), render: (r) => r.invoice ? <span dir="ltr">{r.invoice.invoice_number}</span> : '—' },
     { key: 'status', header: t('credits.text_3'), render: (r) => <StatusBadge meta={CREDIT_STATUS[r.status]} /> },
@@ -79,7 +82,13 @@ export default function Credits() {
       {error && <ErrorNote message={error} />}
       {fetching && data && <div className="text-xs text-ink-muted" role="status">{t('credits.text_4')}</div>}
       <PageHeader title={<span className="flex items-center gap-2"><RotateCcw size={ICON.xl} aria-hidden="true" /> {t('credits.text_5')}</span>}
-        meta={<>{t('credits.fmtMoneyExact_2')} <b className="text-await-fg"><MoneyByCurrency amounts={openTotals} baseCurrency={org?.base_currency} /></b></>} />
+        /* `FIN-01`: `openTotals` is derived from a list that has already loaded, so an empty
+           result here is the measurement "nothing is open" — not the absence of one. The em dash
+           `MoneyByCurrency` draws by default is this codebase's marker for a figure it could NOT
+           measure, and printing it here made `/credits` say "unknown" while the dashboards, over
+           the very same population, said "none". The screen supplies the better sentence the
+           component's `empty` prop exists for, and it is the dashboards' own words. */
+        meta={<>{t('credits.fmtMoneyExact_2')} <b className="text-await-fg"><MoneyByCurrency amounts={openTotals} baseCurrency={org?.base_currency} empty={t('credits.openTotalNone')} /></b></>} />
       <DataTable rows={rows} columns={columns} searchable
         searchFn={(r, q) => r.supplier.name.toLowerCase().includes(q) || (r.notes ?? '').toLowerCase().includes(q)}
         searchLabel={t('credits.searchLabel')}
@@ -91,6 +100,11 @@ export default function Credits() {
         toolbar={
           <>
             <select className="input w-auto!" aria-label={t('credits.aria_label')} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+              {/* `DASH-10`: the value stays `active` — it is in links, in the dashboard tile and in
+                  bookmarks — but the WORD names the set. `open|requested|received` are the three
+                  states in which nothing has been offset yet, and one of them, `received`, wears a
+                  `done` badge reading התקבל. Calling that row "open" contradicted the badge two
+                  columns away; calling the set "not yet offset" is true of all three. */}
               <option value="active">{t('credits.text_6')}</option>
               <option value="all">{t('credits.text_7')}</option>
             </select>
@@ -123,7 +137,7 @@ export default function Credits() {
 function CreditDetail({ credit, onClose, onChanged, onOpenInvoice, canWrite }: {
   credit: Row; onClose: () => void; onChanged: () => void; onOpenInvoice: (id: string) => void; canWrite: boolean;
 }) {
-  const { errorText, t } = useT();
+  const { errorText, statusLabel, t } = useT();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
 
@@ -151,7 +165,7 @@ function CreditDetail({ credit, onClose, onChanged, onOpenInvoice, canWrite }: {
   return (
     <Modal open onClose={onClose} title={t('credits.modalTitle', { number: credit.number, supplier: credit.supplier.name })} busy={busy} statusMessage={busy ? t('credits.updatingStatus') : undefined}>
       <dl className="text-sm space-y-2 mb-4">
-        <div className="flex justify-between"><dt className="text-ink-muted">{t('credits.statusLabel_2')}</dt><dd>{CREDIT_REASON[credit.reason]}</dd></div>
+        <div className="flex justify-between"><dt className="text-ink-muted">{t('credits.statusLabel_2')}</dt><dd>{statusLabel(CREDIT_REASON[credit.reason])}</dd></div>
         <div className="flex justify-between"><dt className="text-ink-muted">{t('credits.fmtMoneyExact_3')}</dt><dd className="num font-semibold">{fmtMoneyExact(credit.amount, credit.currency)}</dd></div>
         <div className="flex justify-between"><dt className="text-ink-muted">{t('credits.text_13')}</dt><dd><StatusBadge meta={CREDIT_STATUS[credit.status]} /></dd></div>
         {credit.invoice && (

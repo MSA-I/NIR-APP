@@ -1,0 +1,188 @@
+=== PR 34 GREEN — DOC-07, RTL-A11Y-08, DOC-10 ===
+Same three oracles, same machine, same command, with the fix applied.
+HEAD 2001b9af3a187927ddcb5a5e8b358230bf5dd320   branch worktree-agent-a034934b5cca8e8d5
+
+--- oracle 1 of 3: node scripts/filename-bidi-visual-check.cjs
+waiting for vite on 5933...
+[vite] 
+  VITE v6.4.3  ready in 1860 ms
+
+[vite]   ➜  Local:   http://localhost:5933/
+  ➜  Network: use --host to expose
+[vite] [BABEL] Note: The code generator has deoptimised the styling of D:\משה פרוייקטים\פיתוח אתרים\NIR-APP\.claude\worktrees\agent-a034934b5cca8e8d5\.tmp\pr34-filename-bidi\.vite\deps\react-dom_client.js?v=42056d4b as it exceeds the max of 500KB.
+[vite] 15:20:20 [vite] (client) page reload docs/qa/2026-09-04/evidence/PR34-DOC-07-RTL-A11Y-08-DOC-10-GREEN.txt
+[vite] 15:20:25 [vite] (client) page reload docs/qa/2026-09-04/evidence/PR34-DOC-07-RTL-A11Y-08-DOC-10-GREEN.txt
+
+--- measured (visual order, left to right) ---
+PASS  desktop  <BDI dir=ltr> direction=ltr unicode-bidi=isolate
+      logical: 93_00002007 — חלק 3.pdf
+      visual : 93_00002007 — 3 קלח.pdf
+PASS  desktop  <BDI dir=ltr> direction=ltr unicode-bidi=isolate
+      logical: א.ע עלים ירוקים — חשבונית 2026-08.jpeg
+      visual : 2026-08 תינובשח — םיקורי םילע ע.א.jpeg
+PASS  desktop  <BDI dir=ltr> direction=ltr unicode-bidi=isolate
+      logical: חשבונית ספק לבדיקה.pdf
+      visual : הקידבל קפס תינובשח.pdf
+PASS  desktop  <BDI dir=ltr> direction=ltr unicode-bidi=isolate
+      logical: invoice-2026-08 סופי.pdf
+      visual : invoice-2026-08 יפוס.pdf
+PASS  desktop  <BDI dir=ltr> direction=ltr unicode-bidi=isolate
+      logical: ADTV Ltd receipt 7352.pdf
+      visual : ADTV Ltd receipt 7352.pdf
+PASS  mobile  <BDI dir=ltr> direction=ltr unicode-bidi=isolate
+      logical: 93_00002007 — חלק 3.pdf
+      visual : 93_00002007 — 3 קלח.pdf
+PASS  mobile  <BDI dir=ltr> direction=ltr unicode-bidi=isolate
+      logical: א.ע עלים ירוקים — חשבונית 2026-08.jpeg
+      visual : תינובשח — םיקורי םילע ע.א ⏎ 2026-08.jpeg
+PASS  mobile  <BDI dir=ltr> direction=ltr unicode-bidi=isolate
+      logical: חשבונית ספק לבדיקה.pdf
+      visual : הקידבל קפס תינובשח.pdf
+PASS  mobile  <BDI dir=ltr> direction=ltr unicode-bidi=isolate
+      logical: invoice-2026-08 סופי.pdf
+      visual : invoice-2026-08 יפוס.pdf
+PASS  mobile  <BDI dir=ltr> direction=ltr unicode-bidi=isolate
+      logical: ADTV Ltd receipt 7352.pdf
+      visual : ADTV Ltd receipt 7352.pdf
+
+screenshots:
+  D:\משה פרוייקטים\פיתוח אתרים\NIR-APP\.claude\worktrees\agent-a034934b5cca8e8d5\docs\qa\2026-09-04\evidence\PR34-documents-desktop-1440x900-AFTER.png
+  D:\משה פרוייקטים\פיתוח אתרים\NIR-APP\.claude\worktrees\agent-a034934b5cca8e8d5\docs\qa\2026-09-04\evidence\PR34-documents-mobile-390x844-AFTER.png
+
+routes answered empty: desktop: /rest/v1/rpc/organization_usage_snapshot, desktop: /rest/v1/rpc/get_document_processing_statuses, mobile: /rest/v1/rpc/organization_usage_snapshot, mobile: /rest/v1/rpc/get_document_processing_statuses
+
+file-name bidi check completed with no findings — 10 rendered names measured
+
+--- oracle 2 of 3: npx vitest run src/lib/fileNameIsolation.spec.ts
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a034934b5cca8e8d5
+
+
+ Test Files  1 passed (1)
+      Tests  2 passed (2)
+   Start at  15:20:43
+   Duration  1.82s (transform 63ms, setup 423ms, import 18ms, tests 91ms, environment 1.10s)
+
+
+--- oracle 3 of 3: npx vitest run src/components/uploadDocument.spec.ts src/lib/storageObjectName.spec.ts src/lib/bidiText.spec.ts
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a034934b5cca8e8d5
+
+
+ Test Files  3 passed (3)
+      Tests  41 passed (41)
+   Start at  15:20:47
+   Duration  3.41s (transform 1.16s, setup 1.38s, import 1.58s, tests 69ms, environment 3.68s)
+
+
+--- named guards + typecheck (NOT 
+pm run verify in full, and no SQL suite: ci-sql-suites.mjs
+--- without --list resets the shared local database)
+
+> npm run check:i18n
+
+> inplace@0.1.0 check:i18n
+> node scripts/check-i18n.ts
+
+node.exe : check:i18n FAILED — 1 file(s) disagree with the baseline.
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (check:i18n FAIL...h the baseline.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+  src/lib/storageObjectName.ts: NEW file with 3 Hebrew line(s), not in the baseline
+
+  Hebrew was hardcoded into product source. Put the string in src/lib/i18n/dictionaries/
+  and read it with useT(). If it genuinely is not interface copy, say so in a comment —
+  comments are not counted.
+
+
+> npm run check:orphan-keys
+
+> inplace@0.1.0 check:orphan-keys
+> node scripts/check-orphan-keys.mjs
+
+check:orphan-keys passed: 6021 leaf key(s), 106 with no call site, pinned.
+
+> npm run check:typography
+
+> inplace@0.1.0 check:typography
+> node scripts/check-typography.ts
+
+Typography contract passed (534 source files).
+
+> npm run check:jsx-space
+
+> inplace@0.1.0 check:jsx-space
+> node scripts/check-jsx-space.mjs
+
+check:jsx-space passed: 152 .tsx file(s), no glued translated expressions.
+
+> npx tsc --noEmit
+tsc exit: 0
+
+--- named guards, re-run after the DESIGN.md and ledger edits
+> npm run check:i18n
+
+
+
+check:i18n passed: 64 file(s) still carry 911 Hebrew line(s), all at their pinned counts (64 documented exception(s)).
+
+
+> npm run check:orphan-keys
+
+
+
+check:orphan-keys passed: 6021 leaf key(s), 106 with no call site, pinned.
+
+
+> npm run check:typography
+
+
+
+Typography contract passed (534 source files).
+
+
+> npm run check:jsx-space
+
+
+
+check:jsx-space passed: 152 .tsx file(s), no glued translated expressions.
+
+
+> npm run check:decision-numbers
+
+
+
+check:decision-numbers passed: 333 rulings, #10–#357, none duplicated, 79 prose citation(s) and 1830 in code all 
+resolve.
+
+
+> npm run check:debt-numbers
+
+
+
+check:debt-numbers passed: 98 debt section number(s), none duplicated.
+
+
+> npm run check:migration-numbers
+
+
+
+check:migration-numbers passed: 305 migrations, 0001–0314, no duplicate, no new gap.
+
+
+
+--- npx tsc --noEmit : exit 0, no output
+--- regression sweep, because ltrIsolate puts a control character into translated sentences and a
+--- test asserting an exact message would have broken: npm run test
+
+ Test Files  247 passed (247)
+      Tests  2560 passed (2560)
+
+
+
+NOT RUN, deliberately: `npm run verify` in full, `npm run quality`, and any SQL suite —
+`scripts/ci-sql-suites.mjs` without --list RESETS the shared local database.

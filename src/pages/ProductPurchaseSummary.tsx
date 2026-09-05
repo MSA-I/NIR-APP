@@ -1,7 +1,9 @@
 import { useT } from '../lib/i18n/LocaleProvider';
 import { useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router';
 import { AlertTriangle, FileSpreadsheet, Info, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useParamState } from '../lib/useParamState';
 import { useQuery, unwrap } from '../lib/useQuery';
 import { fmtDate, fmtMoneyExact, fmtNum, formatUnit, todayISO } from '../lib/format';
 import { Card, DataTable, ErrorNote, ICON, Note, PageHeader, SkeletonTable, useToast, type Column } from '../components/ui';
@@ -14,6 +16,11 @@ import {
   renderConfiguredReportTemplate,
 } from '../lib/reportTemplateExport';
 import { downloadWorkbook } from '../lib/workbook';
+import {
+  billedNothingInWindow,
+  buildProductPurchaseWorkbook,
+  canonicalQuantityIsUnmeasured,
+} from '../lib/productPurchaseWorkbook';
 
 /**
  * Per-product purchase rollup — the screen for `get_product_purchase_summary` (0114).
@@ -84,9 +91,35 @@ export default function ProductPurchaseSummary() {
   const { t, errorText, locale } = useT();
   const { org } = useAuth();
   const toast = useToast();
-  const [from, setFrom] = useState(monthStart);
-  const [to, setTo] = useState(todayISO);
+  /**
+   * The window lives in the URL, not in component state — `?from=YYYY-MM-DD&to=YYYY-MM-DD`, the
+   * same shape `/expenses` uses.
+   *
+   * It used to be `useState`, and that was not merely un-shareable: it made the screen INCAPABLE
+   * of being told which window to show. `/reports` now links here with the month it is displaying,
+   * and against component state that link could have carried July and still landed on September —
+   * which is exactly what a manager measured (DASH-08), and then exported (EXP-02).
+   *
+   * An absent parameter still means "the current month to date", so a bare `/reports/products`
+   * opens on the window it always did.
+   */
+  const [from] = useParamState('from', monthStart());
+  const [to] = useParamState('to', todayISO());
+  const [params, setParams] = useSearchParams();
   const [exporting, setExporting] = useState(false);
+
+  /**
+   * Both ends move together, in one replace-navigation. Written as a pair rather than through two
+   * independent setters because a range is one claim: `from` alone briefly describes a window
+   * nobody asked for, and the query would fire for it.
+   */
+  function setRange(nextFrom: string, nextTo: string) {
+    if (!nextFrom || !nextTo) return; // a cleared date input is not a range claim
+    const next = new URLSearchParams(params);
+    next.set('from', nextFrom);
+    next.set('to', nextTo);
+    setParams(next, { replace: true });
+  }
 
   const { data, loading, error } = useQuery<SummaryResponse>(async () =>
     unwrap(await supabase.rpc('get_product_purchase_summary', {
@@ -96,6 +129,33 @@ export default function ProductPurchaseSummary() {
   const rows = useMemo(
     () => (data?.products ?? []).map((row) => ({ ...row, id: row.product_id })),
     [data]);
+
+  /**
+   * `DASH-07` — the whole billed half of this report is empty and the screen used to say nothing.
+   *
+   * MEASURED, not supposed. Against live production on 05.09.2026, over 2026-01-01..2026-09-04:
+   * 115 products, `invoice_count` 0 on every one, `gross_amount_by_currency` and
+   * `average_unit_price` null on every one — and `public.invoice_lines` and
+   * `public.invoice_line_matches` hold ZERO ROWS across all five organisations. The rows the money
+   * is computed from do not exist, so no join, predicate, window or org filter is at fault and the
+   * em dashes are the correct answer. What was wrong was the silence around them.
+   *
+   * AND THE ONE IDIOM THIS SCREEN HAD COULD NOT COVER IT. The unmapped-lines note below is guarded
+   * by `unmapped_invoice_lines > 0`, and that count reads the SAME empty table the empty columns
+   * read: no invoice lines means no unmapped invoice lines. It can only speak when some lines
+   * exist and are unmatched — never in the state that empties the column completely. So the two
+   * notes are mutually exclusive by construction, which is why this one stands down whenever that
+   * one has something to say.
+   *
+   * The claim is deliberately narrow: EVERY product in the window, and no unmatched line either.
+   * One product with a billed figure makes the sentence false, and the per-row em dash beside a
+   * populated neighbour is self-explanatory anyway.
+   *
+   * The predicate lives beside the workbook builder because the FILE states this too, on the row
+   * every sheet asserts its window on. One owner, for the reason `EXP-04` had to be fixed at all.
+   */
+  const nothingBilledInWindow = !!data
+    && billedNothingInWindow(data.products, data.unmapped_invoice_lines);
 
   const columns: Column<SummaryRow & { id: string }>[] = [
     {
@@ -116,7 +176,16 @@ export default function ProductPurchaseSummary() {
     {
       key: 'canonical', header: t('productPurchase.text_4'), priority: 1,
       sortValue: (r) => r.canonical_qty ?? -1,
-      render: (r) => <span className="num font-semibold">{fmtNum(r.canonical_qty)}</span>,
+      /* A product with no completed receipt and no approved invoice line has a canonical figure
+         of 0 by construction (`0221`) — a sum of zeros, not a count. The screen printed it in
+         bold beside two em dashes, and the export repeated it on 74 of 115 rows (`EXP-04`). One
+         predicate now answers for both surfaces, because two readings of "unmeasured" is how the
+         file and the screen came to disagree in the first place. */
+      render: (r) => (
+        <span className="num font-semibold">
+          {fmtNum(canonicalQuantityIsUnmeasured(r) ? null : r.canonical_qty)}
+        </span>
+      ),
     },
     // Ordered, received and invoiced stay side by side. The rows worth opening are the ones where
     // they disagree, and one merged figure hides exactly that.
@@ -175,55 +244,26 @@ export default function ProductPurchaseSummary() {
       if (templated) {
         downloadRenderedWorkbook(templated, fileName);
       } else {
-        // No custom template configured → the styled built-in. Until 28.08.2026 this branch wrote
-        // a bare SheetJS workbook: no RTL view, so an eleven-column Hebrew grid opened
-        // left-to-right, with every column at default width and money as raw numbers.
+        // No custom template configured → the styled built-in, which now lives in
+        // `productPurchaseWorkbook.ts` so the FILE can be reopened and read in a test rather than
+        // asserted from the arguments handed to the writer (`EXP-04`). Until 28.08.2026 this
+        // branch wrote a bare SheetJS workbook: no RTL view, so an eleven-column Hebrew grid
+        // opened left-to-right, with every column at default width and money as raw numbers.
         //
-        // The two money columns stay TEXT, and that is #287 rather than an oversight: a product
-        // bought in two currencies has two gross figures, and one numeric cell cannot hold them.
-        // One column per currency would change shape with the data; one text column states every
-        // figure with its own symbol and never adds two.
-        await downloadWorkbook({
-          title: t('productPurchase.pdfTitle', { org: org.name }),
-          subtitle: t('productPurchase.pdfSubtitle', { from: fmtDate(from), to: fmtDate(to), generated: fmtDate(todayISO()) }),
-          sheets: [{
-            name: t('productPurchase.book_append_sheet'),
-            columns: [
-              { header: t('productPurchase.text_11'), key: 'product', width: 32 },
-              { header: t('productPurchase.formatUnit'), key: 'unit', width: 10 },
-              { header: t('productPurchase.text_12'), key: 'ordered', width: 10, type: 'number' },
-              { header: t('productPurchase.text_13'), key: 'received', width: 10, type: 'number' },
-              { header: t('productPurchase.text_14'), key: 'invoiced', width: 10, type: 'number' },
-              { header: t('productPurchase.text_15'), key: 'canonical', width: 13, type: 'number' },
-              { header: t('productPurchase.text_16'), key: 'suppliers', width: 12, type: 'number' },
-              { header: t('productPurchase.text_17'), key: 'orders', width: 12, type: 'number' },
-              { header: t('productPurchase.text_18'), key: 'invoices', width: 13, type: 'number' },
-              // Text, for the same reason the two columns beside it are: a product ordered in two
-              // currencies has two committed figures and one numeric cell cannot hold them.
-              { header: t('productPurchase.committedCost'), key: 'orderedCost', width: 20 },
-              { header: t('productPurchase.text_19'), key: 'gross', width: 20 },
-              { header: t('productPurchase.text_20'), key: 'average', width: 20 },
-            ],
-            rows: data.products.map((row) => ({
-              product: row.product_name,
-              unit: formatUnit(row.unit, locale),
-              ordered: row.ordered_qty,
-              received: row.received_qty,
-              invoiced: row.invoiced_qty,
-              canonical: row.canonical_qty,
-              suppliers: row.supplier_count,
-              orders: row.order_count,
-              invoices: row.invoice_count,
-              orderedCost: (row.ordered_amount_by_currency ?? [])
-                .map((entry) => fmtMoneyExact(entry.amount, entry.currency)).join(' · '),
-              gross: (row.gross_amount_by_currency ?? [])
-                .map((entry) => fmtMoneyExact(entry.amount, entry.currency)).join(' · '),
-              average: row.spans_currencies
-                ? t('productPurchase.inSeveralCurrencies')
-                : fmtMoneyExact(row.average_unit_price, row.average_unit_price_currency),
-            })),
-          }],
-        }, fileName);
+        // The two money columns stay TEXT, and that is the per-currency rule rather than an
+        // oversight: a product bought in two currencies has two gross figures, and one numeric
+        // cell cannot hold them. One column per currency would change shape with the data; one
+        // text column states every figure with its own symbol and never adds two.
+        await downloadWorkbook(buildProductPurchaseWorkbook({
+          t,
+          locale,
+          orgName: org.name,
+          from,
+          to,
+          generatedAt: todayISO(),
+          products: data.products,
+          unmappedInvoiceLines: data.unmapped_invoice_lines,
+        }), fileName);
       }
       toast(t('productPurchase.toast'));
     } catch (exportError) {
@@ -248,12 +288,12 @@ export default function ProductPurchaseSummary() {
         <div>
           <label className="label" htmlFor="summary-from">{t('productPurchase.text_23')}</label>
           <input id="summary-from" type="date" className="input num" value={from}
-            onChange={(event) => setFrom(event.target.value)} />
+            onChange={(event) => setRange(event.target.value, to)} />
         </div>
         <div>
           <label className="label" htmlFor="summary-to">{t('productPurchase.text_24')}</label>
           <input id="summary-to" type="date" className="input num" value={to}
-            onChange={(event) => setTo(event.target.value)} />
+            onChange={(event) => setRange(from, event.target.value)} />
         </div>
       </Card>
 
@@ -271,6 +311,23 @@ export default function ProductPurchaseSummary() {
           </span>
         </p>
       </Note>
+
+      {/* The billed half of the report has nothing to report, and now says so rather than leaving
+          115 em dashes to be read as a fault in the screen. `role="status"` for the same reason
+          the unmapped note has one: this changes what the table below means. */}
+      {nothingBilledInWindow && (
+        <Note tone="await" role="status">
+          <p className="flex items-start gap-2 text-sm">
+            <Info size={ICON.sm} aria-hidden="true" className="mt-0.5 shrink-0" />
+            <span>
+              <strong>{t('productPurchase.billedAbsenceLead')}</strong>{' '}
+              {t('productPurchase.billedAbsenceColumns')}
+              <span className="mt-1 block">{t('productPurchase.billedAbsenceCommitted')}</span>
+              <span className="mt-1 block">{t('productPurchase.billedAbsenceAction')}</span>
+            </span>
+          </p>
+        </Note>
+      )}
 
       {/* Money nobody could place. A work list, not a rounding error — and never folded into a
           product's total, because the product it belongs to is not established. */}

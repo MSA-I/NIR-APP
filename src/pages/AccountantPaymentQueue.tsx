@@ -1,14 +1,16 @@
 import type { TKey } from '../lib/i18n/t';
 import { useT } from '../lib/i18n/LocaleProvider';
 import { useState } from 'react';
+import { Link } from 'react-router';
 import { reasonOr } from '../lib/reason';
 import { Landmark, CheckCircle2, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
+import { fetchAll, fetchInChunks } from '../lib/supabasePaging';
 import { useToast, StatusBadge, Modal, EmptyState, ErrorNote, PageHeader, SkeletonList, Note, Card, SubPanel, ICON } from '../components/ui';
 import { ReauthModal } from '../components/ReauthModal';
 import { DocumentList } from '../components/FileUpload';
-import { PAYMENT_REQUEST_STATUS } from '../lib/status';
+import { EXCEPTION_TYPE, PAYMENT_REQUEST_STATUS } from '../lib/status';
 import { bidiIsolate, fmtMoneyExact, fmtDate, todayISO } from '../lib/format';
 import { ALLOCATION_REFUSAL_MESSAGES } from '../lib/errors';
 import type { PaymentRequest } from '../lib/types';
@@ -122,6 +124,67 @@ export function partitionSupplierCredits(
 
 const minorAmount = (value: number, minorUnits: number) => Math.round(value * (10 ** minorUnits));
 const majorAmount = (value: number, minorUnits: number) => value / (10 ** minorUnits);
+
+/** One row of `invoice_balances_by_currency` (0218), narrowed to what this screen reads. */
+export interface QueueInvoiceBalance {
+  invoice_id: string;
+  balance_in_currency: number;
+}
+
+/** An open `exceptions` row this screen may have to mention. */
+export interface QueueException {
+  id: string;
+  type: string;
+  severity: 'low' | 'medium' | 'high';
+  title: string;
+  payment_request_id: string | null;
+  invoice_id: string | null;
+}
+
+/**
+ * What is still owed on the invoices of one approved request, read NOW rather than at approval.
+ *
+ * `FIN-03`. `payment_request_invoices.amount_allocated` is written when the request is created and
+ * never recomputed, so a request approved in August can be sitting in this queue in September
+ * against invoices that were paid in the meantime — which is exactly what the sweep measured: two
+ * of two queued transfers targeted invoices whose balance was already zero, and the dialog showed
+ * no balance at all.
+ *
+ * THREE ANSWERS, NOT TWO, and the middle one is the point. `invoice_balances_by_currency` returns
+ * NO ROW for an invoice the reader's role may not value (`0218` — the accountant sees approved
+ * invoices only). That is genuinely unknown, and this returns `null` for the whole request rather
+ * than summing the invoices it happens to know: a partial sum printed as a balance is a claim
+ * about money that was never measured. A measured `0` is the opposite claim — "these are settled"
+ * — and it is reported as `0`, never as the em dash. Same rule as the balance column on
+ * `/invoices` (`FIN-09`/`MON-09`), decided in one place instead of twice.
+ *
+ * Ids are de-duplicated because a request MAY carry two rows for one invoice — `buildPaymentAllocations`
+ * above sums them on purpose — and counting one invoice's balance twice would understate what is
+ * left. The arithmetic runs in minor units for the same reason the allocation split does: summing
+ * `0.1 + 0.2` in floating point is how a settled invoice acquires a balance of 0.00000000000000004
+ * and stops being reported as settled.
+ *
+ * `settled` is deliberately NOT a permission. Ruling #353 (04.09.2026) says the recording is always
+ * accepted, because `/pay` documents a transfer that has already left the bank. This is information
+ * the accountant reads before deciding, and nothing in this file turns it into a refusal.
+ */
+export function paymentRequestBalance(
+  invoices: readonly { invoice_id: string }[],
+  balances: Readonly<Record<string, number | undefined>>,
+  minorUnits = 2,
+): { total: number | null; settled: boolean } {
+  const seen = new Set<string>();
+  let minor = 0;
+  for (const invoice of invoices) {
+    if (seen.has(invoice.invoice_id)) continue;
+    seen.add(invoice.invoice_id);
+    const balance = balances[invoice.invoice_id];
+    if (balance == null || !Number.isFinite(balance)) return { total: null, settled: false };
+    minor += minorAmount(balance, minorUnits);
+  }
+  if (!seen.size) return { total: null, settled: false };
+  return { total: majorAmount(minor, minorUnits), settled: minor <= 0 };
+}
 
 /** Ties the visible refusal to the control it disables. */
 const ALLOCATION_ERROR_ID = 'payment-execution-allocation-error';
@@ -248,8 +311,70 @@ type Row = Omit<PaymentRequest, 'supplier'> & {
   invoices: { invoice_id: string; amount_allocated: number; invoice: { invoice_number: string } | null }[];
   approver: { full_name: string } | null;
   minor_units: number;
+  /**
+   * The live balance of each invoice under this request. A MISSING key is "not measured" — the
+   * balance view returns no row for an invoice the reader's role may not value — and is not the
+   * same statement as a balance of zero. `paymentRequestBalance` is the one place that decides
+   * what either means.
+   */
+  invoice_balances: Record<string, number | undefined>;
+  /** Open exceptions the product already raised against this request or one of its invoices. */
+  open_exceptions: QueueException[];
 };
-type RawRow = Omit<Row, 'supplier'>;
+type RawRow = Omit<Row, 'supplier' | 'minor_units' | 'invoice_balances' | 'open_exceptions'>;
+
+const QUEUED_STATUSES = ['approved', 'sent_for_execution'];
+const RECORDED_STATUSES = ['executed', 'matched'];
+/** `Exceptions.tsx` treats these two as "open" and so does the dashboard; one definition, not three. */
+const OPEN_EXCEPTION_STATUSES = ['open', 'in_progress'];
+
+/**
+ * The live balance of every invoice sitting in the queue, keyed by invoice.
+ *
+ * Read for the QUEUED requests only. A recorded transfer's balance is a fact about the past and
+ * nothing on this screen asks for it, so fetching it would be a larger `in (...)` list for no
+ * reader.
+ */
+async function readQueueInvoiceBalances(invoiceIds: readonly string[]) {
+  if (!invoiceIds.length) return {} as Record<string, number>;
+  const rows = await fetchInChunks(invoiceIds, (chunk) => fetchAll<QueueInvoiceBalance>((from, to) =>
+    supabase.from('invoice_balances_by_currency')
+      .select('invoice_id, balance_in_currency')
+      .in('invoice_id', chunk)
+      .order('invoice_id')
+      .range(from, to)));
+  return Object.fromEntries(rows.map((row) => [row.invoice_id, Number(row.balance_in_currency)]));
+}
+
+/**
+ * The open exceptions attached to what is in the queue.
+ *
+ * `FIN-03` measured the gap this closes: the product had ALREADY opened a high-severity
+ * duplicate-payment exception against one of the two queued transfers, and the one screen whose
+ * job is to execute those transfers said nothing about it.
+ *
+ * TWO READS RATHER THAN ONE `.or(...)`. The predicate is "this request, or any invoice under it",
+ * and PostgREST expresses that as a hand-built `or=` string — which becomes a syntax error the
+ * moment one of the two id lists is empty, on a money screen, at read time. Two `.in()` reads
+ * cannot be malformed and are de-duplicated here, because an exception naming both the request and
+ * its invoice legitimately matches both.
+ */
+async function readQueueExceptions(requestIds: readonly string[], invoiceIds: readonly string[]) {
+  const columns = 'id, type, severity, title, payment_request_id, invoice_id';
+  const byColumn = (column: 'payment_request_id' | 'invoice_id', ids: readonly string[]) =>
+    fetchInChunks(ids, (chunk) => fetchAll<QueueException>((from, to) =>
+      supabase.from('exceptions')
+        .select(columns)
+        .in('status', OPEN_EXCEPTION_STATUSES)
+        .in(column, chunk)
+        .order('id')
+        .range(from, to)));
+  const rows = (await Promise.all([
+    requestIds.length ? byColumn('payment_request_id', requestIds) : Promise.resolve([]),
+    invoiceIds.length ? byColumn('invoice_id', invoiceIds) : Promise.resolve([]),
+  ])).flat();
+  return [...new Map(rows.map((row) => [row.id, row])).values()];
+}
 
 /**
  * The one payment-execution queue (G4, 10.08.2026).
@@ -274,13 +399,20 @@ export default function AccountantPaymentQueue() {
       .in('status', ['approved', 'sent_for_execution', 'executed', 'matched'])
       .order('due_date', { ascending: true, nullsFirst: false })) as RawRow[];
     const supplierIds = rows.map((row) => row.supplier_id);
-    const [suppliers, bankAccounts, currencyRows] = await Promise.all([
+    // What is still owed, and what the product already flagged, are read for the QUEUED rows —
+    // those are the only ones this screen offers to act on.
+    const queued = rows.filter((row) => QUEUED_STATUSES.includes(row.status));
+    const queuedInvoiceIds = [...new Set(queued.flatMap((row) => row.invoices.map((i) => i.invoice_id)))];
+    const queuedRequestIds = queued.map((row) => row.id);
+    const [suppliers, bankAccounts, currencyRows, invoiceBalances, openExceptions] = await Promise.all([
       financialSupplierMap(supplierIds),
       financialSupplierBankAccountMap(supplierIds),
       rows.length
         ? supabase.from('currencies').select('code, minor_units')
           .in('code', [...new Set(rows.map((row) => row.currency))])
         : Promise.resolve({ data: [], error: null }),
+      readQueueInvoiceBalances(queuedInvoiceIds),
+      readQueueExceptions(queuedRequestIds, queuedInvoiceIds),
     ]);
     if (currencyRows.error) throw new Error(currencyRows.error.message);
     const minorUnits = new Map(((currencyRows.data ?? []) as { code: string; minor_units: number }[])
@@ -288,6 +420,7 @@ export default function AccountantPaymentQueue() {
     return rows.map<Row>((row) => {
       const units = minorUnits.get(row.currency);
       if (units == null) throw new Error(`currency_minor_units_unavailable:${row.currency}`);
+      const rowInvoiceIds = new Set(row.invoices.map((invoice) => invoice.invoice_id));
       return {
         ...row,
         supplier: {
@@ -297,6 +430,15 @@ export default function AccountantPaymentQueue() {
           bank_details: formatSupplierBankAccount(bankAccounts.get(row.supplier_id), t),
         },
         minor_units: units,
+        // Only the invoices this request names, and only the ones the balance view actually
+        // answered for. An invoice with no answer stays ABSENT rather than arriving as 0 — that
+        // distinction is the whole of `FIN-09`/`MON-09` and it is decided once, here.
+        invoice_balances: Object.fromEntries([...rowInvoiceIds]
+          .filter((invoiceId) => invoiceBalances[invoiceId] !== undefined)
+          .map((invoiceId) => [invoiceId, invoiceBalances[invoiceId]])),
+        open_exceptions: openExceptions.filter((exception) =>
+          exception.payment_request_id === row.id
+          || (exception.invoice_id != null && rowInvoiceIds.has(exception.invoice_id))),
       };
     });
   });
@@ -304,8 +446,8 @@ export default function AccountantPaymentQueue() {
   if (loading) return <SkeletonList />;
   if (error) return <ErrorNote message={error} />;
 
-  const pending = (data ?? []).filter((r) => ['approved', 'sent_for_execution'].includes(r.status));
-  const done = (data ?? []).filter((r) => ['executed', 'matched'].includes(r.status));
+  const pending = (data ?? []).filter((r) => QUEUED_STATUSES.includes(r.status));
+  const done = (data ?? []).filter((r) => RECORDED_STATUSES.includes(r.status));
 
   return (
     <div className="space-y-5 max-w-2xl">
@@ -316,7 +458,9 @@ export default function AccountantPaymentQueue() {
         <Card pad={false}><EmptyState title={t('payQueue.title_2')} subtitle={t('payQueue.subtitle')} /></Card>
       ) : (
         <div className="space-y-3">
-          {pending.map((r) => (
+          {pending.map((r) => {
+            const balance = paymentRequestBalance(r.invoices, r.invoice_balances, r.minor_units);
+            return (
             <Card as="button" key={r.id} pad={false} className="card-link-hover w-full text-start p-4 sm:p-5" onClick={() => setSelected(r)}>
               <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                 <span className="min-w-0 break-words font-semibold text-ink">{r.supplier.name}</span>
@@ -327,13 +471,31 @@ export default function AccountantPaymentQueue() {
                 {r.due_date && <span>{t('payQueue.payBy')} {fmtDate(r.due_date)}</span>}
                 <span>{t('payQueue.invoiceCount', { count: r.invoices.length })}</span>
               </div>
+              {/* `FIN-03`: the accountant chooses which card to open from THIS list, so what the
+                  invoices still owe — and whether the product has already raised a finding against
+                  the request — belongs here and not only two clicks in. Neither mark closes the
+                  card or removes the action; ruling #353 keeps the recording available. */}
+              <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm">
+                <span className="text-ink-muted">
+                  {t('payQueue.invoiceBalanceLabel')}{' '}
+                  <span className="num font-medium text-ink-body">{fmtMoneyExact(balance.total, r.currency)}</span>
+                </span>
+                {/* Two marks, two weights, on purpose. `alert` is reserved for the finding the
+                    PRODUCT raised and a person still has to close; a settled invoice under a
+                    queued transfer is something to look at before acting, which is what `await`
+                    means everywhere else in this app. A queue where every card wears the same
+                    solid red pill teaches the reader to stop seeing red. */}
+                {balance.settled && <span className="badge-await">{t('payQueue.settledBadge')}</span>}
+                {r.open_exceptions.length > 0 && <span className="badge-alert">{t('payQueue.openExceptionBadge')}</span>}
+              </div>
               {r.open_credit_override_total != null && (
                 <div className="mt-3 text-sm text-await-fg">
                   {t('payQueue.approvedWithoutOffsetBefore')}<span className="num font-semibold">{fmtMoneyExact(r.open_credit_override_total, r.currency)}</span>
                 </div>
               )}
             </Card>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -360,7 +522,7 @@ export default function AccountantPaymentQueue() {
 }
 
 function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; onDone: () => void }) {
-  const { errorText, t } = useT();
+  const { errorText, statusLabel, t } = useT();
   const { profile } = useAuth();
   const toast = useToast();
   const [f, setF] = useState({
@@ -420,6 +582,10 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
     allocationPreview = null;
     allocationError = allocationRefusal(error, t);
   }
+
+  // What the invoices under this request still owe, read now. Information only — see
+  // `paymentRequestBalance` and ruling #353: nothing below turns either figure into a refusal.
+  const liveBalance = paymentRequestBalance(pr.invoices, pr.invoice_balances, pr.minor_units);
 
   // Field validation first, then the step-up gate. Re-authentication happens only when the JWT's
   // password AMR entry is stale — the server (0061) asserts freshness itself, so a fresh session
@@ -487,10 +653,49 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
           <div className="text-sm text-ink-body text-start" dir="ltr">{pr.supplier.bank_details ?? t('payQueue.text_6')}</div>
         </SubPanel>
 
-        {/* The queue records a completed transfer; it never claims to perform the bank action. */}
-        {!pr.supplier.bank_details && (
+        {/* `FIN-03`. The product had already raised a high-severity duplicate-payment finding
+            against one of the two queued transfers and this screen never said so. Named rather
+            than counted: "one open exception" tells the accountant nothing they can act on, and
+            the row's own title is the sentence somebody wrote about THIS request. */}
+        {pr.open_exceptions.length > 0 && (
           <Note tone="alert">
-            <span>
+            <span className="min-w-0 flex-1">
+              <strong>{t('payQueue.openExceptionHeading')}</strong>{' '}
+              {t('payQueue.openExceptionBody')}
+              <ul className="mt-1 space-y-1">
+                {pr.open_exceptions.map((exception) => (
+                  <li key={exception.id} className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                    <span>{statusLabel(EXCEPTION_TYPE[exception.type])} · {exception.title}</span>
+                    <Link to={`/exceptions?id=${exception.id}`} className="underline">
+                      {t('payQueue.openExceptionLink')}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </span>
+          </Note>
+        )}
+
+        {/* `FIN-03`, the settled case. A statement, not a gate: ruling #353 (04.09.2026) says a
+            transfer that already left the bank is recorded whatever the balance now reads, so the
+            primary below stays enabled and this says what the accountant needs to check first. */}
+        {liveBalance.settled && (
+          <Note tone="await">
+            <span className="min-w-0 flex-1">
+              <strong>{t('payQueue.settledHeading')}</strong>{' '}
+              {t('payQueue.settledBody')}
+            </span>
+          </Note>
+        )}
+
+        {/* `FIN-10`/`MON-05`. This used to read "…ולכן לא ניתן לבצע את ההעברה" — a refusal, in the
+            alert tone, directly above an enabled button that performs the recording, and the sweep
+            performed it twice under exactly this block. The FACT is kept because it is true and
+            somebody has to act on it; what is gone is the claim that it stops the recording. A
+            missing bank account is a note about the NEXT transfer. */}
+        {!pr.supplier.bank_details && (
+          <Note tone="info">
+            <span className="min-w-0 flex-1">
               {t('payQueue.text_7')}{' '}
               {t('payQueue.text_8')}
             </span>
@@ -510,6 +715,12 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
               is unknown — and an unknown offset printed as ₪0.00 is a claim that none was taken. */}
           <div className="flex justify-between"><dt className="text-ink-muted">{t('payQueue.fmtMoneyExact_2')}</dt><dd className="num">{fmtMoneyExact(allocationPreview?.creditAmount ?? null, pr.currency)}</dd></div>
           <div className="flex justify-between"><dt className="text-ink-muted">{t('payQueue.text_36')}</dt><dd className="font-semibold num">{fmtMoneyExact(allocationPreview?.cashAmount ?? null, pr.currency)}</dd></div>
+          {/* `FIN-03`: the live balance, beside the amount about to be transferred, because the
+              allocation above was frozen at approval and the invoice has been moving since. `—`
+              here means the balance could not be READ (the accountant values approved invoices
+              only, 0218) — never that it is zero. A measured zero prints as 0.00 and is the
+              claim "these invoices are settled". */}
+          <div className="flex justify-between"><dt className="text-ink-muted">{t('payQueue.invoiceBalanceLabel')}</dt><dd className="num">{fmtMoneyExact(liveBalance.total, pr.currency)}</dd></div>
           {pr.due_date && <div className="flex justify-between"><dt className="text-ink-muted">{t('payQueue.fmtDate')}</dt><dd>{fmtDate(pr.due_date)}</dd></div>}
           <div className="flex justify-between"><dt className="text-ink-muted">{t('payQueue.text_10')}</dt>
             <dd dir="ltr">{pr.invoices.map((i) => i.invoice?.invoice_number).filter(Boolean).join(', ') || t('payQueue.map')}</dd></div>
@@ -522,6 +733,16 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
               <span className="min-w-0 flex-1">
                 <strong>{t('payQueue.text_17')}</strong>{' '}
                 {t('payQueue.openCreditsBefore')}<span className="num">{fmtMoneyExact(pr.open_credit_override_total, pr.currency)}</span>{t('payQueue.openCreditsAfter')}
+                {/* `MON-06`. This figure and the credit list below it answer DIFFERENT questions,
+                    and printed adjacent with nothing said, they read as one. It is
+                    `open_credit_override_total` — frozen by the approval command from what the
+                    APPROVER could see, at the moment of approval, and immutable thereafter. The
+                    list below is what THIS reader can see NOW, and ruling #13 stops that at
+                    approved invoices. Measured 05.09.2026: the accountant reads 0 of the tenant's
+                    9 open credits. So the number stays — deleting an approval-override warning
+                    from the executor's screen would remove a control — and it now says whose view
+                    it is, which is the plan's rule when two figures differ by population. */}
+                <span className="block mt-1">{t('payQueue.overrideObservedAtApproval')}</span>
                 <span className="block mt-1">{t('payQueue.overrideReasonLabel')} {pr.open_credit_override_reason}</span>
               </span>
             </Note>
@@ -532,8 +753,21 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
           <h3 className="text-sm font-medium text-ink-soft">{t('payQueue.text_18')}</h3>
           {creditsLoading && <p className="mt-2 text-sm text-ink-muted" role="status">{t('payQueue.text_19')}</p>}
           {creditsError && <p className="mt-2 text-sm text-alert-fg" role="alert">{creditsError}</p>}
+          {/* `MON-06`, and it is `ASSIST-12`'s conclusion arriving on the screen next door.
+              `openCredits` is empty in two unrelated situations, and one sentence used to speak
+              for both. Either the reader ANSWERED and nothing in the answer is open — a
+              measurement, and "no open credits" is the true thing to say — or the reader returned
+              NOTHING, in which case it has measured its own blind spot and must not report it as
+              a fact about the supplier. For this role the second case is the common one: the
+              `credit_requests` derived-scope rider resolves its anchor through `invoices` and
+              `goods_receipts` under the CALLER's RLS, and the accountant's stops at approved
+              (#13). Measured against production 05.09.2026 on the guarded path: 0 rows returned
+              while the tenant held 9 open credits worth 3,423.20 ILS.
+              The constitution's `—`-not-`0` rule is the same rule in numeric form. */}
           {!creditsLoading && !creditsError && openCredits.length === 0 && (
-            <p className="mt-2 text-sm text-ink-muted">{t('payQueue.text_20')}</p>
+            <p className="mt-2 text-sm text-ink-muted">
+              {creditBalances?.length ? t('payQueue.text_20') : t('payQueue.creditsOutOfRoleScope')}
+            </p>
           )}
           {!creditsLoading && !creditsError && openCredits.length > 0 && selectableCredits.length === 0 && (
             <p className="mt-2 text-sm text-ink-muted">

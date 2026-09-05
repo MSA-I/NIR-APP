@@ -1,0 +1,55 @@
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-aeb936e34818cc2b1
+
+ ❯ src/pages/hebrewNumberAgreement.spec.tsx (8 tests | 2 failed | 6 skipped) 3152ms
+     × prints «החזרת סחורה» in the table and in the credit card, never the key 3048ms
+     × has no door left that renders the map without resolving it 99ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/hebrewNumberAgreement.spec.tsx > FIN-05 — the credit reason reaches the screen as words > prints «החזרת סחורה» in the table and in the credit card, never the key
+TestingLibraryElementError: Unable to find an element with the text: החזרת סחורה. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+    …DOM dump elided for the record; the assertion above is the measurement…
+Ignored nodes: comments, script, style
+    …DOM dump elided for the record; the assertion above is the measurement…
+ ❯ src/pages/hebrewNumberAgreement.spec.tsx:278:33
+    276|     // More than one match on purpose: `DataTable` draws the desktop r…
+    277|     // the same column definition, so a fix that reached only one of t…
+    278|     const listed = await screen.findAllByText('החזרת סחורה');
+       |                                 ^
+    279|     expect(listed.length).toBeGreaterThan(0);
+    280|     expect(document.body.textContent).not.toContain('creditReason_');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/pages/hebrewNumberAgreement.spec.tsx > FIN-05 — the credit reason reaches the screen as words > has no door left that renders the map without resolving it
+AssertionError: expected [ 'src\pages\Credits.tsx:70', …(2) ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   "src\\pages\\Credits.tsx:70",
++   "src\\pages\\Credits.tsx:157",
++   "src\\pages\\Suppliers.tsx:929",
++ ]
+
+ ❯ src/pages/hebrewNumberAgreement.spec.tsx:303:23
+    301|       });
+    302|     }
+    303|     expect(offenders).toEqual([]);
+       |                       ^
+    304|   });
+    305| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 6 skipped (8)
+   Start at  14:20:36
+   Duration  6.55s (transform 777ms, setup 498ms, import 1.19s, tests 3.15s, environment 1.45s)
+

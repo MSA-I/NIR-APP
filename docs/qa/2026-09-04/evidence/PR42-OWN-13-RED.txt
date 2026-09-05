@@ -1,0 +1,178 @@
+PR42 / OWN-13 — RED. Oracle: npx vitest run src/pages/settingsNumericBounds.spec.tsx
+Run against the UNFIXED tree at 2001b9af, before any change to Settings.tsx or inputBounds.ts.
+
+The four reds: no min and no step on #settings-match-days, and three values the screen wrote
+to organizations.settings that the code cannot honour — bank_match_days: -30 (an inverted
+window), 7.5 (Date.UTC truncates it) and 0 from an empty box (Number("") is a zero).
+Two controls pass in the same run: the VAT field beside it reports min=0 max=100, and an
+ordinary window of 14 days still reaches the row.
+
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-aa6ab415e44e16b91
+
+stderr | src/pages/settingsNumericBounds.spec.tsx > /settings — the bank-matching window carries a bound, as the field beside it does > states a floor and a unit in the DOM
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • POST http://127.0.0.1:55431/rest/v1/rpc/currencies_in_use
+
+  • Request body: {}
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | src/pages/settingsNumericBounds.spec.tsx > /settings — the bank-matching window carries a bound, as the field beside it does > states a floor and a unit in the DOM
+[supplyflow] InternalError: [MSW] Cannot bypass a request when using the "error" strategy for the "onUnhandledRequest" option.
+
+stderr | src/pages/settingsNumericBounds.spec.tsx > /settings — the bank-matching window carries a bound, as the field beside it does > refuses a negative window instead of writing one
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • POST http://127.0.0.1:55431/rest/v1/rpc/currencies_in_use
+
+  • Request body: {}
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | src/pages/settingsNumericBounds.spec.tsx > /settings — the bank-matching window carries a bound, as the field beside it does > refuses a negative window instead of writing one
+[supplyflow] InternalError: [MSW] Cannot bypass a request when using the "error" strategy for the "onUnhandledRequest" option.
+
+stderr | src/pages/settingsNumericBounds.spec.tsx > /settings — the bank-matching window carries a bound, as the field beside it does > refuses a fractional day, which the calendar arithmetic cannot honour
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • POST http://127.0.0.1:55431/rest/v1/rpc/currencies_in_use
+
+  • Request body: {}
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | src/pages/settingsNumericBounds.spec.tsx > /settings — the bank-matching window carries a bound, as the field beside it does > refuses a fractional day, which the calendar arithmetic cannot honour
+[supplyflow] InternalError: [MSW] Cannot bypass a request when using the "error" strategy for the "onUnhandledRequest" option.
+
+stderr | src/pages/settingsNumericBounds.spec.tsx > /settings — the bank-matching window carries a bound, as the field beside it does > refuses an empty box rather than storing the zero `Number("")` produces
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • POST http://127.0.0.1:55431/rest/v1/rpc/currencies_in_use
+
+  • Request body: {}
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | src/pages/settingsNumericBounds.spec.tsx > /settings — the bank-matching window carries a bound, as the field beside it does > refuses an empty box rather than storing the zero `Number("")` produces
+[supplyflow] InternalError: [MSW] Cannot bypass a request when using the "error" strategy for the "onUnhandledRequest" option.
+
+ ❯ src/pages/settingsNumericBounds.spec.tsx (5 tests | 4 failed) 977ms
+     × states a floor and a unit in the DOM 150ms
+     × refuses a negative window instead of writing one 299ms
+     × refuses a fractional day, which the calendar arithmetic cannot honour 225ms
+     × refuses an empty box rather than storing the zero `Number("")` produces 116ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/settingsNumericBounds.spec.tsx > /settings — the bank-matching window carries a bound, as the field beside it does > states a floor and a unit in the DOM
+AssertionError: expected null to be '0' // Object.is equality
+
+- Expected:
+"0"
+
++ Received:
+null
+
+ ❯ src/pages/settingsNumericBounds.spec.tsx:124:45
+    122|
+    123|     // A day window measured in whole days that cannot run backwards.
+    124|     expect(matchDays().getAttribute('min')).toBe('0');
+       |                                             ^
+    125|     expect(matchDays().getAttribute('step')).toBe('1');
+    126|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  src/pages/settingsNumericBounds.spec.tsx > /settings — the bank-matching window carries a bound, as the field beside it does > refuses a negative window instead of writing one
+AssertionError: expected [ { name: 'ארגון בדיקה', …(2) } ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   {
++     "name": "ארגון בדיקה",
++     "settings": {
++       "bank_match_days": -30,
++     },
++     "vat_rate": 18,
++   },
++ ]
+
+ ❯ src/pages/settingsNumericBounds.spec.tsx:138:21
+    136|     // A negative window makes `fromDate > toDate` in Bank.tsx, so no …
+    137|     // inside it and the date signal silently stops firing. Nothing ma…
+    138|     expect(patched).toEqual([]);
+       |                     ^
+    139|   });
+    140|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  src/pages/settingsNumericBounds.spec.tsx > /settings — the bank-matching window carries a bound, as the field beside it does > refuses a fractional day, which the calendar arithmetic cannot honour
+AssertionError: expected [ { name: 'ארגון בדיקה', …(2) } ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   {
++     "name": "ארגון בדיקה",
++     "settings": {
++       "bank_match_days": 7.5,
++     },
++     "vat_rate": 18,
++   },
++ ]
+
+ ❯ src/pages/settingsNumericBounds.spec.tsx:149:21
+    147|     await userEvent.click(saveOrgButton());
+    148|
+    149|     expect(patched).toEqual([]);
+       |                     ^
+    150|   });
+    151|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  src/pages/settingsNumericBounds.spec.tsx > /settings — the bank-matching window carries a bound, as the field beside it does > refuses an empty box rather than storing the zero `Number("")` produces
+AssertionError: expected [ { name: 'ארגון בדיקה', …(2) } ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   {
++     "name": "ארגון בדיקה",
++     "settings": {
++       "bank_match_days": 0,
++     },
++     "vat_rate": 18,
++   },
++ ]
+
+ ❯ src/pages/settingsNumericBounds.spec.tsx:161:21
+    159|     // `Number('')` is 0, and a zero window is a claim — "only a payme…
+    160|     // — not an absence. An empty box has said nothing, so nothing is …
+    161|     expect(patched).toEqual([]);
+       |                     ^
+    162|   });
+    163|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 1 passed (5)
+   Start at  15:00:40
+   Duration  3.63s (transform 697ms, setup 383ms, import 1.12s, tests 977ms, environment 949ms)
+

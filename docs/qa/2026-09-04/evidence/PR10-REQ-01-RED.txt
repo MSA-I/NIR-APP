@@ -1,0 +1,675 @@
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a4e05b5fcb59e1ec4
+
+stderr | src/pages/paymentRequestApprovalClosed.spec.tsx
+[supplyflow] payment_request_checks_failed
+
+ ❯ src/pages/paymentRequestApprovalClosed.spec.tsx (6 tests | 5 failed) 3478ms
+     × closes the approve button and carries the reason as its accessible name 3256ms
+     × does not offer the exceptional credit route as a way past it 114ms
+     × does not claim a payment or a balance change that did not happen 1ms
+     × does not send the reader to refresh, which changes nothing 1ms
+     × names the approval dependency and the step that clears it 2ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/paymentRequestApprovalClosed.spec.tsx > PaymentRequestDetail — an approval the server will certainly refuse > closes the approve button and carries the reason as its accessible name
+TestingLibraryElementError: Unable to find role="button" and name `/אישור חסום — חשבונית בדרישה טרם אושרה לתשלום/`
+
+Ignored nodes: comments, script, style
+<body
+  style="overflow: hidden;"
+>
+  <div>
+    <div
+      class="mobile-overlay-stack fixed z-[60] start-4 end-4 flex flex-col items-center gap-2 pointer-events-none no-print sm:start-6 sm:end-6"
+    />
+  </div>
+  <div
+    class="dialog-backdrop-safe fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-scrim p-0 sm:p-4"
+  >
+    <div
+      aria-labelledby="_r_0_"
+      aria-modal="true"
+      class="dialog-panel-safe bg-surface rounded-t-2xl sm:rounded-2xl shadow-dialog w-full sm:max-w-3xl flex flex-col focus:outline-none"
+      role="dialog"
+      tabindex="-1"
+    >
+      <div
+        class="flex items-center justify-between px-5 py-4 border-b border-line-soft"
+      >
+        <h3
+          class="font-semibold text-ink focus:outline-none"
+          id="_r_0_"
+          tabindex="-1"
+        >
+          דרישת תשלום #21 — משק ירוק — ירקות ופירות
+        </h3>
+        <button
+          aria-label="סגירה"
+          class="btn-ghost p-1.5! min-w-11 min-h-11"
+          type="button"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-x"
+            fill="none"
+            height="17"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="17"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M18 6 6 18"
+            />
+            <path
+              d="m6 6 12 12"
+            />
+          </svg>
+        </button>
+      </div>
+      <div
+        class="dialog-safe-body p-5 overflow-y-auto"
+      >
+        <div
+          class="space-y-4"
+        >
+          <div
+            class="flex flex-wrap items-center gap-3"
+          >
+            <span
+              class="badge-await"
+            >
+              ממתינה לאישור
+            </span>
+            <span
+              class="kpi-value-compact num"
+            >
+              ‏90.00 ‏₪
+            </span>
+          </div>
+          <div>
+            <div
+              class="text-sm font-medium text-ink-soft mb-1.5"
+            >
+              חשבוניות מקושרות
+            </div>
+            <ul
+              class="divide-y divide-line-soft border border-line-soft rounded-lg text-sm"
+            >
+              <li
+                class="flex min-h-11 flex-wrap items-center justify-between gap-x-3 gap-y-1 px-3 py-2"
+              >
+                <span>
+                  חשבונית
+                   
+                  <b
+                    class="num"
+                    dir="ltr"
+                  >
+                    LIVE-E2E-6430D260
+                  </b>
+                   · 
+                  01.08.2026
+                  <span
+                    class="badge-await ms-2"
+                  >
+                    טרם אושרה
+                  </span>
+                </span>
+                <span
+                  class="num font-medium"
+                >
+                  ‏90.00 ‏₪
+                </span>
+              </li>
+            </ul>
+            <div
+              class="note-alert mt-2"
+            >
+              <span
+                class="min-w-0 flex-1"
+              >
+                הדרישה ממתינה לאישור החשבונית LIVE-E2E-6430D260 לתשלום. עד שתאושר, האישור ייחסם בשרת.
+              </span>
+            </div>
+          </div>
+          <div>
+            <div
+              class="text-sm font-medium text-ink-soft mb-1.5"
+            >
+              בדיקות לפני אישור
+            </div>
+            <div
+              class="note-alert "
+            >
+              <div
+                class="min-w-0 flex-1 space-y-2"
+              >
+                <p
+                  class="font-semibold"
+                >
+                  לא ניתן לאשר את הדרישה במצבה הנוכחי.
+                </p>
+                <p
+                  class="text-xs"
+                >
+                  חסימה אחת · אזהרה אחת
+                </p>
+                <ul
+                  class="space-y-1"
+                >
+                  <li>
+                    הדרישה כוללת חשבונית שטרם אושרה לתשלום
+                  </li>
+                </ul>
+                <details
+                  class="group -mx-4 -mb-3 mt-2 border-t border-line-soft"
+                >
+                  <summary
+                    class="flex min-h-11 cursor-pointer list-none flex-wrap items-center gap-2 px-3 py-2.5 text-sm hover:bg-surface-hover active:bg-surface-selected focus-visible:outline-2 focus-visible:outline-focus [&::-webkit-details-marker]:hidden sm:px-4"
+                  >
+                    <span
+                      class="font-medium text-ink-body"
+                    >
+                      פירוט הבדיקות
+                    </span>
+                    <span
+                      class="badge-alert num"
+                    >
+                      2
+                    </span>
+                    <svg
+                      aria-hidden="true"
+                      class="lucide lucide-chevron-down shrink-0 text-ink-ghost transition-transform duration-200 ease-out group-open:rotate-180 motion-reduce:transition-none ms-auto"
+                      fill="none"
+                      height="15"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      viewBox="0 0 24 24"
+                      width="15"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="m6 9 6 6 6-6"
+                      />
+                    </svg>
+                  </summary>
+                  <div
+                    class="border-t border-line-soft px-3 pb-4 pt-3 sm:px-4"
+                  />
+                </details>
+              </div>
+            </div>
+          </div>
+          <div
+            class="flex flex-wrap justify-end gap-2 pt-1"
+          >
+            <button
+              class="btn-danger"
+            >
+              <svg
+                aria-hidden="true"
+                class="lucide lucide-circle-check"
+                fill="none"
+                height="15"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                viewBox="0 0 24 24"
+                width="15"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <circle
+                  cx="12"
+                  cy="12"
+                  r="10"
+                />
+                <path
+                  d="m9 12 2 2 4-4"
+                />
+              </svg>
+               
+              אישור למרות האזהרות
+            </button>
+            <button
+              class="btn-danger"
+            >
+              <svg
+                aria-hidden="true"
+                class="lucide lucide-circle-x"
+                fill="none"
+                height="15"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                viewBox="0 0 24 24"
+                width="15"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <circle
+                  cx="12"
+                  cy="12"
+                  r="10"
+                />
+                <path
+                  d="m15 9-6 6"
+                />
+                <path
+                  d="m9 9 6 6"
+                />
+              </svg>
+               
+              ביטול
+            </button>
+          </div>
+        </div>
+      </div>
+      <div
+        aria-live="polite"
+        class="sr-only"
+      >
+        דרישת תשלום #21 — משק ירוק — ירקות ופירות
+      </div>
+    </div>
+  </div>
+</body>
+
+Ignored nodes: comments, script, style
+<body
+  style="overflow: hidden;"
+>
+  <div>
+    <div
+      class="mobile-overlay-stack fixed z-[60] start-4 end-4 flex flex-col items-center gap-2 pointer-events-none no-print sm:start-6 sm:end-6"
+    />
+  </div>
+  <div
+    class="dialog-backdrop-safe fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-scrim p-0 sm:p-4"
+  >
+    <div
+      aria-labelledby="_r_0_"
+      aria-modal="true"
+      class="dialog-panel-safe bg-surface rounded-t-2xl sm:rounded-2xl shadow-dialog w-full sm:max-w-3xl flex flex-col focus:outline-none"
+      role="dialog"
+      tabindex="-1"
+    >
+      <div
+        class="flex items-center justify-between px-5 py-4 border-b border-line-soft"
+      >
+        <h3
+          class="font-semibold text-ink focus:outline-none"
+          id="_r_0_"
+          tabindex="-1"
+        >
+          דרישת תשלום #21 — משק ירוק — ירקות ופירות
+        </h3>
+        <button
+          aria-label="סגירה"
+          class="btn-ghost p-1.5! min-w-11 min-h-11"
+          type="button"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-x"
+            fill="none"
+            height="17"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="17"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M18 6 6 18"
+            />
+            <path
+              d="m6 6 12 12"
+            />
+          </svg>
+        </button>
+      </div>
+      <div
+        class="dialog-safe-body p-5 overflow-y-auto"
+      >
+        <div
+          class="space-y-4"
+        >
+          <div
+            class="flex flex-wrap items-center gap-3"
+          >
+            <span
+              class="badge-await"
+            >
+              ממתינה לאישור
+            </span>
+            <span
+              class="kpi-value-compact num"
+            >
+              ‏90.00 ‏₪
+            </span>
+          </div>
+          <div>
+            <div
+              class="text-sm font-medium text-ink-soft mb-1.5"
+            >
+              חשבוניות מקושרות
+            </div>
+            <ul
+              class="divide-y divide-line-soft border border-line-soft rounded-lg text-sm"
+            >
+              <li
+                class="flex min-h-11 flex-wrap items-center justify-between gap-x-3 gap-y-1 px-3 py-2"
+              >
+                <span>
+                  חשבונית
+                   
+                  <b
+                    class="num"
+                    dir="ltr"
+                  >
+                    LIVE-E2E-6430D260
+                  </b>
+                   · 
+                  01.08.2026
+                  <span
+                    class="badge-await ms-2"
+                  >
+                    טרם אושרה
+                  </span>
+                </span>
+                <span
+                  class="num font-medium"
+                >
+                  ‏90.00 ‏₪
+                </span>
+              </li>
+            </ul>
+            <div
+              class="note-alert mt-2"
+            >
+              <span
+                class="min-w-0 flex-1"
+              >
+                הדרישה ממתינה לאישור החשבונית LIVE-E2E-6430D260 לתשלום. עד שתאושר, האישור ייחסם בשרת.
+              </span>
+            </div>
+          </div>
+          <div>
+            <div
+              class="text-sm font-medium text-ink-soft mb-1.5"
+            >
+              בדיקות לפני אישור
+            </div>
+            <div
+              class="note-alert "
+            >
+              <div
+                class="min-w-0 flex-1 space-y-2"
+              >
+                <p
+                  class="font-semibold"
+                >
+                  לא ניתן לאשר את הדרישה במצבה הנוכחי.
+                </p>
+                <p
+                  class="text-xs"
+                >
+                  חסימה אחת · אזהרה אחת
+                </p>
+                <ul
+                  class="space-y-1"
+                >
+                  <li>
+                    הדרישה כוללת חשבונית שטרם אושרה לתשלום
+                  </li>
+                </ul>
+                <details
+                  class="group -mx-4 -mb-3 mt-2 border-t border-line-soft"
+                >
+                  <summary
+                    class="flex min-h-11 cursor-pointer list-none flex-wrap items-center gap-2 px-3 py-2.5 text-sm hover:bg-surface-hover active:bg-surface-selected focus-visible:outline-2 focus-visible:outline-focus [&::-webkit-details-marker]:hidden sm:px-4"
+                  >
+                    <span
+                      class="font-medium text-ink-body"
+                    >
+                      פירוט הבדיקות
+                    </span>
+                    <span
+                      class="badge-alert num"
+                    >
+                      2
+                    </span>
+                    <svg
+                      aria-hidden="true"
+                      class="lucide lucide-chevron-down shrink-0 text-ink-ghost transition-transform duration-200 ease-out group-open:rotate-180 motion-reduce:transition-none ms-auto"
+                      fill="none"
+                      height="15"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      viewBox="0 0 24 24"
+                      width="15"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="m6 9 6 6 6-6"
+                      />
+                    </svg>
+                  </summary>
+                  <div
+                    class="border-t border-line-soft px-3 pb-4 pt-3 sm:px-4"
+                  />
+                </details>
+              </div>
+            </div>
+          </div>
+          <div
+            class="flex flex-wrap justify-end gap-2 pt-1"
+          >
+            <button
+              class="btn-danger"
+            >
+              <svg
+                aria-hidden="true"
+                class="lucide lucide-circle-check"
+                fill="none"
+                height="15"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                viewBox="0 0 24 24"
+                width="15"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <circle
+                  cx="12"
+                  cy="12"
+                  r="10"
+                />
+                <path
+                  d="m9 12 2 2 4-4"
+                />
+              </svg>
+               
+              אישור למרות האזהרות
+            </button>
+            <button
+              class="btn-danger"
+            >
+              <svg
+                aria-hidden="true"
+                class="lucide lucide-circle-x"
+                fill="none"
+                height="15"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                viewBox="0 0 24 24"
+                width="15"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <circle
+                  cx="12"
+                  cy="12"
+                  r="10"
+                />
+                <path
+                  d="m15 9-6 6"
+                />
+                <path
+                  d="m9 9 6 6"
+                />
+              </svg>
+               
+              ביטול
+            </button>
+          </div>
+        </div>
+      </div>
+      <div
+        aria-live="polite"
+        class="sr-only"
+      >
+        דרישת תשלום #21 — משק ירוק — ירקות ופירות
+      </div>
+    </div>
+  </div>
+</body>
+ ❯ waitForWrapper ../../../node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ src/pages/paymentRequestApprovalClosed.spec.tsx:145:34
+    143|
+    144|     // The precedent this file already set for a refusal the server ma…
+    145|     const approve = await screen.findByRole('button', { name: /אישור ח…
+       |                                  ^
+    146|     expect(approve.hasAttribute('disabled')).toBe(true);
+    147|     // And nothing else on the panel offers to approve. `אישור למרות ה…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  src/pages/paymentRequestApprovalClosed.spec.tsx > PaymentRequestDetail — an approval the server will certainly refuse > does not offer the exceptional credit route as a way past it
+AssertionError: expected <button class="btn-primary">…(1)</button> to be null
+
+- Expected:
+null
+
++ Received:
+<button
+  class="btn-primary"
+>
+  <svg
+    aria-hidden="true"
+    class="lucide lucide-shield-alert"
+    fill="none"
+    height="15"
+    stroke="currentColor"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    stroke-width="2"
+    viewBox="0 0 24 24"
+    width="15"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path
+      d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
+    />
+    <path
+      d="M12 8v4"
+    />
+    <path
+      d="M12 16h.01"
+    />
+  </svg>
+   
+  אישור חריג ללא קיזוז הזיכוי
+</button>
+
+ ❯ src/pages/paymentRequestApprovalClosed.spec.tsx:165:66
+    163|     fireEvent.click(acknowledge);
+    164|
+    165|     expect(screen.queryByRole('button', { name: /אישור חריג/ })).toBeN…
+       |                                                                  ^
+    166|     expect(approvalButtons().every((button) => button.hasAttribute('di…
+    167|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+ FAIL  src/pages/paymentRequestApprovalClosed.spec.tsx > the refusal the server actually sends > does not claim a payment or a balance change that did not happen
+AssertionError: expected 'בדיקות השרת מצאו חשבונית ששולמה או ית…' not to match /חשבונית ששולמה/
+
+- Expected:
+/חשבונית ששולמה/
+
++ Received:
+"בדיקות השרת מצאו חשבונית ששולמה או יתרה שהשתנתה. רענן ובדוק את הדרישה."
+
+ ❯ src/pages/paymentRequestApprovalClosed.spec.tsx:186:24
+    184|     // `paid_invoice_count: 0` in the very signals call that preceded …
+    185|     // (`0031:895-915`) is a disjunction, and "an invoice was paid" is…
+    186|     expect(hebrew).not.toMatch(/חשבונית ששולמה/);
+       |                        ^
+    187|     expect(english).not.toMatch(/has been paid/i);
+    188|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
+
+ FAIL  src/pages/paymentRequestApprovalClosed.spec.tsx > the refusal the server actually sends > does not send the reader to refresh, which changes nothing
+AssertionError: expected 'בדיקות השרת מצאו חשבונית ששולמה או ית…' not to match /רענן/
+
+- Expected:
+/רענן/
+
++ Received:
+"בדיקות השרת מצאו חשבונית ששולמה או יתרה שהשתנתה. רענן ובדוק את הדרישה."
+
+ ❯ src/pages/paymentRequestApprovalClosed.spec.tsx:192:24
+    190|   it('does not send the reader to refresh, which changes nothing', () …
+    191|     // The state is on the server and did not move; the sweep refreshe…
+    192|     expect(hebrew).not.toMatch(/רענן/);
+       |                        ^
+    193|     expect(english).not.toMatch(/refresh/i);
+    194|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯
+
+ FAIL  src/pages/paymentRequestApprovalClosed.spec.tsx > the refusal the server actually sends > names the approval dependency and the step that clears it
+AssertionError: expected 'בדיקות השרת מצאו חשבונית ששולמה או ית…' to match /אושרו לתשלום/
+
+- Expected:
+/אושרו לתשלום/
+
++ Received:
+"בדיקות השרת מצאו חשבונית ששולמה או יתרה שהשתנתה. רענן ובדוק את הדרישה."
+
+ ❯ src/pages/paymentRequestApprovalClosed.spec.tsx:197:20
+    195|
+    196|   it('names the approval dependency and the step that clears it', () =…
+    197|     expect(hebrew).toMatch(/אושרו לתשלום/);
+       |                    ^
+    198|     expect(hebrew).toMatch(/יש לאשר את החשבונית לתשלום/);
+    199|     expect(english).toMatch(/approved for payment/i);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/5]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  5 failed | 1 passed (6)
+   Start at  04:55:28
+   Duration  8.57s (transform 1.25s, setup 753ms, import 1.84s, tests 3.48s, environment 2.10s)
+
+
+[exit code] 1

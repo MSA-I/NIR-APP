@@ -1,0 +1,1872 @@
+PR 18 — DOC-01 and DOC-06 — the FINAL oracle, run against the UNFIXED tree
+worktree: agent-aef072387c1d1282c   base commit: 2001b9af
+method: the nine tracked files this PR changes were restored to their base version with
+        `git checkout -- <files>`; the two oracle spec files are new and therefore survived.
+command: npx vitest run src/pages/documentsScanApprovalGate.spec.tsx src/components/document-review/noApprovalRoute.spec.tsx
+date: 2026-09-04
+exit code: 1
+----------------------------------------------------------------------
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-aef072387c1d1282c
+
+ ❯ src/components/document-review/noApprovalRoute.spec.tsx (6 tests | 4 failed) 467ms
+     × refuses a payment confirmation even when everything else resolved 13ms
+     × refuses a quote and an unclassified document for the same reason 2ms
+     × אומר מה לעשות עם אישור תשלום, לא רק שאין מסלול 305ms
+     × אומר מה לעשות עם הצעת מחיר — לתקן את הסוג או לשייך מהתיקייה 91ms
+ ❯ src/pages/documentsScanApprovalGate.spec.tsx (6 tests | 6 failed) 12429ms
+     × does not resolve a scan waiting for approval to the residual unassigned state 9ms
+     × ranks it with the work that waits on a person, not below it 1ms
+     × קוראת למצב בשמו ולא ״לא משויך״ 3140ms
+     × נותנת את הפעולה שמשחררת אותו, ולא את הוראת השיוך 3086ms
+     × מציעה קישור אל מסך הבדיקה, שבו נמצא הכפתור שמשחרר 3125ms
+     × מציגה כמה זמן הוא כבר ממתין, כי אף עובד לא יזיז אותו 3059ms
+
+ Test Files  2 failed (2)
+      Tests  10 failed | 2 passed (12)
+   Start at  15:33:32
+   Duration  32.10s (transform 29.73s, setup 1.69s, import 31.54s, tests 12.90s, environment 4.32s)
+
+stderr | src/pages/documentsScanApprovalGate.spec.tsx > DOC-01 · תיקיית המסמכים על סריקה שממתינה לאישור > קוראת למצב בשמו ולא ״לא משויך״
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • POST http://127.0.0.1:55431/rest/v1/rpc/organization_usage_snapshot
+
+  • Request body: {}
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | src/pages/documentsScanApprovalGate.spec.tsx > DOC-01 · תיקיית המסמכים על סריקה שממתינה לאישור > קוראת למצב בשמו ולא ״לא משויך״
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • POST http://127.0.0.1:55431/rest/v1/rpc/organization_usage_snapshot
+
+  • Request body: {}
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | src/pages/documentsScanApprovalGate.spec.tsx > DOC-01 · תיקיית המסמכים על סריקה שממתינה לאישור > נותנת את הפעולה שמשחררת אותו, ולא את הוראת השיוך
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • POST http://127.0.0.1:55431/rest/v1/rpc/organization_usage_snapshot
+
+  • Request body: {}
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | src/pages/documentsScanApprovalGate.spec.tsx > DOC-01 · תיקיית המסמכים על סריקה שממתינה לאישור > נותנת את הפעולה שמשחררת אותו, ולא את הוראת השיוך
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • POST http://127.0.0.1:55431/rest/v1/rpc/organization_usage_snapshot
+
+  • Request body: {}
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | src/pages/documentsScanApprovalGate.spec.tsx > DOC-01 · תיקיית המסמכים על סריקה שממתינה לאישור > מציעה קישור אל מסך הבדיקה, שבו נמצא הכפתור שמשחרר
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • POST http://127.0.0.1:55431/rest/v1/rpc/organization_usage_snapshot
+
+  • Request body: {}
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | src/pages/documentsScanApprovalGate.spec.tsx > DOC-01 · תיקיית המסמכים על סריקה שממתינה לאישור > מציעה קישור אל מסך הבדיקה, שבו נמצא הכפתור שמשחרר
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • POST http://127.0.0.1:55431/rest/v1/rpc/organization_usage_snapshot
+
+  • Request body: {}
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | src/pages/documentsScanApprovalGate.spec.tsx > DOC-01 · תיקיית המסמכים על סריקה שממתינה לאישור > מציגה כמה זמן הוא כבר ממתין, כי אף עובד לא יזיז אותו
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • POST http://127.0.0.1:55431/rest/v1/rpc/organization_usage_snapshot
+
+  • Request body: {}
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | src/pages/documentsScanApprovalGate.spec.tsx > DOC-01 · תיקיית המסמכים על סריקה שממתינה לאישור > מציגה כמה זמן הוא כבר ממתין, כי אף עובד לא יזיז אותו
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • POST http://127.0.0.1:55431/rest/v1/rpc/organization_usage_snapshot
+
+  • Request body: {}
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 10 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/documentsScanApprovalGate.spec.tsx > documentUiStatus knows the scan-approval gate > does not resolve a scan waiting for approval to the residual unassigned state
+AssertionError: expected 'unassigned' to be 'awaiting_scan' // Object.is equality
+
+Expected: "awaiting_scan"
+Received: "unassigned"
+
+ ❯ src/pages/documentsScanApprovalGate.spec.tsx:104:26
+    102|       evaluatedAt: Date.parse('2026-09-02T09:08:02Z'),
+    103|     });
+    104|     expect(status.state).toBe('awaiting_scan');
+       |                          ^
+    105|     // The filing filter counts an unassigned row as work for the fili…
+    106|     // has read yet is not that, and counting it there is how it hid i…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/10]⎯
+
+ FAIL  src/pages/documentsScanApprovalGate.spec.tsx > documentUiStatus knows the scan-approval gate > ranks it with the work that waits on a person, not below it
+AssertionError: expected 3 to be less than 3
+ ❯ src/pages/documentsScanApprovalGate.spec.tsx:116:27
+    114|     });
+    115|     const filing = documentUiStatus({ status: 'completed', document: i…
+    116|     expect(gate.priority).toBeLessThan(filing.priority);
+       |                           ^
+    117|   });
+    118| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/10]⎯
+
+ FAIL  src/pages/documentsScanApprovalGate.spec.tsx > DOC-01 · תיקיית המסמכים על סריקה שממתינה לאישור > קוראת למצב בשמו ולא ״לא משויך״
+TestingLibraryElementError: Unable to find an element with the text: /צריך לפתוח את המסמך ולאשר את הסריקה/. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"space-y-4"[39m
+      [33mdata-testid[39m=[32m"documents-page"[39m
+    [36m>[39m
+      [36m<header[39m
+        [33mclass[39m=[32m"flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between "[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"min-w-0 space-y-1"[39m
+        [36m>[39m
+          [36m<h1[39m
+            [33mclass[39m=[32m"page-title break-words"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"flex items-center gap-2"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-folder-open"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"22"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"22"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [0m [0m
+              [0mתיקיית המסמכים[0m
+            [36m</span>[39m
+          [36m</h1>[39m
+          [36m<span[39m
+            [33maria-hidden[39m=[32m"true"[39m
+            [33mclass[39m=[32m"section-mark"[39m
+          [36m/>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"text-sm text-ink-soft"[39m
+          [36m>[39m
+            [0mכל החשבוניות, תעודות המשלוח, הזיכויים והמסמכים הנוספים במקום אחד.[0m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex shrink-0 flex-wrap items-center gap-2"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"btn-primary"[39m
+            [33mdata-tour-anchor[39m=[32m"documents-upload"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"lucide lucide-upload"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"15"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"15"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M12 3v12"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m17 8-5-5-5 5"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [0m [0m
+            [0mהעלאת מסמך[0m
+          [36m</button>[39m
+          [36m<a[39m
+            [33mclass[39m=[32m"btn-secondary"[39m
+            [33mdata-discover[39m=[32m"true"[39m
+            [33mhref[39m=[32m"/documents/archive"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"lucide lucide-archive"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"15"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"15"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<rect[39m
+                [33mheight[39m=[32m"5"[39m
+                [33mrx[39m=[32m"1"[39m
+                [33mwidth[39m=[32m"20"[39m
+                [33mx[39m=[32m"2"[39m
+                [33my[39m=[32m"3"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M10 12h4"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [0mארכיון[0m
+          [36m</a>[39m
+        [36m</div>[39m
+      [36m</header>[39m
+      [36m<section[39m
+        [33maria-label[39m=[32m"סינון מסמכים"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end"[39m
+        [36m>[39m
+          [36m<label>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"label"[39m
+            [36m>[39m
+              [0mשם קובץ[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"relative block"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-search absolute top-1/2 start-3 -translate-y-1/2 text-ink-faint"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"15"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"15"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m21 21-4.34-4.34"[39m
+                [36m/>[39m
+                [36m<circle[39m
+                  [33mcx[39m=[32m"11"[39m
+                  [33mcy[39m=[32m"11"[39m
+                  [33mr[39m=[32m"8"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [36m<input[39m
+                [33mclass[39m=[32m"input ps-9!"[39m
+                [33mplaceholder[39m=[32m"חיפוש מסמך..."[39m
+                [33mtype[39m=[32m"search"[39m
+                [33mvalue[39m=[32m""[39m
+         ...
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"space-y-4"[39m
+      [33mdata-testid[39m=[32m"documents-page"[39m
+    [36m>[39m
+      [36m<header[39m
+        [33mclass[39m=[32m"flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between "[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"min-w-0 space-y-1"[39m
+        [36m>[39m
+          [36m<h1[39m
+            [33mclass[39m=[32m"page-title break-words"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"flex items-center gap-2"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-folder-open"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"22"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"22"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [0m [0m
+              [0mתיקיית המסמכים[0m
+            [36m</span>[39m
+          [36m</h1>[39m
+          [36m<span[39m
+            [33maria-hidden[39m=[32m"true"[39m
+            [33mclass[39m=[32m"section-mark"[39m
+          [36m/>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"text-sm text-ink-soft"[39m
+          [36m>[39m
+            [0mכל החשבוניות, תעודות המשלוח, הזיכויים והמסמכים הנוספים במקום אחד.[0m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex shrink-0 flex-wrap items-center gap-2"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"btn-primary"[39m
+            [33mdata-tour-anchor[39m=[32m"documents-upload"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"lucide lucide-upload"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"15"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"15"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M12 3v12"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m17 8-5-5-5 5"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [0m [0m
+            [0mהעלאת מסמך[0m
+          [36m</button>[39m
+          [36m<a[39m
+            [33mclass[39m=[32m"btn-secondary"[39m
+            [33mdata-discover[39m=[32m"true"[39m
+            [33mhref[39m=[32m"/documents/archive"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"lucide lucide-archive"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"15"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"15"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<rect[39m
+                [33mheight[39m=[32m"5"[39m
+                [33mrx[39m=[32m"1"[39m
+                [33mwidth[39m=[32m"20"[39m
+                [33mx[39m=[32m"2"[39m
+                [33my[39m=[32m"3"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M10 12h4"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [0mארכיון[0m
+          [36m</a>[39m
+        [36m</div>[39m
+      [36m</header>[39m
+      [36m<section[39m
+        [33maria-label[39m=[32m"סינון מסמכים"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end"[39m
+        [36m>[39m
+          [36m<label>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"label"[39m
+            [36m>[39m
+              [0mשם קובץ[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"relative block"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-search absolute top-1/2 start-3 -translate-y-1/2 text-ink-faint"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"15"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"15"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m21 21-4.34-4.34"[39m
+                [36m/>[39m
+                [36m<circle[39m
+                  [33mcx[39m=[32m"11"[39m
+                  [33mcy[39m=[32m"11"[39m
+                  [33mr[39m=[32m"8"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [36m<input[39m
+                [33mclass[39m=[32m"input ps-9!"[39m
+                [33mplaceholder[39m=[32m"חיפוש מסמך..."[39m
+                [33mtype[39m=[32m"search"[39m
+                [33mvalue[39m=[32m""[39m
+         ...
+ ❯ waitForWrapper ../../../node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ src/pages/documentsScanApprovalGate.spec.tsx:134:25
+    132|     // filter option, and an option exists before any status has been …
+    133|     // would let this assertion run against the first render, where ev…
+    134|     expect(await screen.findAllByText(/צריך לפתוח את המסמך ולאשר את הס…
+       |                         ^
+    135|     // Asserted on the BADGE and not on the page, because "לא משויך" i…
+    136|     // option — a control offering to narrow the list, which is a diff…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/10]⎯
+
+ FAIL  src/pages/documentsScanApprovalGate.spec.tsx > DOC-01 · תיקיית המסמכים על סריקה שממתינה לאישור > נותנת את הפעולה שמשחררת אותו, ולא את הוראת השיוך
+TestingLibraryElementError: Unable to find an element with the text: /צריך לפתוח את המסמך ולאשר את הסריקה/. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"space-y-4"[39m
+      [33mdata-testid[39m=[32m"documents-page"[39m
+    [36m>[39m
+      [36m<header[39m
+        [33mclass[39m=[32m"flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between "[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"min-w-0 space-y-1"[39m
+        [36m>[39m
+          [36m<h1[39m
+            [33mclass[39m=[32m"page-title break-words"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"flex items-center gap-2"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-folder-open"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"22"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"22"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [0m [0m
+              [0mתיקיית המסמכים[0m
+            [36m</span>[39m
+          [36m</h1>[39m
+          [36m<span[39m
+            [33maria-hidden[39m=[32m"true"[39m
+            [33mclass[39m=[32m"section-mark"[39m
+          [36m/>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"text-sm text-ink-soft"[39m
+          [36m>[39m
+            [0mכל החשבוניות, תעודות המשלוח, הזיכויים והמסמכים הנוספים במקום אחד.[0m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex shrink-0 flex-wrap items-center gap-2"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"btn-primary"[39m
+            [33mdata-tour-anchor[39m=[32m"documents-upload"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"lucide lucide-upload"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"15"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"15"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M12 3v12"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m17 8-5-5-5 5"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [0m [0m
+            [0mהעלאת מסמך[0m
+          [36m</button>[39m
+          [36m<a[39m
+            [33mclass[39m=[32m"btn-secondary"[39m
+            [33mdata-discover[39m=[32m"true"[39m
+            [33mhref[39m=[32m"/documents/archive"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"lucide lucide-archive"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"15"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"15"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<rect[39m
+                [33mheight[39m=[32m"5"[39m
+                [33mrx[39m=[32m"1"[39m
+                [33mwidth[39m=[32m"20"[39m
+                [33mx[39m=[32m"2"[39m
+                [33my[39m=[32m"3"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M10 12h4"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [0mארכיון[0m
+          [36m</a>[39m
+        [36m</div>[39m
+      [36m</header>[39m
+      [36m<section[39m
+        [33maria-label[39m=[32m"סינון מסמכים"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end"[39m
+        [36m>[39m
+          [36m<label>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"label"[39m
+            [36m>[39m
+              [0mשם קובץ[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"relative block"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-search absolute top-1/2 start-3 -translate-y-1/2 text-ink-faint"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"15"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"15"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m21 21-4.34-4.34"[39m
+                [36m/>[39m
+                [36m<circle[39m
+                  [33mcx[39m=[32m"11"[39m
+                  [33mcy[39m=[32m"11"[39m
+                  [33mr[39m=[32m"8"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [36m<input[39m
+                [33mclass[39m=[32m"input ps-9!"[39m
+                [33mplaceholder[39m=[32m"חיפוש מסמך..."[39m
+                [33mtype[39m=[32m"search"[39m
+                [33mvalue[39m=[32m""[39m
+         ...
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"space-y-4"[39m
+      [33mdata-testid[39m=[32m"documents-page"[39m
+    [36m>[39m
+      [36m<header[39m
+        [33mclass[39m=[32m"flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between "[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"min-w-0 space-y-1"[39m
+        [36m>[39m
+          [36m<h1[39m
+            [33mclass[39m=[32m"page-title break-words"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"flex items-center gap-2"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-folder-open"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"22"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"22"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [0m [0m
+              [0mתיקיית המסמכים[0m
+            [36m</span>[39m
+          [36m</h1>[39m
+          [36m<span[39m
+            [33maria-hidden[39m=[32m"true"[39m
+            [33mclass[39m=[32m"section-mark"[39m
+          [36m/>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"text-sm text-ink-soft"[39m
+          [36m>[39m
+            [0mכל החשבוניות, תעודות המשלוח, הזיכויים והמסמכים הנוספים במקום אחד.[0m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex shrink-0 flex-wrap items-center gap-2"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"btn-primary"[39m
+            [33mdata-tour-anchor[39m=[32m"documents-upload"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"lucide lucide-upload"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"15"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"15"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M12 3v12"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m17 8-5-5-5 5"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [0m [0m
+            [0mהעלאת מסמך[0m
+          [36m</button>[39m
+          [36m<a[39m
+            [33mclass[39m=[32m"btn-secondary"[39m
+            [33mdata-discover[39m=[32m"true"[39m
+            [33mhref[39m=[32m"/documents/archive"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"lucide lucide-archive"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"15"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"15"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<rect[39m
+                [33mheight[39m=[32m"5"[39m
+                [33mrx[39m=[32m"1"[39m
+                [33mwidth[39m=[32m"20"[39m
+                [33mx[39m=[32m"2"[39m
+                [33my[39m=[32m"3"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M10 12h4"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [0mארכיון[0m
+          [36m</a>[39m
+        [36m</div>[39m
+      [36m</header>[39m
+      [36m<section[39m
+        [33maria-label[39m=[32m"סינון מסמכים"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end"[39m
+        [36m>[39m
+          [36m<label>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"label"[39m
+            [36m>[39m
+              [0mשם קובץ[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"relative block"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-search absolute top-1/2 start-3 -translate-y-1/2 text-ink-faint"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"15"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"15"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m21 21-4.34-4.34"[39m
+                [36m/>[39m
+                [36m<circle[39m
+                  [33mcx[39m=[32m"11"[39m
+                  [33mcy[39m=[32m"11"[39m
+                  [33mr[39m=[32m"8"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [36m<input[39m
+                [33mclass[39m=[32m"input ps-9!"[39m
+                [33mplaceholder[39m=[32m"חיפוש מסמך..."[39m
+                [33mtype[39m=[32m"search"[39m
+                [33mvalue[39m=[32m""[39m
+         ...
+ ❯ waitForWrapper ../../../node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ src/pages/documentsScanApprovalGate.spec.tsx:150:25
+    148|     renderGallery();
+    149|
+    150|     expect(await screen.findAllByText(/צריך לפתוח את המסמך ולאשר את הס…
+       |                         ^
+    151|     // The sentence the sweep read on this row. It sent the reader to …
+    152|     // not have started the reading, and `file_document` would have re…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/10]⎯
+
+ FAIL  src/pages/documentsScanApprovalGate.spec.tsx > DOC-01 · תיקיית המסמכים על סריקה שממתינה לאישור > מציעה קישור אל מסך הבדיקה, שבו נמצא הכפתור שמשחרר
+TestingLibraryElementError: Unable to find role="link" and name "אישור הסריקה"
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"space-y-4"[39m
+      [33mdata-testid[39m=[32m"documents-page"[39m
+    [36m>[39m
+      [36m<header[39m
+        [33mclass[39m=[32m"flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between "[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"min-w-0 space-y-1"[39m
+        [36m>[39m
+          [36m<h1[39m
+            [33mclass[39m=[32m"page-title break-words"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"flex items-center gap-2"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-folder-open"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"22"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"22"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [0m [0m
+              [0mתיקיית המסמכים[0m
+            [36m</span>[39m
+          [36m</h1>[39m
+          [36m<span[39m
+            [33maria-hidden[39m=[32m"true"[39m
+            [33mclass[39m=[32m"section-mark"[39m
+          [36m/>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"text-sm text-ink-soft"[39m
+          [36m>[39m
+            [0mכל החשבוניות, תעודות המשלוח, הזיכויים והמסמכים הנוספים במקום אחד.[0m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex shrink-0 flex-wrap items-center gap-2"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"btn-primary"[39m
+            [33mdata-tour-anchor[39m=[32m"documents-upload"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"lucide lucide-upload"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"15"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"15"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M12 3v12"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m17 8-5-5-5 5"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [0m [0m
+            [0mהעלאת מסמך[0m
+          [36m</button>[39m
+          [36m<a[39m
+            [33mclass[39m=[32m"btn-secondary"[39m
+            [33mdata-discover[39m=[32m"true"[39m
+            [33mhref[39m=[32m"/documents/archive"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"lucide lucide-archive"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"15"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"15"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<rect[39m
+                [33mheight[39m=[32m"5"[39m
+                [33mrx[39m=[32m"1"[39m
+                [33mwidth[39m=[32m"20"[39m
+                [33mx[39m=[32m"2"[39m
+                [33my[39m=[32m"3"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M10 12h4"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [0mארכיון[0m
+          [36m</a>[39m
+        [36m</div>[39m
+      [36m</header>[39m
+      [36m<section[39m
+        [33maria-label[39m=[32m"סינון מסמכים"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end"[39m
+        [36m>[39m
+          [36m<label>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"label"[39m
+            [36m>[39m
+              [0mשם קובץ[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"relative block"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-search absolute top-1/2 start-3 -translate-y-1/2 text-ink-faint"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"15"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"15"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m21 21-4.34-4.34"[39m
+                [36m/>[39m
+                [36m<circle[39m
+                  [33mcx[39m=[32m"11"[39m
+                  [33mcy[39m=[32m"11"[39m
+                  [33mr[39m=[32m"8"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [36m<input[39m
+                [33mclass[39m=[32m"input ps-9!"[39m
+                [33mplaceholder[39m=[32m"חיפוש מסמך..."[39m
+                [33mtype[39m=[32m"search"[39m
+                [33mvalue[39m=[32m""[39m
+         ...
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"space-y-4"[39m
+      [33mdata-testid[39m=[32m"documents-page"[39m
+    [36m>[39m
+      [36m<header[39m
+        [33mclass[39m=[32m"flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between "[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"min-w-0 space-y-1"[39m
+        [36m>[39m
+          [36m<h1[39m
+            [33mclass[39m=[32m"page-title break-words"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"flex items-center gap-2"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-folder-open"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"22"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"22"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [0m [0m
+              [0mתיקיית המסמכים[0m
+            [36m</span>[39m
+          [36m</h1>[39m
+          [36m<span[39m
+            [33maria-hidden[39m=[32m"true"[39m
+            [33mclass[39m=[32m"section-mark"[39m
+          [36m/>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"text-sm text-ink-soft"[39m
+          [36m>[39m
+            [0mכל החשבוניות, תעודות המשלוח, הזיכויים והמסמכים הנוספים במקום אחד.[0m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex shrink-0 flex-wrap items-center gap-2"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"btn-primary"[39m
+            [33mdata-tour-anchor[39m=[32m"documents-upload"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"lucide lucide-upload"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"15"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"15"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M12 3v12"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m17 8-5-5-5 5"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [0m [0m
+            [0mהעלאת מסמך[0m
+          [36m</button>[39m
+          [36m<a[39m
+            [33mclass[39m=[32m"btn-secondary"[39m
+            [33mdata-discover[39m=[32m"true"[39m
+            [33mhref[39m=[32m"/documents/archive"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"lucide lucide-archive"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"15"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"15"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<rect[39m
+                [33mheight[39m=[32m"5"[39m
+                [33mrx[39m=[32m"1"[39m
+                [33mwidth[39m=[32m"20"[39m
+                [33mx[39m=[32m"2"[39m
+                [33my[39m=[32m"3"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M10 12h4"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [0mארכיון[0m
+          [36m</a>[39m
+        [36m</div>[39m
+      [36m</header>[39m
+      [36m<section[39m
+        [33maria-label[39m=[32m"סינון מסמכים"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end"[39m
+        [36m>[39m
+          [36m<label>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"label"[39m
+            [36m>[39m
+              [0mשם קובץ[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"relative block"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-search absolute top-1/2 start-3 -translate-y-1/2 text-ink-faint"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"15"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"15"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m21 21-4.34-4.34"[39m
+                [36m/>[39m
+                [36m<circle[39m
+                  [33mcx[39m=[32m"11"[39m
+                  [33mcy[39m=[32m"11"[39m
+                  [33mr[39m=[32m"8"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [36m<input[39m
+                [33mclass[39m=[32m"input ps-9!"[39m
+                [33mplaceholder[39m=[32m"חיפוש מסמך..."[39m
+                [33mtype[39m=[32m"search"[39m
+                [33mvalue[39m=[32m""[39m
+         ...
+ ❯ waitForWrapper ../../../node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ src/pages/documentsScanApprovalGate.spec.tsx:160:32
+    158|     renderGallery();
+    159|
+    160|     const links = await screen.findAllByRole('link', { name: 'אישור הס…
+       |                                ^
+    161|     expect(links.length).toBeGreaterThan(0);
+    162|     expect(links[0]).toHaveAttribute('href', `/documents/${DOC_ID}/rev…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/10]⎯
+
+ FAIL  src/pages/documentsScanApprovalGate.spec.tsx > DOC-01 · תיקיית המסמכים על סריקה שממתינה לאישור > מציגה כמה זמן הוא כבר ממתין, כי אף עובד לא יזיז אותו
+TestingLibraryElementError: Unable to find an element with the text: · 7 דק׳. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"space-y-4"[39m
+      [33mdata-testid[39m=[32m"documents-page"[39m
+    [36m>[39m
+      [36m<header[39m
+        [33mclass[39m=[32m"flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between "[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"min-w-0 space-y-1"[39m
+        [36m>[39m
+          [36m<h1[39m
+            [33mclass[39m=[32m"page-title break-words"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"flex items-center gap-2"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-folder-open"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"22"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"22"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [0m [0m
+              [0mתיקיית המסמכים[0m
+            [36m</span>[39m
+          [36m</h1>[39m
+          [36m<span[39m
+            [33maria-hidden[39m=[32m"true"[39m
+            [33mclass[39m=[32m"section-mark"[39m
+          [36m/>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"text-sm text-ink-soft"[39m
+          [36m>[39m
+            [0mכל החשבוניות, תעודות המשלוח, הזיכויים והמסמכים הנוספים במקום אחד.[0m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex shrink-0 flex-wrap items-center gap-2"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"btn-primary"[39m
+            [33mdata-tour-anchor[39m=[32m"documents-upload"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"lucide lucide-upload"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"15"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"15"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M12 3v12"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m17 8-5-5-5 5"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [0m [0m
+            [0mהעלאת מסמך[0m
+          [36m</button>[39m
+          [36m<a[39m
+            [33mclass[39m=[32m"btn-secondary"[39m
+            [33mdata-discover[39m=[32m"true"[39m
+            [33mhref[39m=[32m"/documents/archive"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"lucide lucide-archive"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"15"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"15"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<rect[39m
+                [33mheight[39m=[32m"5"[39m
+                [33mrx[39m=[32m"1"[39m
+                [33mwidth[39m=[32m"20"[39m
+                [33mx[39m=[32m"2"[39m
+                [33my[39m=[32m"3"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M10 12h4"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [0mארכיון[0m
+          [36m</a>[39m
+        [36m</div>[39m
+      [36m</header>[39m
+      [36m<section[39m
+        [33maria-label[39m=[32m"סינון מסמכים"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end"[39m
+        [36m>[39m
+          [36m<label>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"label"[39m
+            [36m>[39m
+              [0mשם קובץ[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"relative block"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-search absolute top-1/2 start-3 -translate-y-1/2 text-ink-faint"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"15"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"15"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m21 21-4.34-4.34"[39m
+                [36m/>[39m
+                [36m<circle[39m
+                  [33mcx[39m=[32m"11"[39m
+                  [33mcy[39m=[32m"11"[39m
+                  [33mr[39m=[32m"8"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [36m<input[39m
+                [33mclass[39m=[32m"input ps-9!"[39m
+                [33mplaceholder[39m=[32m"חיפוש מסמך..."[39m
+                [33mtype[39m=[32m"search"[39m
+                [33mvalue[39m=[32m""[39m
+         ...
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"space-y-4"[39m
+      [33mdata-testid[39m=[32m"documents-page"[39m
+    [36m>[39m
+      [36m<header[39m
+        [33mclass[39m=[32m"flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between "[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"min-w-0 space-y-1"[39m
+        [36m>[39m
+          [36m<h1[39m
+            [33mclass[39m=[32m"page-title break-words"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"flex items-center gap-2"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-folder-open"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"22"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"22"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [0m [0m
+              [0mתיקיית המסמכים[0m
+            [36m</span>[39m
+          [36m</h1>[39m
+          [36m<span[39m
+            [33maria-hidden[39m=[32m"true"[39m
+            [33mclass[39m=[32m"section-mark"[39m
+          [36m/>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"text-sm text-ink-soft"[39m
+          [36m>[39m
+            [0mכל החשבוניות, תעודות המשלוח, הזיכויים והמסמכים הנוספים במקום אחד.[0m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex shrink-0 flex-wrap items-center gap-2"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"btn-primary"[39m
+            [33mdata-tour-anchor[39m=[32m"documents-upload"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"lucide lucide-upload"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"15"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"15"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M12 3v12"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m17 8-5-5-5 5"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [0m [0m
+            [0mהעלאת מסמך[0m
+          [36m</button>[39m
+          [36m<a[39m
+            [33mclass[39m=[32m"btn-secondary"[39m
+            [33mdata-discover[39m=[32m"true"[39m
+            [33mhref[39m=[32m"/documents/archive"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"lucide lucide-archive"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"15"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"15"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<rect[39m
+                [33mheight[39m=[32m"5"[39m
+                [33mrx[39m=[32m"1"[39m
+                [33mwidth[39m=[32m"20"[39m
+                [33mx[39m=[32m"2"[39m
+                [33my[39m=[32m"3"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M10 12h4"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [0mארכיון[0m
+          [36m</a>[39m
+        [36m</div>[39m
+      [36m</header>[39m
+      [36m<section[39m
+        [33maria-label[39m=[32m"סינון מסמכים"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end"[39m
+        [36m>[39m
+          [36m<label>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"label"[39m
+            [36m>[39m
+              [0mשם קובץ[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"relative block"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-search absolute top-1/2 start-3 -translate-y-1/2 text-ink-faint"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"15"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"15"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m21 21-4.34-4.34"[39m
+                [36m/>[39m
+                [36m<circle[39m
+                  [33mcx[39m=[32m"11"[39m
+                  [33mcy[39m=[32m"11"[39m
+                  [33mr[39m=[32m"8"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [36m<input[39m
+                [33mclass[39m=[32m"input ps-9!"[39m
+                [33mplaceholder[39m=[32m"חיפוש מסמך..."[39m
+                [33mtype[39m=[32m"search"[39m
+                [33mvalue[39m=[32m""[39m
+         ...
+ ❯ waitForWrapper ../../../node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ src/pages/documentsScanApprovalGate.spec.tsx:169:25
+    167|     renderGallery();
+    168|
+    169|     expect(await screen.findAllByText('· 7 דק׳')).not.toHaveLength(0);
+       |                         ^
+    170|   });
+    171| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/10]⎯
+
+ FAIL  src/components/document-review/noApprovalRoute.spec.tsx > canSubmit mirrors the subtypes apply_reviewed_document accepts > refuses a payment confirmation even when everything else resolved
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ src/components/document-review/noApprovalRoute.spec.tsx:77:51
+     75| describe('canSubmit mirrors the subtypes apply_reviewed_document accep…
+     76|   it('refuses a payment confirmation even when everything else resolve…
+     77|     expect(canSubmit(reviewRead(), 'supplier-1')).toBe(false);
+       |                                                   ^
+     78|   });
+     79|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/10]⎯
+
+ FAIL  src/components/document-review/noApprovalRoute.spec.tsx > canSubmit mirrors the subtypes apply_reviewed_document accepts > refuses a quote and an unclassified document for the same reason
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ src/components/document-review/noApprovalRoute.spec.tsx:81:77
+     79|
+     80|   it('refuses a quote and an unclassified document for the same reason…
+     81|     expect(canSubmit(reviewRead({ document_type: 'quote' }), 'supplier…
+       |                                                                             ^
+     82|     expect(canSubmit(reviewRead({ document_type: 'other' }), 'supplier…
+     83|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/10]⎯
+
+ FAIL  src/components/document-review/noApprovalRoute.spec.tsx > DOC-06 · מסמך שאין לו מסלול אישור מקבל צעד הבא > אומר מה לעשות עם אישור תשלום, לא רק שאין מסלול
+TestingLibraryElementError: Unable to find an element by: [data-testid="no-approval-route-next-step"]
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<section[39m
+      [33maria-label[39m=[32m"בדיקת מסמך שהתקבל"[39m
+      [33mclass[39m=[32m"space-y-5"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"card p-4"[39m
+      [36m>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"flex items-start gap-2 text-sm text-ink-body"[39m
+        [36m>[39m
+          [36m<svg[39m
+            [33maria-hidden[39m=[32m"true"[39m
+            [33mclass[39m=[32m"lucide lucide-circle-check mt-0.5 shrink-0"[39m
+            [33mfill[39m=[32m"none"[39m
+            [33mheight[39m=[32m"15"[39m
+            [33mstroke[39m=[32m"currentColor"[39m
+            [33mstroke-linecap[39m=[32m"round"[39m
+            [33mstroke-linejoin[39m=[32m"round"[39m
+            [33mstroke-width[39m=[32m"2"[39m
+            [33mviewBox[39m=[32m"0 0 24 24"[39m
+            [33mwidth[39m=[32m"15"[39m
+            [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+          [36m>[39m
+            [36m<circle[39m
+              [33mcx[39m=[32m"12"[39m
+              [33mcy[39m=[32m"12"[39m
+              [33mr[39m=[32m"10"[39m
+            [36m/>[39m
+            [36m<path[39m
+              [33md[39m=[32m"m9 12 2 2 4-4"[39m
+            [36m/>[39m
+          [36m</svg>[39m
+          [36m<span>[39m
+            [0mהקובץ נשמר באחסון הפרטי ולא ילך לאיבוד[0m
+          [36m</span>[39m
+        [36m</p>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"mt-2 flex items-start gap-2 text-sm text-ink-body"[39m
+        [36m>[39m
+          [36m<svg[39m
+            [33maria-hidden[39m=[32m"true"[39m
+            [33mclass[39m=[32m"lucide lucide-info mt-0.5 shrink-0"[39m
+            [33mfill[39m=[32m"none"[39m
+            [33mheight[39m=[32m"15"[39m
+            [33mstroke[39m=[32m"currentColor"[39m
+            [33mstroke-linecap[39m=[32m"round"[39m
+            [33mstroke-linejoin[39m=[32m"round"[39m
+            [33mstroke-width[39m=[32m"2"[39m
+            [33mviewBox[39m=[32m"0 0 24 24"[39m
+            [33mwidth[39m=[32m"15"[39m
+            [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+          [36m>[39m
+            [36m<circle[39m
+              [33mcx[39m=[32m"12"[39m
+              [33mcy[39m=[32m"12"[39m
+              [33mr[39m=[32m"10"[39m
+            [36m/>[39m
+            [36m<path[39m
+              [33md[39m=[32m"M12 16v-4"[39m
+            [36m/>[39m
+            [36m<path[39m
+              [33md[39m=[32m"M12 8h.01"[39m
+            [36m/>[39m
+          [36m</svg>[39m
+          [36m<span>[39m
+            [0mהנתונים עדיין לא אושרו — שום דבר כספי לא נרשם[0m
+          [36m</span>[39m
+        [36m</p>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"card p-4"[39m
+      [36m>[39m
+        [36m<h3[39m
+          [33mclass[39m=[32m"text-sm font-medium text-ink-soft"[39m
+        [36m>[39m
+          [0mהספק[0m
+        [36m</h3>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"mt-1 text-sm text-ink-body"[39m
+        [36m>[39m
+          [0mזוהה · by_vat_id[0m
+        [36m</p>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"card p-4"[39m
+      [36m>[39m
+        [36m<h3[39m
+          [33mclass[39m=[32m"text-sm font-medium text-ink-soft"[39m
+        [36m>[39m
+          [0mמה יקרה באישור[0m
+        [36m</h3>[39m
+        [36m<ul[39m
+          [33mclass[39m=[32m"mt-2 space-y-1.5"[39m
+        [36m>[39m
+          [36m<li[39m
+            [33mclass[39m=[32m"flex items-start gap-2 text-sm text-ink-body"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"mt-0.5 shrink-0 text-ink-muted"[39m
+            [36m>[39m
+              [0m✕[0m
+            [36m</span>[39m
+            [36m<span>[39m
+              [0mלסוג המסמך הזה אין עדיין מסלול אישור[0m
+            [36m</span>[39m
+          [36m</li>[39m
+        [36m</ul>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"card p-4"[39m
+      [36m>[39m
+        [36m<div>[39m
+          [36m<label[39m
+            [33mclass[39m=[32m"label"[39m
+            [33mfor[39m=[32m"review-reason"[39m
+          [36m>[39m
+            [0mסיבה (רשות — נרשמת ביומן הביקורת ובתיק המסמך)[0m
+          [36m</label>[39m
+          [36m<textarea[39m
+            [33mclass[39m=[32m"input"[39m
+            [33mid[39m=[32m"review-reason"[39m
+            [33mmaxlength[39m=[32m"1000"[39m
+            [33mrows[39m=[32m"2"[39m
+          [36m/>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33maria-label[39m=[32m"אישור המסמך שהתקבל"[39m
+          [33mclass[39m=[32m"flex flex-col items-stretch gap-2 lg:items-end mt-3"[39m
+          [33mdata-testid[39m=[32m"primary-decision"[39m
+          [33mrole[39m=[32m"group"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"btn btn-primary min-h-11"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [0mאישור המסמך[0m
+          [36m</button>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+    [36m</section>[39m
+  [36m</div>[39m
+[36m</body>[39m
+ ❯ Object.getElementError ../../../node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/components/document-review/noApprovalRoute.spec.tsx:98:29
+     96|
+     97|     expect(screen.getByText('לסוג המסמך הזה אין עדיין מסלול אישור')).t…
+     98|     const nextStep = screen.getByTestId('no-approval-route-next-step');
+       |                             ^
+     99|     expect(nextStep).toHaveTextContent(/ההתאמה לתשלום שכבר בוצע/);
+    100|     expect(nextStep).toHaveTextContent(/תיקיית המסמכים/);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/10]⎯
+
+ FAIL  src/components/document-review/noApprovalRoute.spec.tsx > DOC-06 · מסמך שאין לו מסלול אישור מקבל צעד הבא > אומר מה לעשות עם הצעת מחיר — לתקן את הסוג או לשייך מהתיקייה
+TestingLibraryElementError: Unable to find an element by: [data-testid="no-approval-route-next-step"]
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<section[39m
+      [33maria-label[39m=[32m"בדיקת מסמך שהתקבל"[39m
+      [33mclass[39m=[32m"space-y-5"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"card p-4"[39m
+      [36m>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"flex items-start gap-2 text-sm text-ink-body"[39m
+        [36m>[39m
+          [36m<svg[39m
+            [33maria-hidden[39m=[32m"true"[39m
+            [33mclass[39m=[32m"lucide lucide-circle-check mt-0.5 shrink-0"[39m
+            [33mfill[39m=[32m"none"[39m
+            [33mheight[39m=[32m"15"[39m
+            [33mstroke[39m=[32m"currentColor"[39m
+            [33mstroke-linecap[39m=[32m"round"[39m
+            [33mstroke-linejoin[39m=[32m"round"[39m
+            [33mstroke-width[39m=[32m"2"[39m
+            [33mviewBox[39m=[32m"0 0 24 24"[39m
+            [33mwidth[39m=[32m"15"[39m
+            [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+          [36m>[39m
+            [36m<circle[39m
+              [33mcx[39m=[32m"12"[39m
+              [33mcy[39m=[32m"12"[39m
+              [33mr[39m=[32m"10"[39m
+            [36m/>[39m
+            [36m<path[39m
+              [33md[39m=[32m"m9 12 2 2 4-4"[39m
+            [36m/>[39m
+          [36m</svg>[39m
+          [36m<span>[39m
+            [0mהקובץ נשמר באחסון הפרטי ולא ילך לאיבוד[0m
+          [36m</span>[39m
+        [36m</p>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"mt-2 flex items-start gap-2 text-sm text-ink-body"[39m
+        [36m>[39m
+          [36m<svg[39m
+            [33maria-hidden[39m=[32m"true"[39m
+            [33mclass[39m=[32m"lucide lucide-info mt-0.5 shrink-0"[39m
+            [33mfill[39m=[32m"none"[39m
+            [33mheight[39m=[32m"15"[39m
+            [33mstroke[39m=[32m"currentColor"[39m
+            [33mstroke-linecap[39m=[32m"round"[39m
+            [33mstroke-linejoin[39m=[32m"round"[39m
+            [33mstroke-width[39m=[32m"2"[39m
+            [33mviewBox[39m=[32m"0 0 24 24"[39m
+            [33mwidth[39m=[32m"15"[39m
+            [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+          [36m>[39m
+            [36m<circle[39m
+              [33mcx[39m=[32m"12"[39m
+              [33mcy[39m=[32m"12"[39m
+              [33mr[39m=[32m"10"[39m
+            [36m/>[39m
+            [36m<path[39m
+              [33md[39m=[32m"M12 16v-4"[39m
+            [36m/>[39m
+            [36m<path[39m
+              [33md[39m=[32m"M12 8h.01"[39m
+            [36m/>[39m
+          [36m</svg>[39m
+          [36m<span>[39m
+            [0mהנתונים עדיין לא אושרו — שום דבר כספי לא נרשם[0m
+          [36m</span>[39m
+        [36m</p>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"card p-4"[39m
+      [36m>[39m
+        [36m<h3[39m
+          [33mclass[39m=[32m"text-sm font-medium text-ink-soft"[39m
+        [36m>[39m
+          [0mהספק[0m
+        [36m</h3>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"mt-1 text-sm text-ink-body"[39m
+        [36m>[39m
+          [0mזוהה · by_vat_id[0m
+        [36m</p>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"card p-4"[39m
+      [36m>[39m
+        [36m<h3[39m
+          [33mclass[39m=[32m"text-sm font-medium text-ink-soft"[39m
+        [36m>[39m
+          [0mמה יקרה באישור[0m
+        [36m</h3>[39m
+        [36m<ul[39m
+          [33mclass[39m=[32m"mt-2 space-y-1.5"[39m
+        [36m>[39m
+          [36m<li[39m
+            [33mclass[39m=[32m"flex items-start gap-2 text-sm text-ink-body"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"mt-0.5 shrink-0 text-ink-muted"[39m
+            [36m>[39m
+              [0m✕[0m
+            [36m</span>[39m
+            [36m<span>[39m
+              [0mלסוג המסמך הזה אין עדיין מסלול אישור[0m
+            [36m</span>[39m
+          [36m</li>[39m
+        [36m</ul>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"card p-4"[39m
+      [36m>[39m
+        [36m<div>[39m
+          [36m<label[39m
+            [33mclass[39m=[32m"label"[39m
+            [33mfor[39m=[32m"review-reason"[39m
+          [36m>[39m
+            [0mסיבה (רשות — נרשמת ביומן הביקורת ובתיק המסמך)[0m
+          [36m</label>[39m
+          [36m<textarea[39m
+            [33mclass[39m=[32m"input"[39m
+            [33mid[39m=[32m"review-reason"[39m
+            [33mmaxlength[39m=[32m"1000"[39m
+            [33mrows[39m=[32m"2"[39m
+          [36m/>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33maria-label[39m=[32m"אישור המסמך שהתקבל"[39m
+          [33mclass[39m=[32m"flex flex-col items-stretch gap-2 lg:items-end mt-3"[39m
+          [33mdata-testid[39m=[32m"primary-decision"[39m
+          [33mrole[39m=[32m"group"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"btn btn-primary min-h-11"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [0mאישור המסמך[0m
+          [36m</button>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+    [36m</section>[39m
+  [36m</div>[39m
+[36m</body>[39m
+ ❯ Object.getElementError ../../../node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/components/document-review/noApprovalRoute.spec.tsx:108:29
+    106|     await renderPanel(reviewRead({ document_type: 'quote' }));
+    107|
+    108|     const nextStep = screen.getByTestId('no-approval-route-next-step');
+       |                             ^
+    109|     // Two actions, both of which exist on screens this role can open:…
+    110|     // (the type selector is on this same page) or file the document f…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/10]⎯
+

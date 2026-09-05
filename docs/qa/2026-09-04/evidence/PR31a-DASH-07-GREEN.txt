@@ -1,0 +1,54 @@
+PR 31a — DASH-07 — GREEN. The same final oracle with both reverted lines restored, run
+together with the two neighbouring specs that own this screen and its export.
+=======================================================================================
+20 passed. Nine in the new file; three in reportsProductWindow.spec.tsx (DASH-08, EXP-02); eight in
+exportProvenanceAndNaming.spec.tsx (EXP-04, EXP-07, EXP-10). The neighbours are here on purpose:
+the export change writes row 2 of every sheet, which EXP-02 pins, and changes the builder's
+signature, which EXP-04 and EXP-10 exercise.
+
+---------------------------------------------------------------------------------------
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a1d1bde669e320b5b
+
+ ✓ src/pages/productPurchaseBilledAbsence.spec.tsx > DASH-07 — every billed column is empty and the screen says why > states, once, that no approved invoice line reached any product in this window 412ms
+ ✓ src/pages/reportsProductWindow.spec.tsx > DASH-08 — the link a July report hands you > carries July, the way every other tile on that page does 427ms
+ ✓ src/pages/productPurchaseBilledAbsence.spec.tsx > DASH-07 — every billed column is empty and the screen says why > CONTROL — the empty cells are em dashes, per row, and never a zero 169ms
+ ✓ src/pages/reportsProductWindow.spec.tsx > DASH-08 — the screen you arrive at > reads its window from the URL instead of resetting to the current month 100ms
+ ✓ src/pages/productPurchaseBilledAbsence.spec.tsx > DASH-07 — every billed column is empty and the screen says why > CONTROL — the committed cost is stated on every one of those same rows 145ms
+ ✓ src/pages/productPurchaseBilledAbsence.spec.tsx > DASH-07 — the sentence stays away when it would be false > CONTROL — a window in which one product HAS been billed shows no such note 135ms
+ ✓ src/pages/productPurchaseBilledAbsence.spec.tsx > DASH-07 — the sentence stays away when it would be false > CONTROL — unmatched lines exist, so the report's own unmapped note is the right one 112ms
+ ✓ src/pages/productPurchaseBilledAbsence.spec.tsx > DASH-07 — the sentence stays away when it would be false > CONTROL — an empty window says it is empty and claims nothing about billing 58ms
+node.exe : Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+At line:4 char:8
++ $out = & node "$r\node_modules\vitest\vitest.mjs" run src/pages/produ ...
++        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Not implemented...vas npm package:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+ ✓ src/pages/exportProvenanceAndNaming.spec.tsx > EXP-04 — the provenance the screen states rides the file > gives the caveat a column of its own, naming the source of every quantity 1228ms
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+ ✓ src/pages/reportsProductWindow.spec.tsx > EXP-02 — the file that leaves that screen > is named for the window on screen, and every sheet states that window 918ms
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+ ✓ src/pages/exportProvenanceAndNaming.spec.tsx > EXP-04 — the provenance the screen states rides the file > never states a purchased quantity of zero for a row nothing was measured on 240ms
+ ✓ src/pages/reportsProductWindow.spec.tsx > EXP-02 — the file that leaves that screen > carries the rows, adds no two currencies together, and computes no error 160ms
+ ✓ src/pages/exportProvenanceAndNaming.spec.tsx > EXP-04 — the provenance the screen states rides the file > says the same thing on the screen the file was exported from 109ms
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+ ✓ src/pages/exportProvenanceAndNaming.spec.tsx > EXP-10 — the exported name is the name > leaves a product name beginning with a hyphen exactly as the tenant typed it 212ms
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+ ✓ src/pages/productPurchaseBilledAbsence.spec.tsx > DASH-07 — the file says it too > states the absence on row 2, beside the window, and keeps the window 1077ms
+ ✓ src/pages/exportProvenanceAndNaming.spec.tsx > EXP-10 — the exported name is the name > still writes no cell an opened workbook would evaluate 260ms
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+ ✓ src/pages/exportProvenanceAndNaming.spec.tsx > EXP-07 — the expenses workbook is named for its window > names the period it covers, not the day it was produced 209ms
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+ ✓ src/pages/productPurchaseBilledAbsence.spec.tsx > DASH-07 — the file says it too > CONTROL — a file with a billed product carries no such banner 351ms
+ ✓ src/pages/productPurchaseBilledAbsence.spec.tsx > DASH-07 — the note is reachable by a screen reader > is announced, not merely painted 131ms
+ ✓ src/pages/exportProvenanceAndNaming.spec.tsx > EXP-07 — the expenses workbook is named for its window > agrees with the PDF button beside it, which was always right 289ms
+
+ Test Files  3 passed (3)
+      Tests  20 passed (20)
+   Start at  06:27:55
+   Duration  6.78s (transform 2.67s, setup 2.24s, import 4.84s, tests 6.77s, environment 4.65s)
+

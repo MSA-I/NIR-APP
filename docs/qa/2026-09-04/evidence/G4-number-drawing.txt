@@ -1,0 +1,70 @@
+G4 — every number is drawn before it is written
+Recorded by the campaign coordinator, 2026-09-05, on branch worktree-qa-sweep-20260904.
+
+WHAT THE GATE ASKS FOR, AND WHAT THIS CAMPAIGN DID INSTEAD
+The gate's stated evidence is "`npm run next-number` output pasted into each PR that claims one,
+drawn under the lock". This campaign centralised the draw instead: ONE holder
+(.claude/locks/numbers, holder=session-cf142aac, the coordinator) draws, assigns each number to a
+named PR in that file, and no agent may run `next-number` at all.
+
+That is a deliberate deviation and it is stated here rather than glossed. The reason: pasting the
+output into a PR proves the agent RAN the command; it does not prove that no other agent drew the
+same number in the same minute. Six collisions in the 01.09 campaign were all of exactly that
+shape -- each agent read the file, saw the highest number, added one, and three did it at once.
+A single drawing authority removes the class; a pasted transcript does not.
+
+The gate's INTENT -- no number is written before it is drawn, and no two writers get the same one
+-- is what the evidence below is against.
+
+DRAW OF 2026-09-05 (fourth draw of the campaign), decisive lines:
+
+  owner ruling — next free: #358
+    origin/main #349 · your tree #357 · 35 live branch(es) · 2 stale not counted
+  debt section — next free: §120
+    origin/main §115 · your tree §119 · 35 live branch(es) · 2 stale not counted
+    CLAIMED ON A BRANCH BUT NOT IN YOUR TREE: §118 on origin/docs/ux-laws-audit
+  migration — next free: 0318
+    origin/main 0314 · your tree 0315 · 35 live branch(es) · 2 stale not counted
+    CLAIMED ON A BRANCH BUT NOT IN YOUR TREE: 0316 on docs/ux-remediation-documents-assistant,
+                                              0317 on docs/ux-remediation-documents-assistant
+  SQL suite — next free: p111
+    origin/main p107 · your tree p108 · 35 live branch(es) · 2 stale not counted
+    CLAIMED ON A BRANCH BUT NOT IN YOUR TREE: p109, p110 on docs/ux-remediation-documents-assistant
+
+The tool also reports "COLLISION" against thirty-odd `worktree-agent-*` and `qa/pr*` branches for
+every number this campaign has landed. Those are FALSE: each of those branches is a copy of
+`worktree-qa-sweep-20260904` and carries the campaign's own numbers. A report against `origin/*`,
+or against a branch that is not such a copy, is the real one -- and the four real ones are the
+lines above, all from a second live campaign on this machine
+(`docs/ux-remediation-documents-assistant` and `docs/ux-laws-audit`).
+
+WHAT WAS ACTUALLY WRITTEN, AND BY WHOM
+
+  #350-#357  owner rulings   drawn 2026-09-04, landed. `check:decision-numbers` resolves all 333.
+  §116       debt section    PR 1. DRAWN AS §115 AND RENUMBERED BEFORE MERGE -- §115 was free at
+                             draw time and was taken on
+                             origin/fix/new-user-surfaces-bar-pricelist-progress before PR 1
+                             landed. Git merges both without a conflict; this is the gate working.
+  §119       debt section    PR 28, landed. PR 7 carried its code half.
+  0315/p108  migration+suite PR 7, landed.
+  0318/p111  migration+suite PR 17, assigned, in flight.
+  0319/p112  migration+suite PR 5+6 (PERM-01), assigned 2026-09-05, not yet written.
+  0320/p113  migration+suite PR 14 (MON-03/FIN-04/FIN-07), assigned 2026-09-05, not yet written.
+  0321/p114  migration+suite PR 15 (MON-06), assigned 2026-09-05, not yet written.
+  0322/p115  migration+suite PR 11 (MON-04), assigned 2026-09-05, not yet written.
+  0323/p116  migration+suite PR 13 (PERM-02), assigned 2026-09-05, not yet written.
+
+  0316, 0317, p109, p110 are held by the other live campaign and were SKIPPED, which is why this
+  campaign's sequence jumps from 0315 to 0318. That campaign has already applied 0316 to the
+  SHARED LOCAL STACK, so the stack's migration head must be READ before a suite run, never assumed
+  from what the last agent left it at.
+
+  #140 is NOT a number that can be drawn or cited from code: it is a prose section heading in
+  OPEN-DECISIONS.md, not a table row, and `check:decision-numbers` resolves code citations against
+  the table only. Cite it by title.
+
+WHY THIS IS "MET SO FAR" AND NOT "MET"
+Five of the eleven numbers above have been assigned and not yet written. A number is only proved
+drawn-before-written once it is written. This line closes when PRs 5/6, 11, 13, 14, 15 and 17
+have landed and `npm run verify`'s numbering guards -- check:decision-numbers, check:debt-numbers,
+check:migration-numbers, check:suite-manifest, check:renumber-closure -- are green on the result.

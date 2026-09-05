@@ -101,7 +101,7 @@ declare
   v_anchor text; v_replacement text; v_count integer;
 begin
   -- §119. The writer's last lifecycle-label credit term, replaced with the money actually applied
-  -- — the same expression the reader (`p0_invoice_balance_rows_by_currency`) and `execute_payment_request`
+  -- — the same expression the reader (`p0_invoice_balance_rows`) and `execute_payment_request`
   -- have used since 0173. A credit allocation carries a null `invoice_id` (0234:107-111), so this
   -- does not double-subtract against the payments term above it.
   v_anchor := $anchor$         - coalesce((select sum(cr.amount) from public.credit_requests cr

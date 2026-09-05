@@ -1,0 +1,468 @@
+PR 26 · DASH-01 · RED — the oracle failing on the unfixed tree
+================================================================================
+THE ORACLE: every standing condition the control centre counts is scanned by
+/alerts too, each row carrying that condition's own figure and opening the list
+that reproduces it.
+
+HOW THIS RED WAS PRODUCED, stated plainly because it matters.
+  The oracle was written AFTER the fix. To record the red, exactly four files were
+  restored to HEAD (c1ee7a8b) with `git checkout HEAD -- <path>` and nothing else
+  was touched:
+
+      src/lib/alerts.ts                      the eight snapshot-derived scans,
+                                             the exceptions scan, the shared read
+      src/lib/i18n/dictionaries/he.ts        the new wording and the subtitle
+      src/lib/i18n/dictionaries/en.ts        the same, in English
+      src/pages/Alerts.tsx                   the coverage sentence in the subtitle
+
+  The spec file itself was NOT reverted and is byte-identical in both runs:
+      src/lib/alertsControlCentreParity.spec.ts
+      SHA-256 1076F68B63C9F52040A16FF193DB285AF9B2B392F2E88426077666D93087FA91
+
+  The four product files were copied out byte-exact before the revert and copied
+  back after it. Their SHA-256 are identical before and after, so the GREEN run
+  below is against the same bytes this commit carries:
+      src/lib/alerts.ts                 1A5AB2886BAA59FAE3CFEA185C7E8A9C5FA656B1466367A75CA93ED9527F27D5
+      src/lib/i18n/dictionaries/he.ts   BFA9A9BA94AD4CBC10822D7943D407CD8410C545C57B137B9CA5F3A57C713217
+      src/lib/i18n/dictionaries/en.ts   79A1DDA5AF90F7AECB0FAC80CA81E1FD153420967D6150E2E5AD491C40616C36
+      src/pages/Alerts.tsx              BB833C43BE333AFD2B35CC70CDFCB61A35ABB0DCBACB3A9CC4EFA1202391FE2C
+
+  The oracle was NOT corrected between the two runs — the same file, unchanged,
+  produced both.
+
+RESULT: 22 failed | 12 passed (34). Exit 1.
+
+THE TWELVE THAT PASS HERE ARE THE CONTROLS, and they pass in the green run too.
+A red where everything fails proves the harness broke, not that the product did.
+  · the five conditions /alerts already scanned, each carrying its own figure
+  · a condition at zero is no row at all (above_average_price really is 0)
+  · every alert lands on a route every reader of /alerts may open
+  · and /bank genuinely fails that test, which is why bank matches stay off
+  · rows arrive most severe first
+  · every row says its finding in both languages
+
+WHAT FAILS IS EXACTLY THE FINDING: nine conditions the control centre counts and
+this screen does not scan, each named, plus the two behaviours that depend on the
+shared read (one call between them; a refused read becoming named failures rather
+than silent all-clears) and the two wording assertions.
+
+Command: NO_COLOR=1 npx vitest run src/lib/alertsControlCentreParity.spec.ts --reporter=verbose
+================================================================================
+
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a8bf526b1af28ecd6
+
+ ✓ src/lib/alertsControlCentreParity.spec.ts > CONTROL — the five conditions /alerts already scanned (green on both sides of DASH-01) > 'duplicate_invoice' is a row, carrying its own figure 9ms
+ ✓ src/lib/alertsControlCentreParity.spec.ts > CONTROL — the five conditions /alerts already scanned (green on both sides of DASH-01) > 'orders_awaiting_confirmation' is a row, carrying its own figure 2ms
+ ✓ src/lib/alertsControlCentreParity.spec.ts > CONTROL — the five conditions /alerts already scanned (green on both sides of DASH-01) > 'price_increase' is a row, carrying its own figure 2ms
+ ✓ src/lib/alertsControlCentreParity.spec.ts > CONTROL — the five conditions /alerts already scanned (green on both sides of DASH-01) > 'invoice_without_order' is a row, carrying its own figure 1ms
+ ✓ src/lib/alertsControlCentreParity.spec.ts > CONTROL — the five conditions /alerts already scanned (green on both sides of DASH-01) > 'payment_due_soon' is a row, carrying its own figure 1ms
+ ✓ src/lib/alertsControlCentreParity.spec.ts > CONTROL — the five conditions /alerts already scanned (green on both sides of DASH-01) > a condition that holds for nobody is no row at all — never a row reading 0 1ms
+ × src/lib/alertsControlCentreParity.spec.ts > DASH-01 — every condition the control centre counts is scanned here too > 'חריגים פתוחים' ('open_exceptions') 8ms
+   → the control centre counts open_exceptions and /alerts does not scan it: expected undefined to be defined
+ × src/lib/alertsControlCentreParity.spec.ts > DASH-01 — every condition the control centre counts is scanned here too > 'הזמנות באיחור באספקה' ('late_deliveries') 2ms
+   → the control centre counts late_deliveries and /alerts does not scan it: expected undefined to be defined
+ × src/lib/alertsControlCentreParity.spec.ts > DASH-01 — every condition the control centre counts is scanned here too > 'חשבוניות לאישור' ('invoices_pending_approval') 2ms
+   → the control centre counts invoices_pending_approval and /alerts does not scan it: expected undefined to be defined
+ × src/lib/alertsControlCentreParity.spec.ts > DASH-01 — every condition the control centre counts is scanned here too > 'דרישות תשלום לאישור' ('payment_requests_pending_approval') 2ms
+   → the control centre counts payment_requests_pending_approval and /alerts does not scan it: expected undefined to be defined
+ × src/lib/alertsControlCentreParity.spec.ts > DASH-01 — every condition the control centre counts is scanned here too > 'חשבוניות לבדיקה' ('invoices_to_review') 2ms
+   → the control centre counts invoices_to_review and /alerts does not scan it: expected undefined to be defined
+ × src/lib/alertsControlCentreParity.spec.ts > DASH-01 — every condition the control centre counts is scanned here too > 'חשבוניות מאושרות שטרם נשלחו להנהלת חש…' ('invoices_not_sent_to_accountant') 1ms
+   → the control centre counts invoices_not_sent_to_accountant and /alerts does not scan it: expected undefined to be defined
+ × src/lib/alertsControlCentreParity.spec.ts > DASH-01 — every condition the control centre counts is scanned here too > 'טיוטות דרישות תשלום' ('payment_request_drafts') 1ms
+   → the control centre counts payment_request_drafts and /alerts does not scan it: expected undefined to be defined
+ × src/lib/alertsControlCentreParity.spec.ts > DASH-01 — every condition the control centre counts is scanned here too > 'זיכויים שטרם קוזזו' ('open_credits') 2ms
+   → the control centre counts open_credits and /alerts does not scan it: expected undefined to be defined
+ × src/lib/alertsControlCentreParity.spec.ts > DASH-01 — every condition the control centre counts is scanned here too > 'התחייבויות פתוחות' ('open_commitments') 2ms
+   → the control centre counts open_commitments and /alerts does not scan it: expected undefined to be defined
+ × src/lib/alertsControlCentreParity.spec.ts > DASH-01 — every condition the control centre counts is scanned here too > 'open_exceptions' reads its OWN field, not a neighbour's 6ms
+   → expected undefined to be 19 // Object.is equality
+ × src/lib/alertsControlCentreParity.spec.ts > DASH-01 — every condition the control centre counts is scanned here too > 'late_deliveries' reads its OWN field, not a neighbour's 2ms
+   → expected undefined to be 18 // Object.is equality
+ × src/lib/alertsControlCentreParity.spec.ts > DASH-01 — every condition the control centre counts is scanned here too > 'invoices_pending_approval' reads its OWN field, not a neighbour's 2ms
+   → expected undefined to be 14 // Object.is equality
+ × src/lib/alertsControlCentreParity.spec.ts > DASH-01 — every condition the control centre counts is scanned here too > 'payment_requests_pending_approval' reads its OWN field, not a neighbour's 2ms
+   → expected undefined to be 11 // Object.is equality
+ × src/lib/alertsControlCentreParity.spec.ts > DASH-01 — every condition the control centre counts is scanned here too > 'invoices_to_review' reads its OWN field, not a neighbour's 2ms
+   → expected undefined to be 15 // Object.is equality
+ × src/lib/alertsControlCentreParity.spec.ts > DASH-01 — every condition the control centre counts is scanned here too > 'invoices_not_sent_to_accountant' reads its OWN field, not a neighbour's 1ms
+   → expected undefined to be 16 // Object.is equality
+ × src/lib/alertsControlCentreParity.spec.ts > DASH-01 — every condition the control centre counts is scanned here too > 'payment_request_drafts' reads its OWN field, not a neighbour's 2ms
+   → expected undefined to be 12 // Object.is equality
+ × src/lib/alertsControlCentreParity.spec.ts > DASH-01 — every condition the control centre counts is scanned here too > 'open_credits' reads its OWN field, not a neighbour's 2ms
+   → expected undefined to be 13 // Object.is equality
+ × src/lib/alertsControlCentreParity.spec.ts > DASH-01 — every condition the control centre counts is scanned here too > 'open_commitments' reads its OWN field, not a neighbour's 2ms
+   → expected undefined to be 17 // Object.is equality
+ ✓ src/lib/alertsControlCentreParity.spec.ts > DASH-01 — every condition the control centre counts is scanned here too > the whole scan is complete and nothing was left unmeasured 2ms
+ ✓ src/lib/alertsControlCentreParity.spec.ts > DASH-01 — a condition with no data is silent, and one that could not be read is NAMED > a control centre that counts nothing produces no row for those conditions 2ms
+ × src/lib/alertsControlCentreParity.spec.ts > DASH-01 — a condition with no data is silent, and one that could not be read is NAMED > a control centre the reader may not read is nine NAMED failures, not nine silent all-clears 4ms
+   → expected true to be false // Object.is equality
+ × src/lib/alertsControlCentreParity.spec.ts > DASH-01 — a condition with no data is silent, and one that could not be read is NAMED > the eight snapshot conditions cost ONE call between them 4ms
+   → expected [] to have a length of 1 but got +0
+ ✓ src/lib/alertsControlCentreParity.spec.ts > CONTROL — no row promises a destination this screen's readers cannot open > every alert lands on a route every reader of /alerts may open 3ms
+ ✓ src/lib/alertsControlCentreParity.spec.ts > CONTROL — no row promises a destination this screen's readers cannot open > and that is a real constraint — /bank fails it, which is why bank matches stay on the dashboard 1ms
+ ✓ src/lib/alertsControlCentreParity.spec.ts > CONTROL — severity order and wording > rows arrive most severe first 1ms
+ ✓ src/lib/alertsControlCentreParity.spec.ts > CONTROL — severity order and wording > every row says its finding in BOTH languages, and reads correctly at one 4ms
+ × src/lib/alertsControlCentreParity.spec.ts > CONTROL — severity order and wording > a new condition at one does not read "1 invoices" 4ms
+   → expected 'alerts.invoicesPendingApproval_title' to be 'One invoice is awaiting approval' // Object.is equality
+ × src/lib/alertsControlCentreParity.spec.ts > CONTROL — severity order and wording > the screen still names what it does NOT scan, bank reconciliation included 1ms
+   → expected 'אינו נבדק: מלאי נמוך (אין מעקב כמויות…' to contain 'התאמות בנק'
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 22 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/lib/alertsControlCentreParity.spec.ts > DASH-01 — every condition the control centre counts is scanned here too > 'חריגים פתוחים' ('open_exceptions')
+AssertionError: the control centre counts open_exceptions and /alerts does not scan it: expected undefined to be defined
+ ❯ src/lib/alertsControlCentreParity.spec.ts:238:83
+    236|     const { rows } = await byCode();
+    237|     const row = rows.get(code);
+    238|     expect(row, `the control centre counts ${code} and /alerts does no…
+       |                                                                                   ^
+    239|     expect(row!.title.vars?.count).toBe(figure(PRODUCTION));
+    240|     expect(row!.severity).toBe(severity);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/22]⎯
+
+ FAIL  src/lib/alertsControlCentreParity.spec.ts > DASH-01 — every condition the control centre counts is scanned here too > 'הזמנות באיחור באספקה' ('late_deliveries')
+AssertionError: the control centre counts late_deliveries and /alerts does not scan it: expected undefined to be defined
+ ❯ src/lib/alertsControlCentreParity.spec.ts:238:83
+    236|     const { rows } = await byCode();
+    237|     const row = rows.get(code);
+    238|     expect(row, `the control centre counts ${code} and /alerts does no…
+       |                                                                                   ^
+    239|     expect(row!.title.vars?.count).toBe(figure(PRODUCTION));
+    240|     expect(row!.severity).toBe(severity);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/22]⎯
+
+ FAIL  src/lib/alertsControlCentreParity.spec.ts > DASH-01 — every condition the control centre counts is scanned here too > 'חשבוניות לאישור' ('invoices_pending_approval')
+AssertionError: the control centre counts invoices_pending_approval and /alerts does not scan it: expected undefined to be defined
+ ❯ src/lib/alertsControlCentreParity.spec.ts:238:83
+    236|     const { rows } = await byCode();
+    237|     const row = rows.get(code);
+    238|     expect(row, `the control centre counts ${code} and /alerts does no…
+       |                                                                                   ^
+    239|     expect(row!.title.vars?.count).toBe(figure(PRODUCTION));
+    240|     expect(row!.severity).toBe(severity);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/22]⎯
+
+ FAIL  src/lib/alertsControlCentreParity.spec.ts > DASH-01 — every condition the control centre counts is scanned here too > 'דרישות תשלום לאישור' ('payment_requests_pending_approval')
+AssertionError: the control centre counts payment_requests_pending_approval and /alerts does not scan it: expected undefined to be defined
+ ❯ src/lib/alertsControlCentreParity.spec.ts:238:83
+    236|     const { rows } = await byCode();
+    237|     const row = rows.get(code);
+    238|     expect(row, `the control centre counts ${code} and /alerts does no…
+       |                                                                                   ^
+    239|     expect(row!.title.vars?.count).toBe(figure(PRODUCTION));
+    240|     expect(row!.severity).toBe(severity);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/22]⎯
+
+ FAIL  src/lib/alertsControlCentreParity.spec.ts > DASH-01 — every condition the control centre counts is scanned here too > 'חשבוניות לבדיקה' ('invoices_to_review')
+AssertionError: the control centre counts invoices_to_review and /alerts does not scan it: expected undefined to be defined
+ ❯ src/lib/alertsControlCentreParity.spec.ts:238:83
+    236|     const { rows } = await byCode();
+    237|     const row = rows.get(code);
+    238|     expect(row, `the control centre counts ${code} and /alerts does no…
+       |                                                                                   ^
+    239|     expect(row!.title.vars?.count).toBe(figure(PRODUCTION));
+    240|     expect(row!.severity).toBe(severity);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/22]⎯
+
+ FAIL  src/lib/alertsControlCentreParity.spec.ts > DASH-01 — every condition the control centre counts is scanned here too > 'חשבוניות מאושרות שטרם נשלחו להנהלת חש…' ('invoices_not_sent_to_accountant')
+AssertionError: the control centre counts invoices_not_sent_to_accountant and /alerts does not scan it: expected undefined to be defined
+ ❯ src/lib/alertsControlCentreParity.spec.ts:238:83
+    236|     const { rows } = await byCode();
+    237|     const row = rows.get(code);
+    238|     expect(row, `the control centre counts ${code} and /alerts does no…
+       |                                                                                   ^
+    239|     expect(row!.title.vars?.count).toBe(figure(PRODUCTION));
+    240|     expect(row!.severity).toBe(severity);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/22]⎯
+
+ FAIL  src/lib/alertsControlCentreParity.spec.ts > DASH-01 — every condition the control centre counts is scanned here too > 'טיוטות דרישות תשלום' ('payment_request_drafts')
+AssertionError: the control centre counts payment_request_drafts and /alerts does not scan it: expected undefined to be defined
+ ❯ src/lib/alertsControlCentreParity.spec.ts:238:83
+    236|     const { rows } = await byCode();
+    237|     const row = rows.get(code);
+    238|     expect(row, `the control centre counts ${code} and /alerts does no…
+       |                                                                                   ^
+    239|     expect(row!.title.vars?.count).toBe(figure(PRODUCTION));
+    240|     expect(row!.severity).toBe(severity);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/22]⎯
+
+ FAIL  src/lib/alertsControlCentreParity.spec.ts > DASH-01 — every condition the control centre counts is scanned here too > 'זיכויים שטרם קוזזו' ('open_credits')
+AssertionError: the control centre counts open_credits and /alerts does not scan it: expected undefined to be defined
+ ❯ src/lib/alertsControlCentreParity.spec.ts:238:83
+    236|     const { rows } = await byCode();
+    237|     const row = rows.get(code);
+    238|     expect(row, `the control centre counts ${code} and /alerts does no…
+       |                                                                                   ^
+    239|     expect(row!.title.vars?.count).toBe(figure(PRODUCTION));
+    240|     expect(row!.severity).toBe(severity);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/22]⎯
+
+ FAIL  src/lib/alertsControlCentreParity.spec.ts > DASH-01 — every condition the control centre counts is scanned here too > 'התחייבויות פתוחות' ('open_commitments')
+AssertionError: the control centre counts open_commitments and /alerts does not scan it: expected undefined to be defined
+ ❯ src/lib/alertsControlCentreParity.spec.ts:238:83
+    236|     const { rows } = await byCode();
+    237|     const row = rows.get(code);
+    238|     expect(row, `the control centre counts ${code} and /alerts does no…
+       |                                                                                   ^
+    239|     expect(row!.title.vars?.count).toBe(figure(PRODUCTION));
+    240|     expect(row!.severity).toBe(severity);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/22]⎯
+
+ FAIL  src/lib/alertsControlCentreParity.spec.ts > DASH-01 — every condition the control centre counts is scanned here too > 'open_exceptions' reads its OWN field, not a neighbour's
+AssertionError: expected undefined to be 19 // Object.is equality
+
+- Expected:
+19
+
++ Received:
+undefined
+
+ ❯ src/lib/alertsControlCentreParity.spec.ts:247:47
+    245|     tenant = DISTINCT;
+    246|     const { rows } = await byCode();
+    247|     expect(rows.get(code)?.title.vars?.count).toBe(figure(DISTINCT));
+       |                                               ^
+    248|   });
+    249|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/22]⎯
+
+ FAIL  src/lib/alertsControlCentreParity.spec.ts > DASH-01 — every condition the control centre counts is scanned here too > 'late_deliveries' reads its OWN field, not a neighbour's
+AssertionError: expected undefined to be 18 // Object.is equality
+
+- Expected:
+18
+
++ Received:
+undefined
+
+ ❯ src/lib/alertsControlCentreParity.spec.ts:247:47
+    245|     tenant = DISTINCT;
+    246|     const { rows } = await byCode();
+    247|     expect(rows.get(code)?.title.vars?.count).toBe(figure(DISTINCT));
+       |                                               ^
+    248|   });
+    249|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/22]⎯
+
+ FAIL  src/lib/alertsControlCentreParity.spec.ts > DASH-01 — every condition the control centre counts is scanned here too > 'invoices_pending_approval' reads its OWN field, not a neighbour's
+AssertionError: expected undefined to be 14 // Object.is equality
+
+- Expected:
+14
+
++ Received:
+undefined
+
+ ❯ src/lib/alertsControlCentreParity.spec.ts:247:47
+    245|     tenant = DISTINCT;
+    246|     const { rows } = await byCode();
+    247|     expect(rows.get(code)?.title.vars?.count).toBe(figure(DISTINCT));
+       |                                               ^
+    248|   });
+    249|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/22]⎯
+
+ FAIL  src/lib/alertsControlCentreParity.spec.ts > DASH-01 — every condition the control centre counts is scanned here too > 'payment_requests_pending_approval' reads its OWN field, not a neighbour's
+AssertionError: expected undefined to be 11 // Object.is equality
+
+- Expected:
+11
+
++ Received:
+undefined
+
+ ❯ src/lib/alertsControlCentreParity.spec.ts:247:47
+    245|     tenant = DISTINCT;
+    246|     const { rows } = await byCode();
+    247|     expect(rows.get(code)?.title.vars?.count).toBe(figure(DISTINCT));
+       |                                               ^
+    248|   });
+    249|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/22]⎯
+
+ FAIL  src/lib/alertsControlCentreParity.spec.ts > DASH-01 — every condition the control centre counts is scanned here too > 'invoices_to_review' reads its OWN field, not a neighbour's
+AssertionError: expected undefined to be 15 // Object.is equality
+
+- Expected:
+15
+
++ Received:
+undefined
+
+ ❯ src/lib/alertsControlCentreParity.spec.ts:247:47
+    245|     tenant = DISTINCT;
+    246|     const { rows } = await byCode();
+    247|     expect(rows.get(code)?.title.vars?.count).toBe(figure(DISTINCT));
+       |                                               ^
+    248|   });
+    249|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/22]⎯
+
+ FAIL  src/lib/alertsControlCentreParity.spec.ts > DASH-01 — every condition the control centre counts is scanned here too > 'invoices_not_sent_to_accountant' reads its OWN field, not a neighbour's
+AssertionError: expected undefined to be 16 // Object.is equality
+
+- Expected:
+16
+
++ Received:
+undefined
+
+ ❯ src/lib/alertsControlCentreParity.spec.ts:247:47
+    245|     tenant = DISTINCT;
+    246|     const { rows } = await byCode();
+    247|     expect(rows.get(code)?.title.vars?.count).toBe(figure(DISTINCT));
+       |                                               ^
+    248|   });
+    249|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/22]⎯
+
+ FAIL  src/lib/alertsControlCentreParity.spec.ts > DASH-01 — every condition the control centre counts is scanned here too > 'payment_request_drafts' reads its OWN field, not a neighbour's
+AssertionError: expected undefined to be 12 // Object.is equality
+
+- Expected:
+12
+
++ Received:
+undefined
+
+ ❯ src/lib/alertsControlCentreParity.spec.ts:247:47
+    245|     tenant = DISTINCT;
+    246|     const { rows } = await byCode();
+    247|     expect(rows.get(code)?.title.vars?.count).toBe(figure(DISTINCT));
+       |                                               ^
+    248|   });
+    249|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/22]⎯
+
+ FAIL  src/lib/alertsControlCentreParity.spec.ts > DASH-01 — every condition the control centre counts is scanned here too > 'open_credits' reads its OWN field, not a neighbour's
+AssertionError: expected undefined to be 13 // Object.is equality
+
+- Expected:
+13
+
++ Received:
+undefined
+
+ ❯ src/lib/alertsControlCentreParity.spec.ts:247:47
+    245|     tenant = DISTINCT;
+    246|     const { rows } = await byCode();
+    247|     expect(rows.get(code)?.title.vars?.count).toBe(figure(DISTINCT));
+       |                                               ^
+    248|   });
+    249|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[17/22]⎯
+
+ FAIL  src/lib/alertsControlCentreParity.spec.ts > DASH-01 — every condition the control centre counts is scanned here too > 'open_commitments' reads its OWN field, not a neighbour's
+AssertionError: expected undefined to be 17 // Object.is equality
+
+- Expected:
+17
+
++ Received:
+undefined
+
+ ❯ src/lib/alertsControlCentreParity.spec.ts:247:47
+    245|     tenant = DISTINCT;
+    246|     const { rows } = await byCode();
+    247|     expect(rows.get(code)?.title.vars?.count).toBe(figure(DISTINCT));
+       |                                               ^
+    248|   });
+    249|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[18/22]⎯
+
+ FAIL  src/lib/alertsControlCentreParity.spec.ts > DASH-01 — a condition with no data is silent, and one that could not be read is NAMED > a control centre the reader may not read is nine NAMED failures, not nine silent all-clears
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ src/lib/alertsControlCentreParity.spec.ts:283:27
+    281|     const fromSnapshot = CONTROL_CENTRE.filter((c) => c.code !== 'open…
+    282|     for (const { code } of fromSnapshot) expect(rows.has(code), `${cod…
+    283|     expect(scan.complete).toBe(false);
+       |                           ^
+    284|     expect(scan.failures.map((failure) => failure.code).sort())
+    285|       .toEqual(fromSnapshot.map((c) => c.code).sort());
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[19/22]⎯
+
+ FAIL  src/lib/alertsControlCentreParity.spec.ts > DASH-01 — a condition with no data is silent, and one that could not be read is NAMED > the eight snapshot conditions cost ONE call between them
+AssertionError: expected [] to have a length of 1 but got +0
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ src/lib/alertsControlCentreParity.spec.ts:298:89
+    296|   it('the eight snapshot conditions cost ONE call between them', async…
+    297|     await byCode();
+    298|     expect(rpc.mock.calls.filter(([name]) => name === 'management_dash…
+       |                                                                                         ^
+    299|   });
+    300| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[20/22]⎯
+
+ FAIL  src/lib/alertsControlCentreParity.spec.ts > CONTROL — severity order and wording > a new condition at one does not read "1 invoices"
+AssertionError: expected 'alerts.invoicesPendingApproval_title' to be 'One invoice is awaiting approval' // Object.is equality
+
+Expected: "One invoice is awaiting approval"
+Received: "alerts.invoicesPendingApproval_title"
+
+ ❯ src/lib/alertsControlCentreParity.spec.ts:358:8
+    356|     // The singular siblings, checked where they are reached: `t()` sw…
+    357|     expect(translateIn('en', 'alerts.invoicesPendingApproval_title', {…
+    358|       .toBe('One invoice is awaiting approval');
+       |        ^
+    359|     expect(translateIn('he', 'alerts.openCredits_title', { count: 1 })…
+    360|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[21/22]⎯
+
+ FAIL  src/lib/alertsControlCentreParity.spec.ts > CONTROL — severity order and wording > the screen still names what it does NOT scan, bank reconciliation included
+AssertionError: expected 'אינו נבדק: מלאי נמוך (אין מעקב כמויות…' to contain 'התאמות בנק'
+
+Expected: "התאמות בנק"
+Received: "אינו נבדק: מלאי נמוך (אין מעקב כמויות במערכת) · חריגה בתקציב (לא הוגדר תקציב)."
+
+ ❯ src/lib/alertsControlCentreParity.spec.ts:365:25
+    363|     for (const locale of ['he', 'en'] as const) {
+    364|       const unchecked = translateIn(locale, 'alerts.text_3');
+    365|       expect(unchecked).toContain(locale === 'he' ? 'התאמות בנק' : 'ba…
+       |                         ^
+    366|       expect(translateIn(locale, 'alerts.coverageNote')).not.toBe('ale…
+    367|     }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22/22]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  22 failed | 12 passed (34)
+   Start at  14:05:52
+   Duration  4.14s (transform 907ms, setup 943ms, import 987ms, tests 93ms, environment 1.73s)
+

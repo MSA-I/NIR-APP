@@ -1,0 +1,59 @@
+﻿
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a73266a5292c4fb5f
+
+ ✓ src/pages/tileClaimParity.spec.ts > payment-request due filters exclude drafts, exactly as the snapshot does > the named set is exactly the complement of the four the server excludes 2ms
+ ✓ src/pages/tileClaimParity.spec.ts > payment-request due filters exclude drafts, exactly as the snapshot does > a draft never appears under ?due=overdue 0ms
+ ✓ src/pages/tileClaimParity.spec.ts > payment-request due filters exclude drafts, exactly as the snapshot does > a draft never appears under ?due=today 0ms
+ ✓ src/pages/tileClaimParity.spec.ts > payment-request due filters exclude drafts, exactly as the snapshot does > a draft never appears under ?due=soon 0ms
+ ✓ src/pages/tileClaimParity.spec.ts > payment-request due filters exclude drafts, exactly as the snapshot does > an approved request that is genuinely late does appear 0ms
+ ✓ src/pages/tileClaimParity.spec.ts > payment-request due filters exclude drafts, exactly as the snapshot does > due today and due soon read the same statuses as overdue 0ms
+ ✓ src/pages/tileClaimParity.spec.ts > payment-request due filters exclude drafts, exactly as the snapshot does > an undated request is in no due window at all — it is not "not yet due" 0ms
+ ✓ src/pages/tileClaimParity.spec.ts > payment-request due filters exclude drafts, exactly as the snapshot does > no due filter leaves every row, drafts included 0ms
+ ✓ src/pages/tileClaimParity.spec.ts > "below minimum" has three states, not two > a measured zero survives: products have verdicts and none is low 0ms
+ ✓ src/pages/tileClaimParity.spec.ts > "below minimum" has three states, not two > a real count survives 0ms
+ ✓ src/pages/tileClaimParity.spec.ts > "below minimum" has three states, not two > no product carries a verdict → not measured, never zero 0ms
+ ✓ src/pages/tileClaimParity.spec.ts > "below minimum" has three states, not two > a failed read is not measured either 0ms
+ ✓ src/pages/tileClaimParity.spec.ts > "below minimum" has three states, not two > an empty catalogue keeps its honest zero 0ms
+ ✓ src/pages/tileClaimParity.spec.ts > "below minimum" has three states, not two > and the screen says WHICH zero it is, rather than leaving the sub-line to imply a stocked business 1ms
+ ✓ src/pages/tileClaimParity.spec.ts > the control centre links at the population it counted > '/invoices?export=not_sent&review=approved' — invoices awaiting the bookkeeper are approved ones 0ms
+ ✓ src/pages/tileClaimParity.spec.ts > the control centre links at the population it counted > '/invoices?review=received,in_review' — the review queue is two statuses, not one 0ms
+ ✓ src/pages/tileClaimParity.spec.ts > the control centre links at the population it counted > '/payment-requests?status=draft' — the drafts row opens the drafts 0ms
+ ✓ src/pages/tileClaimParity.spec.ts > the control centre links at the population it counted > '/orders?status=sent,confirmed,partial' — a commitment is an order that left the building 0ms
+ ✓ src/pages/tileClaimParity.spec.ts > the control centre links at the population it counted > '/prices?increases=1&days=30' — the price-rise tile carries its own window 0ms
+ ✓ src/pages/tileClaimParity.spec.ts > the control centre links at the population it counted > to: '/receiving' — the goods-receipt queue opens the goods-receipt screen 0ms
+ ✓ src/pages/tileClaimParity.spec.ts > the control centre links at the population it counted > no tile still points at the unfiltered screens that contradicted it 0ms
+ ✓ src/pages/tileClaimParity.spec.ts > every aggregate inside the currency view is taken inside one currency > weeklySeries(inView(orders).map 0ms
+ ✓ src/pages/tileClaimParity.spec.ts > every aggregate inside the currency view is taken inside one currency > weeklySeries(inView(payments).map 0ms
+ ✓ src/pages/tileClaimParity.spec.ts > every aggregate inside the currency view is taken inside one currency > inView(orders).filter((order) => inPreviousMTD 0ms
+ ✓ src/pages/tileClaimParity.spec.ts > every aggregate inside the currency view is taken inside one currency > inView(payments).filter((payment) => inPreviousMTD 0ms
+ ✓ src/pages/tileClaimParity.spec.ts > every aggregate inside the currency view is taken inside one currency > and none of the four reads the unnarrowed array again 0ms
+ ✓ src/pages/tileClaimParity.spec.ts > every aggregate inside the currency view is taken inside one currency > the monthly card no longer asks about every currency at once 0ms
+ ✓ src/pages/tileClaimParity.spec.ts > a currency with no invoices in the window draws nothing, not a flat zero line > a month with invoices in it is an observation 0ms
+ ✓ src/pages/tileClaimParity.spec.ts > a currency with no invoices in the window draws nothing, not a flat zero line > four empty buckets are not a measurement of zero spending 0ms
+ ✓ src/pages/tileClaimParity.spec.ts > a currency with no invoices in the window draws nothing, not a flat zero line > an empty window is empty 0ms
+ ✓ src/pages/tileClaimParity.spec.ts > a currency with no invoices in the window draws nothing, not a flat zero line > invoices that sum to zero ARE an observation — count decides, never total 0ms
+ ✓ src/pages/tileClaimParity.spec.ts > the accountant-export status exists on a phone > the export column is not hidden on mobile 0ms
+ ✓ src/pages/tileClaimParity.spec.ts > the accountant-export status exists on a phone > and it keeps its label, because the review badge beside it has none 0ms
+ ✓ src/pages/dashboardTileDestinations.spec.ts > DASH-03 — the open-invoice-balance tile opens the balance it counted > the tile is the ₪11,581.60 across eight invoices the sweep measured 2ms
+ ✓ src/pages/dashboardTileDestinations.spec.ts > DASH-03 — the open-invoice-balance tile opens the balance it counted > and the list its link opens holds exactly those invoices 1ms
+ ✓ src/pages/dashboardTileDestinations.spec.ts > DASH-03 — the open-invoice-balance tile opens the balance it counted > the dollar invoice is not in the shekel figure and must not be in the shekel list 1ms
+ ✓ src/pages/dashboardTileDestinations.spec.ts > DASH-03 — the open-invoice-balance tile opens the balance it counted > and switching the picker moves the list with it 0ms
+ ✓ src/pages/dashboardTileDestinations.spec.ts > DASH-04 — "N הזמנות באיחור באספקה" opens those N > two of the nine orders awaiting receipt are late 0ms
+ ✓ src/pages/dashboardTileDestinations.spec.ts > DASH-04 — "N הזמנות באיחור באספקה" opens those N > and the list its link opens holds exactly those two 0ms
+ ✓ src/pages/dashboardTileDestinations.spec.ts > DASH-04 — "N הזמנות באיחור באספקה" opens those N > "דורש פעולה" is not that set — it is five, and that is why it could not carry the link 0ms
+ ✓ src/pages/dashboardTileDestinations.spec.ts > DASH-04 — "N הזמנות באיחור באספקה" opens those N > a delivery promised for today is not late, though it does need action 0ms
+ ✓ src/pages/dashboardTileDestinations.spec.ts > DASH-05 — "N הזמנות פתוחות ללא תאריך אספקה" opens those N > seven open orders carry no delivery date 0ms
+ ✓ src/pages/dashboardTileDestinations.spec.ts > DASH-05 — "N הזמנות פתוחות ללא תאריך אספקה" opens those N > and the list its link opens holds exactly those seven 1ms
+ ✓ src/pages/dashboardTileDestinations.spec.ts > DASH-05 — "N הזמנות פתוחות ללא תאריך אספקה" opens those N > the count is of things, so its link carries no currency 0ms
+ ✓ src/pages/dashboardTileDestinations.spec.ts > DASH-06 — "נרכש החודש" opens the orders that make it up > the month figure is neither every order nor every order this month 0ms
+ ✓ src/pages/dashboardTileDestinations.spec.ts > DASH-06 — "נרכש החודש" opens the orders that make it up > and the list its link opens holds exactly those orders 3ms
+ ✓ src/pages/dashboardTileDestinations.spec.ts > no link promises a narrowing its destination will ignore > /invoices?pay=open&currency=ILS 0ms
+ ✓ src/pages/dashboardTileDestinations.spec.ts > no link promises a narrowing its destination will ignore > /receiving?status=late 0ms
+ ✓ src/pages/dashboardTileDestinations.spec.ts > no link promises a narrowing its destination will ignore > /orders?status=sent,confirmed,partial&delivery=undated 0ms
+ ✓ src/pages/dashboardTileDestinations.spec.ts > no link promises a narrowing its destination will ignore > /orders?status=ready,sent,confirmed,partial,received&month=2026-09&currency=ILS 0ms
+
+ Test Files  2 passed (2)
+      Tests  50 passed (50)
+   Start at  14:09:14
+   Duration  4.28s (transform 2.36s, setup 1.02s, import 4.08s, tests 31ms, environment 2.64s)
+

@@ -25,8 +25,8 @@ describe('price-list language boundaries', () => {
   });
 
   it('stores import result facts and resolves the sentence at render time', () => {
-    expect(source).toContain('useState<ImportReport | null>(null)');
-    expect(source).toContain('setReport(imported);');
+    expect(source).toContain('useState<{ summary: ImportReport; skipped: SkippedRow[] } | null>(null)');
+    expect(source).toContain('setReport({ summary: imported,');
     expect(source).toContain("t('priceListsTail.importReport'");
     expect(source).not.toMatch(/setReport\(`|setReport\(t\(/);
   });

@@ -24,6 +24,22 @@
  * hostile payload, not to express an opinion about how much a business may legitimately buy.
  * Whether a *specific* quantity is sensible for a specific unit is a business question this
  * file deliberately does not answer.
+ *
+ * ONE ENTRY HERE HAS NO SERVER COUNTERPART, AND SAYS SO RATHER THAN PRETENDING OTHERWISE.
+ * `BANK_MATCH_DAYS_MIN` bounds `organizations.settings.bank_match_days`, which lives inside a
+ * `jsonb` column with no CHECK, is read by no server function, and is consumed in exactly one
+ * place — `Bank.tsx` builds `[tx_date - days, tx_date + days]` with `addCalendarDays` and scores
+ * a payment dated inside that window higher. So the rule above is not satisfied and cannot be
+ * satisfied by editing this file; a constraint for it is a migration, and PR 42 draws no number.
+ * What is written here is therefore only what the ARITHMETIC already decides, which is not a
+ * business judgement: a negative window inverts the range into one no date can fall inside, and
+ * `Date.UTC` truncates a fractional day, so `7.5` is a value the product cannot honour.
+ *
+ * THERE IS DELIBERATELY NO MAXIMUM. `docs/OPEN-DECISIONS.md` row 3 records the DEFAULT window
+ * (±7 days) and no ceiling, and no server bound exists to mirror. A `max` chosen on this screen
+ * would be an owner's answer written by a developer, which is the one thing the constitution
+ * forbids outright — so the screen states the unit and what the number does instead, and the
+ * ceiling stays an open question rather than a quiet guess.
  */
 
 /** Lowest VAT rate a form may submit. Mirrors `0099:108` and `provision.ts:170-172`. */
@@ -42,6 +58,28 @@ export const QUANTITY_MAX = 1_000_000;
 /** True when `value` is a real number inside the inclusive VAT range. Blank/NaN is NOT in range. */
 export function isVatRateInRange(value: number): boolean {
   return Number.isFinite(value) && value >= VAT_RATE_MIN && value <= VAT_RATE_MAX;
+}
+
+/**
+ * Narrowest bank-matching window a form may submit, in whole calendar days.
+ *
+ * Zero is a real setting — "only a payment dated the same day scores as near" — so the floor is
+ * `0` and not `1`. Below it the window inverts and stops being a window at all.
+ */
+export const BANK_MATCH_DAYS_MIN = 0;
+
+/** The window is counted in whole days; `Date.UTC` cannot honour a fraction of one. */
+export const BANK_MATCH_DAYS_STEP = 1;
+
+/**
+ * True when `value` is a whole number of days at or above `BANK_MATCH_DAYS_MIN`.
+ *
+ * Blank is NOT in range, and that is the point of testing it here rather than trusting `type=
+ * number`: `Number('')` is `0`, so an empty box that reached the save path would silently store
+ * the narrowest window there is as though the owner had asked for it.
+ */
+export function isBankMatchWindowInRange(value: number): boolean {
+  return Number.isInteger(value) && value >= BANK_MATCH_DAYS_MIN;
 }
 
 /**

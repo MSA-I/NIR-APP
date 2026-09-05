@@ -1,0 +1,40 @@
+PR41 — OWN-05 — RED
+against the UNFIXED tree — the four product files restored to HEAD 50188f6e with git checkout, and the FINAL spec file. src/lib/supplierLogLedger.ts exists on disk but nothing imports it in this state.
+
+command: npx vitest run src/pages/supplierLogLedger.spec.tsx -t "OWN-05"
+exit code: 1
+
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a3c9bf3ef67ad3992
+
+ ❯ src/pages/supplierLogLedger.spec.tsx (4 tests | 1 failed | 3 skipped) 372ms
+     × folds the reason-less trigger twin into the reasoned price command it shadows 364ms
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 3 skipped (4)
+   Start at  16:11:50
+   Duration  4.26s (transform 893ms, setup 651ms, import 1.51s, tests 372ms, environment 1.47s)
+
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/supplierLogLedger.spec.tsx > /supplier-log — OWN-05: one write, one readable entry > folds the reason-less trigger twin into the reasoned price command it shadows
+AssertionError: expected [ [ '04.09.2026, 14:53', …(6) ], …(1) ] to have a length of 1 but got 2
+
+- Expected
++ Received
+
+- 1
++ 2
+
+ ❯ src/pages/supplierLogLedger.spec.tsx:238:20
+    236|
+    237|     const sevens = rowsWhere((cells) => cells.includes('מוצר 7 · ספק ה…
+    238|     expect(sevens).toHaveLength(1);
+       |                    ^
+    239|     // The surviving entry carries BOTH halves: the command's name and…
+    240|     // row's before/after — which is the pair the screen used to split…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+

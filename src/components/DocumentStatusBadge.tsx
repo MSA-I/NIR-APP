@@ -1,12 +1,13 @@
 import { AlertTriangle, LoaderCircle } from 'lucide-react';
 import { useT } from '../lib/i18n/LocaleProvider';
-import type { DocumentUiStatus } from '../lib/documentStatus';
+import { documentStatusElapsed, type DocumentUiStatus } from '../lib/documentStatus';
 import { ICON } from './ui';
 
 export function DocumentStatusBadge({ status, ...attributes }: {
   status: DocumentUiStatus;
 } & Omit<React.ComponentPropsWithoutRef<'span'>, 'children'>) {
   const { t } = useT();
+  const elapsedParts = documentStatusElapsed(status.elapsedSeconds);
   if (!status.badgeVisible) return null;
   // The badge is where a status stops being a decision and becomes words, so it is where the keys
   // resolve. `documentStatus.ts` decides WHICH state this is; it no longer decides in what
@@ -27,6 +28,19 @@ export function DocumentStatusBadge({ status, ...attributes }: {
         {status.state === 'stuck' && <AlertTriangle size={ICON.xs} className="shrink-0" aria-hidden="true" />}
         {t(status.labelKey)}
       </span>
+      {/* MERGE, 05.09.2026 — and this is a RECONCILIATION, not a coin flip.
+          The other campaign pinned the row badge as COMPACT: three named tests assert that a
+          `leased` job shows no page counter, and that a loading or a stuck job shows neither
+          counter nor age. Their reason is row density in lists, and it is a measured one.
+          This sweep needed the opposite for ONE state — `awaiting_scan`, where nothing is running,
+          so nothing will ever look wrong on its own and the sweep found three documents sitting at
+          that gate since 02.09.
+          Not one of their three tests covers `awaiting_scan`. So the age stays for that state
+          ALONE, and the page counter goes entirely — it now lives in the lifecycle strip they
+          moved it to. Both campaigns keep what they measured. */}
+      {elapsedParts && status.state === 'awaiting_scan' && (
+        <span className="num text-xs text-ink-muted" data-document-status-age>· {t(elapsedParts.key, elapsedParts.vars)}</span>
+      )}
       {/* Only when there is a second fact to carry. A state whose description merely repeated the
           badge shipped that repetition to every screen-reader user, on every row. */}
       {description ? <span className="sr-only">{description}</span> : null}

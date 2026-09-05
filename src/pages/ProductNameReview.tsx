@@ -93,6 +93,51 @@ function conflictKey(verdict: DisplayNameConflict): TKey {
 const candidatesKey = (verdict: DisplayNameConflict): TKey =>
   (verdict.candidates.length > 1 ? 'productNameReview.candidatesSizes' : 'productNameReview.candidatesComposed');
 
+/** One product with the verdict already computed for it. One parse per product per load. */
+export interface NameQueueEntry {
+  product: Product;
+  verdict: DisplayNameVerdict;
+}
+
+/**
+ * The queue split into the work and the confirmations (`PL-08`).
+ *
+ * The tenant this was measured on has 270 products with no canonical name and about 39 stored in
+ * visual order. Every one of the 270 was offered as pending work, and the majority of the cards
+ * said on their own face „זהה לשם השמור — האישור מסמן שנבדק, ואינו משנה את מה שמוצג." A count
+ * offered as work has to be the work, or the rows that need a person are hidden inside it.
+ *
+ * NOTHING IS REMOVED AND NOTHING IS AUTO-APPROVED. Confirming a name that is already right is a
+ * real act, it is audited, and a person still presses it. It is separated, and counted separately.
+ *
+ * `changing` is every verdict that would alter what a screen shows or that no parser may settle:
+ * a proposal different from the stored name, a conflict between two sizes, a name stored in visual
+ * order. `confirmOnly` is the residue — a proposal identical to the name already there.
+ */
+export interface NameQueueSplit {
+  changing: NameQueueEntry[];
+  confirmOnly: NameQueueEntry[];
+}
+
+/**
+ * Exported so `Products.tsx` can COUNT without normalising.
+ *
+ * `productDisplayName.spec.ts` allows the parser into this file alone, and rightly: the hazard is a
+ * table rendering names through it. Nothing crosses that boundary here — the caller receives two
+ * integers' worth of grouping and renders neither name through anything.
+ */
+export function splitNameQueue(queue: readonly Product[]): NameQueueSplit {
+  const changing: NameQueueEntry[] = [];
+  const confirmOnly: NameQueueEntry[] = [];
+  for (const product of queue) {
+    const verdict = proposeDisplayName(product.name, product.unit);
+    const entry = { product, verdict };
+    if (verdict.kind === 'proposal' && verdict.displayName === product.name.trim()) confirmOnly.push(entry);
+    else changing.push(entry);
+  }
+  return { changing, confirmOnly };
+}
+
 export function ProductNameReview({ queue, onApproved }: {
   /**
    * Products whose `display_name` is null. `null` means the catalogue itself is unknown — the
@@ -107,15 +152,11 @@ export function ProductNameReview({ queue, onApproved }: {
   const headingRef = useRef<HTMLHeadingElement>(null);
 
   // One parse per product per load, not one per paint. `proposeDisplayName` never throws.
-  const verdicts = useMemo(
-    () => (queue ?? []).map((product) => ({
-      product,
-      verdict: proposeDisplayName(product.name, product.unit),
-    })),
-    [queue],
-  );
-
-  const pending = verdicts.filter(({ product }) => !skipped.has(product.id));
+  const split = useMemo(() => splitNameQueue(queue ?? []), [queue]);
+  const unskipped = (entries: NameQueueEntry[]) => entries.filter(({ product }) => !skipped.has(product.id));
+  const changing = unskipped(split.changing);
+  const confirmOnly = unskipped(split.confirmOnly);
+  const pending = [...changing, ...confirmOnly];
 
   function handleApproved(productId: string) {
     onApproved(productId);
@@ -131,7 +172,7 @@ export function ProductNameReview({ queue, onApproved }: {
           className="text-lg font-semibold text-ink focus:outline-none">
           {t('productNameReview.text')}
         </h2>
-        <p className="text-sm text-ink-soft">
+        <p className="text-sm text-ink-soft" data-testid="name-review-intro">
           {t('productNameReview.intro')}
         </p>
       </div>
@@ -151,13 +192,42 @@ export function ProductNameReview({ queue, onApproved }: {
           </p>
         </div>
       ) : (
-        <ul className="space-y-3">
-          {pending.map(({ product, verdict }) => (
-            <ReviewCard key={product.id} product={product} verdict={verdict}
-              onApproved={handleApproved}
-              onSkip={(id) => setSkipped((current) => new Set(current).add(id))} />
-          ))}
-        </ul>
+        <>
+          {changing.length > 0 ? (
+            <ul className="space-y-3">
+              {changing.map(({ product, verdict }) => (
+                <ReviewCard key={product.id} product={product} verdict={verdict}
+                  onApproved={handleApproved}
+                  onSkip={(id) => setSkipped((current) => new Set(current).add(id))} />
+              ))}
+            </ul>
+          ) : (
+            <div className="note-done" role="status">
+              <Check size={ICON.sm} className="mt-0.5 shrink-0" aria-hidden="true" />
+              <p>{t('productNameReview.noDecisionsLeft')}</p>
+            </div>
+          )}
+
+          {/* PL-08. Folded, never dropped: each of these is still a real approval with a real
+              audit row, and each card still says of itself that it changes nothing displayed. What
+              changes is that they are no longer counted as decisions somebody owes. */}
+          {confirmOnly.length > 0 && (
+            <details className="rounded-lg border border-line-soft p-3" data-testid="name-review-confirm-only">
+              <summary className="link flex min-h-11 cursor-pointer items-center"
+                data-testid="name-review-confirm-only-summary">
+                {t('productNameReview.confirmOnlyGroup', { count: confirmOnly.length })}
+              </summary>
+              <p className="mt-1 text-sm text-ink-muted">{t('productNameReview.confirmOnlyLead')}</p>
+              <ul className="mt-3 space-y-3">
+                {confirmOnly.map(({ product, verdict }) => (
+                  <ReviewCard key={product.id} product={product} verdict={verdict}
+                    onApproved={handleApproved}
+                    onSkip={(id) => setSkipped((current) => new Set(current).add(id))} />
+                ))}
+              </ul>
+            </details>
+          )}
+        </>
       )}
 
       {skipped.size > 0 && (

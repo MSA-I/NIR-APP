@@ -1,7 +1,7 @@
 import { useT } from '../lib/i18n/LocaleProvider';
 import type { TKey } from '../lib/i18n/t';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { reasonOr } from '../lib/reason';
+import { OPTIONAL_REASON_LABEL_KEY, reasonOr } from '../lib/reason';
 import { useSearchParams } from 'react-router';
 import { Upload, Download, Landmark, Link2, AlertTriangle, EyeOff, Loader2, CheckCircle2, Unlink } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -250,11 +250,38 @@ export default function Bank() {
   );
 }
 
-function UnmatchModal({ tx, onClose, onChanged }: { tx: TxRow; onClose: () => void; onChanged: () => void }) {
+/* Exported for `bankStatementLineAllocation.spec.tsx`. The dialog is the only place in the product
+   that opens a MATCHED line, and until MON-04 it was the only place that said nothing at all about
+   what the line is spoken for. */
+export function UnmatchModal({ tx, onClose, onChanged }: { tx: TxRow; onClose: () => void; onChanged: () => void }) {
   const { errorText, t } = useT();
   const toast = useToast();
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
+
+  /* MON-04. `0322` stops a NEW over-allocation from being written; it cannot un-write one that is
+     already there, and a line written before it — or by a migration or repair script — can still
+     hold more than it is. So the dialog states the figure rather than leaving the reader to assume
+     the two rows in front of them are both fine.
+
+     CONFIRMED rows only, and the same reading the rest of this screen already uses (the candidate
+     query above filters `confirmed` too): a suggestion is a proposal the matcher printed, it claims
+     no money, and counting it here would report an over-allocation on every ordinary suggested
+     line. This is the same boundary `0322` draws in the database. */
+  const allocations = useQuery(
+    async () => unwrap(await supabase.from('bank_allocations')
+      .select('id, amount, currency')
+      .eq('bank_transaction_id', tx.id).eq('confirmed', true)
+      .order('id')) as { id: string; amount: number; currency: string }[],
+    [],
+    [DOMAIN.bank, 'allocations', tx.id],
+  );
+  /* null while the read is in flight or has failed — NOT 0. A measured zero is a claim about the
+     line ("nothing is allocated to it"), and we have not measured anything yet. */
+  const claimed = allocations.data
+    ? allocations.data.reduce((total, row) => total + row.amount, 0)
+    : null;
+  const excess = claimed == null ? null : claimed - tx.amount;
 
   async function unmatch() {
     setBusy(true);
@@ -280,7 +307,19 @@ function UnmatchModal({ tx, onClose, onChanged }: { tx: TxRow; onClose: () => vo
             <span>{fmtDate(tx.tx_date)} · {tx.description}</span>
             <span className="font-semibold num">{fmtMoneyExact(tx.amount, tx.currency)}</span>
           </div>
+          <div className="flex flex-wrap justify-between gap-2 text-ink-muted">
+            <span>{t('bank.allocatedLabel')}</span>
+            <span className="num">{claimed == null ? '—' : fmtMoneyExact(claimed, tx.currency)}</span>
+          </div>
         </SubPanel>
+        {allocations.error && <ErrorNote message={allocations.error} />}
+        {excess != null && excess > 0 && (
+          <Note tone="alert" role="alert">{t('bank.overAllocated', {
+            claimed: fmtMoneyExact(claimed as number, tx.currency),
+            amount: fmtMoneyExact(tx.amount, tx.currency),
+            excess: fmtMoneyExact(excess, tx.currency),
+          })}</Note>
+        )}
         <Note tone="await">{t('bank.text_11')}</Note>
         {/* `text_11` already ends with "a direct match to an invoice requires a separate financial
             correction" — a thing named without a door. The refusal itself
@@ -289,7 +328,13 @@ function UnmatchModal({ tx, onClose, onChanged }: { tx: TxRow; onClose: () => vo
             here, before it. One quiet line, not a second panel. */}
         <p className="text-xs text-ink-muted">{t('bank.directMatchCorrection')}</p>
         <div>
-          <label className="label" htmlFor="bank-unmatch-reason">{t('bank.text_12')}</label>
+          {/* The label the server's own behaviour supports, not the one the screen wished for.
+              `unmatch_bank_transaction` refuses a blank `p_reason` by name — and never sees one,
+              because `reasonOr` below writes the ledger sentence when the box is empty. So the
+              button is not blocked, the '*' this label used to carry was decorative, and the
+              action dialog two panels down already said "(רשות)" over an identical box. One key
+              for the whole product settles which of the two conventions is real. */}
+          <label className="label" htmlFor="bank-unmatch-reason">{t(OPTIONAL_REASON_LABEL_KEY)}</label>
           <input id="bank-unmatch-reason" className="input" value={reason} onChange={(e) => setReason(e.target.value)} />
         </div>
         <div className="flex justify-end gap-2">
@@ -325,6 +370,10 @@ function BankImportModal({ onClose, onDone }: { onClose: () => void; onDone: () 
     bank_import_cell_type_invalid: t('bank.text_20'),
     bank_import_row_invalid: t('bank.text_21'),
     bank_import_row_limit: t('bank.text_22'),
+    // `EXP-09`: the template ships a worked example row so a person can see the format. Left in
+    // place it would be filed as a real transfer, so the parser refuses the file and this names
+    // the one row to change.
+    bank_import_example_row_present: t('bank.importExampleRowPresent'),
   };
 
   function downloadTemplate() {

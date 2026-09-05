@@ -1,0 +1,42 @@
+﻿
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a37194cd6c1d29194
+
+ ✓ src/lib/checkSummary.spec.ts > summarizeChecks > blocks on a critical check and names the step that clears it 4ms
+ ✓ src/lib/checkSummary.spec.ts > summarizeChecks > sorts a warning and an info finding without blocking on either 1ms
+ ✓ src/lib/checkSummary.spec.ts > summarizeChecks > leaves the action null for a blocking code with no established remedy 2ms
+ ✓ src/lib/checkSummary.spec.ts > summarizeChecks > reports a clean run as clean 0ms
+ ✓ src/lib/checkSummary.spec.ts > summarizeChecks > still finds the remedy when the blocking check is not the first finding 0ms
+ ✓ src/lib/errors.spec.ts > the direct bank match refusal > maps to its own key, whichever shape the message arrives in 8ms
+ ✓ src/lib/errors.spec.ts > the direct bank match refusal > is not the generic fallback, and not swallowed by a neighbouring bank pattern 2ms
+ ✓ src/lib/errors.spec.ts > the direct bank match refusal > leaves the fallback intact for a code nobody mapped, so the assertions above mean something 3ms
+ ✓ src/lib/errors.spec.ts > the direct bank match refusal > resolves to its own sentence in both dictionaries, not to the fallback 1ms
+ ✓ src/lib/checksI18n.spec.ts > automatic-check language contract > maps every CheckCode to exactly one paired dictionary key 5ms
+ ✓ src/lib/checksI18n.spec.ts > automatic-check language contract > resolves a paid duplicate from raw facts in either reader language 1ms
+ ✓ src/lib/checksI18n.spec.ts > automatic-check language contract > keeps singular and plural financial findings structurally distinct 1ms
+ ✓ src/lib/checksI18n.spec.ts > automatic-check language contract > stores codes and variables, never reader-facing sentences 1ms
+ ✓ src/lib/allocationBalanceChecks.spec.ts > allocationBalanceChecks > says nothing when every allocation is within the balance beside it 4ms
+ ✓ src/lib/allocationBalanceChecks.spec.ts > allocationBalanceChecks > is CRITICAL, not a warning, for the measured 999,999.99 against a printed 150.00 2ms
+ ✓ src/lib/allocationBalanceChecks.spec.ts > allocationBalanceChecks > fires one shekel over, where the tolerance signal returned true 2ms
+ ✓ src/lib/allocationBalanceChecks.spec.ts > allocationBalanceChecks > leaves a legitimate part-payment alone 1ms
+ ✓ src/lib/allocationBalanceChecks.spec.ts > allocationBalanceChecks > accepts the exact balance 1ms
+ ✓ src/lib/allocationBalanceChecks.spec.ts > allocationBalanceChecks > does not report a float remainder as an over-allocation 0ms
+ ✓ src/lib/allocationBalanceChecks.spec.ts > allocationBalanceChecks > names every offending invoice when more than one is over 1ms
+ ✓ src/lib/allocationBalanceChecks.spec.ts > allocationBalanceChecks > measures a JPY allocation at its own scale, not at two decimals 1ms
+ ✓ src/pages/paymentRequestApprovalDependency.spec.tsx > PaymentRequestDetail — the dependency a stuck request is waiting on > names the invoice the approval is waiting for 189ms
+ ✓ src/pages/paymentRequestApprovalDependency.spec.tsx > PaymentRequestDetail — the dependency a stuck request is waiting on > names every one of them when a request is waiting on more than one 48ms
+ ✓ src/pages/paymentRequestApprovalDependency.spec.tsx > PaymentRequestDetail — the dependency a stuck request is waiting on > says nothing when every linked invoice is approved for payment 47ms
+ ✓ src/pages/paymentRequestAllocationBlock.spec.tsx > PaymentRequestDetail — an allocation that no longer fits > closes both approval routes and names the credit as the cause 352ms
+ ✓ src/pages/paymentRequestAllocationBlock.spec.tsx > PaymentRequestDetail — an allocation that no longer fits > leaves the exceptional route alone when the only finding is an open credit 89ms
+ ✓ src/pages/paymentRequestAllocationBlock.spec.tsx > PaymentRequestDetail — an allocation that no longer fits > offers ordinary approval when nothing is wrong 93ms
+ ✓ src/pages/paymentRequestCreateBounds.spec.tsx > CreatePaymentRequest — the allocation bound and the promise on the button > opens with the printed balance, both submits live 635ms
+ ✓ src/pages/paymentRequestCreateBounds.spec.tsx > CreatePaymentRequest — the allocation bound and the promise on the button > closes both submits and states the bound when the allocation goes above the printed balance 545ms
+ ✓ src/pages/paymentRequestCreateBounds.spec.tsx > CreatePaymentRequest — the allocation bound and the promise on the button > fires one agora over the balance, where the tolerance signal said the amount matched 76ms
+ ✓ src/pages/paymentRequestCreateBounds.spec.tsx > CreatePaymentRequest — the allocation bound and the promise on the button > reopens both submits as soon as the amount comes back inside the balance 501ms
+ ✓ src/pages/paymentRequestCreateBounds.spec.tsx > CreatePaymentRequest — the allocation bound and the promise on the button > promises approval, not a quarantine, when the critical is an unapproved invoice 459ms
+ ✓ src/pages/paymentRequestCreateBounds.spec.tsx > CreatePaymentRequest — the allocation bound and the promise on the button > promises the duplicate flag only when the duplicate signal is the one that fired 463ms
+
+ Test Files  7 passed (7)
+      Tests  33 passed (33)
+   Start at  18:03:38
+   Duration  6.47s (transform 3.49s, setup 4.46s, import 6.37s, tests 3.59s, environment 11.04s)
+

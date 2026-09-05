@@ -1,0 +1,74 @@
+﻿
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-afd3bd9c7823f7049
+
+node.exe : stderr | src/pages/receiptOutstandingCredit.spec.tsx > REQ-06 — the receipt states what did not arrive > prints the ordered quantity beside the one that arrived
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (stderr | src/pa...ne that arrived:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+[supplyflow] failed to read offline queue OfflineStorageError: offline_scope_unresolved
+    at requireOfflineScope (D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-afd3bd9c7823f7049/src/lib/offlineDb.ts:106:11)
+    at Object.listQueuedActions (D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-afd3bd9c7823f7049/src/lib/offlineDb.ts:1088:17)
+    at async Promise.all (index 0)
+    at refresh (D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-afd3bd9c7823f7049/src/lib/offlineQueue.ts:263:63)
+
+ ❯ src/pages/receiptOutstandingCredit.spec.tsx (5 tests | 3 failed) 367ms
+     × prints the ordered quantity beside the one that arrived 167ms
+     × prints what the order is still owed 47ms
+     × names the credit the shortfall opened and offers a way to reach it 45ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/receiptOutstandingCredit.spec.tsx > REQ-06 — the receipt states what did not arrive > prints the ordered quantity beside the one that arrived
+AssertionError: expected 'מלפפוןכמות שהתקבלה: 5 קרטוניםהתקבל חל…' to contain '12'
+
+Expected: "12"
+Received: "מלפפוןכמות שהתקבלה: 5 קרטוניםהתקבל חלקית"
+
+ ❯ src/pages/receiptOutstandingCredit.spec.tsx:142:44
+    140|     renderReceipt();
+    141|     await screen.findByText('מלפפון');
+    142|     expect(lineFor('מלפפון')?.textContent).toContain('12');
+       |                                            ^
+    143|   });
+    144|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  src/pages/receiptOutstandingCredit.spec.tsx > REQ-06 — the receipt states what did not arrive > prints what the order is still owed
+AssertionError: expected 'מלפפוןכמות שהתקבלה: 5 קרטוניםהתקבל חל…' to contain '7'
+
+Expected: "7"
+Received: "מלפפוןכמות שהתקבלה: 5 קרטוניםהתקבל חלקית"
+
+ ❯ src/pages/receiptOutstandingCredit.spec.tsx:149:44
+    147|     renderReceipt();
+    148|     await screen.findByText('מלפפון');
+    149|     expect(lineFor('מלפפון')?.textContent).toContain('7');
+       |                                            ^
+    150|   });
+    151|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  src/pages/receiptOutstandingCredit.spec.tsx > REQ-06 — the receipt states what did not arrive > names the credit the shortfall opened and offers a way to reach it
+AssertionError: expected [ '/receiving', '/documents', …(1) ] to include '/credits?id=81b63d4b-4427-4807-a8c2-e…'
+ ❯ src/pages/receiptOutstandingCredit.spec.tsx:156:21
+    154|     renderReceipt();
+    155|     await screen.findByText('מלפפון');
+    156|     expect(hrefs()).toContain(`/credits?id=${CREDIT}`);
+       |                     ^
+    157|     expect(document.body.textContent).toContain('294');
+    158|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 2 passed (5)
+   Start at  17:10:03
+   Duration  3.85s (transform 916ms, setup 570ms, import 1.43s, tests 367ms, environment 1.22s)
+
+

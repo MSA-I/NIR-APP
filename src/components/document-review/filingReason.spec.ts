@@ -131,6 +131,40 @@ describe('what the reviewer is told', () => {
     expect(text).toContain('הספק לא הותאם');
   });
 
+  /**
+   * DOC-02, and the reason it is a sentence bug rather than an extraction bug.
+   *
+   * On the sweep's invoice (`א.ע עלים ירוקים — חשבונית 2026-08.jpeg`, production, 05.09.2026) the
+   * machine filing carried `invoice_identity_missing`, whose ONE sentence named the invoice number
+   * and the date together. Measured on that payload: the number is `SI266001312` at confidence
+   * 0.95 and reads back intact, and only the date — `31/07/26`, a two-digit year — comes back
+   * null. So the screen announced that a number it was displaying, extracted and marked
+   * confidently read, was missing. One code covering two obstacles can only name both.
+   *
+   * `0324` splits the arm in three. These three cases are the whole of DOC-02's oracle: the
+   * blocking sentence names an obstacle that is actually present.
+   */
+  it('names the DATE when the date is what could not be read, and does not accuse the number', () => {
+    const text = filingReason(snapshotWith([filing({ reason_code: 'invoice_date_missing' })]), t);
+    expect(text).toContain('תאריך החשבונית');
+    expect(text).not.toContain('מספר החשבונית');
+  });
+
+  it('names the NUMBER when the number is what could not be read, and does not accuse the date', () => {
+    const text = filingReason(snapshotWith([filing({ reason_code: 'invoice_number_missing' })]), t);
+    expect(text).toContain('מספר החשבונית');
+    expect(text).not.toContain('תאריך החשבונית');
+  });
+
+  it('still names both when both are genuinely absent — the case the old sentence was true for', () => {
+    // `invoice_identity_missing` is not retired: it is narrowed to the one state it ever described
+    // correctly, and its sentence is reworded from "or" to "both ... and" so that the conjunction
+    // is a claim rather than a hedge. This is a CASE, not a control — the wording moved.
+    // The controls for this run are the eight tests above it, none of which 0324 touches.
+    const text = filingReason(snapshotWith([filing({ reason_code: 'invoice_identity_missing' })]), t);
+    expect(text).toContain('גם מספר החשבונית וגם התאריך');
+  });
+
   it('never prints a bare enum, even for an arm nobody labelled', () => {
     const text = filingReason(snapshotWith([filing({ reason_code: 'some_future_arm' })]), t);
     expect(text).not.toContain('some_future_arm');

@@ -1,0 +1,93 @@
+
+=== RTL-A11Y-09 — column chooser, focus and announced role (1440x900) ===
+
+--- /invoices ---
+NOT MEASURED on /invoices: no <h1> in 20s — server-mode screen, the fixture harness never settles it
+
+--- /suppliers ---
+panel semantics on open: {"role":null,"ariaModal":null,"ariaLabel":null,"id":"_r_0_","innerGroupLabel":"בחירת עמודות","triggerHasPopup":null,"triggerExpanded":"true","triggerControls":"_r_0_","controlsResolves":true}
+focus after Enter:       {"tag":"INPUT","role":null,"type":"checkbox","name":"","where":"inside-panel"}
+focus after Escape:      {"tag":"BUTTON","role":null,"type":"button","name":"עמודות","where":"trigger"} (panel still open: false)
+sweep repro — Tab trail (14 presses):
+   1. open=true where=inside-panel INPUT[checkbox] ""
+   2. open=true where=inside-panel INPUT[checkbox] ""
+   3. open=true where=inside-panel INPUT[checkbox] ""
+   4. open=true where=inside-panel INPUT[checkbox] ""
+   5. open=true where=inside-panel INPUT[checkbox] ""
+   6. open=true where=inside-panel INPUT[checkbox] ""
+   7. open=true where=inside-panel INPUT[checkbox] ""
+   8. open=true where=inside-panel INPUT[checkbox] ""
+   9. open=false where=trigger BUTTON[button] "עמודות"
+  10. open=false where=elsewhere DIV "טבלת נתונים — ניתן לגלול אופקית"
+  11. open=false where=table-behind BUTTON[button] "ספק"
+  12. open=false where=table-behind BUTTON[button] "דירוג"
+  13. open=false where=table-behind BUTTON[button] "מינ׳ הזמנה"
+  14. open=false where=table-behind BUTTON[button] "יתרה פתוחה"
+focus after the sweep's Escape: {"tag":"BUTTON","role":null,"type":"button","name":"יתרה פתוחה","where":"table-behind"}
+first Tab that left or closed the panel: #9
+/suppliers: PASS — announces dialog=false, contains focus=false, Escape returns to trigger=true, disclosure wired=true
+
+VERDICT RTL-A11Y-09: PASS — measured on suppliers
+
+=== RTL-A11Y-11 — mobile supplier card, field labels (390x844) ===
+  card 1: labelled   "טלפון:026518868"
+  card 1: labelled   "התראות:1 חריג1 זיכוי"
+  card 1: labelled   "יתרה פתוחה:‏573.00 ‏₪"
+  card 2: labelled   "טלפון:036100200"
+  card 2: labelled   "התראות:—"
+  card 2: labelled   "יתרה פתוחה:—"
+VERDICT RTL-A11Y-11: PASS — 0 unlabelled field(s) on 2 card(s)
+
+=== /dashboard at 1440x900 ===
+shekel occurrences: {"left":12}
+  left   dir=rtl hero=false "‏150 ‏₪"
+  left   dir=rtl hero=false "נותר לקבלה ‏5,200 ‏₪"
+  left   dir=rtl hero=false "‏12,500 ‏₪"
+  left   dir=rtl hero=true "‏68,663 ‏₪"
+  left   dir=rtl hero=true "‏1,724 ‏₪"
+  left   dir=rtl hero=false "‏10,942 ‏₪"
+  left   dir=rtl hero=false "‏17,250 ‏₪"
+  left   dir=rtl hero=true "‏10,942 ‏₪"
+  left   dir=rtl hero=false "‏4,200 ‏₪"
+  left   dir=rtl hero=false "‏6,742 ‏₪"
+  left   dir=rtl hero=false "אחים כהן · ‏573.00 ‏₪"
+  left   dir=rtl hero=false "‏573.00 ‏₪"
+VERDICT RTL-A11Y-10: PASS — 1 shape(s) on one screen
+monthly bar chart: 4 bars, 4 axis labels ["יוני 2026","יולי 2026","אוגוסט 2026","ספטמבר 2026"]
+
+=== /dashboard at 390x844 ===
+shekel occurrences: {"left":12}
+  left   dir=rtl hero=false "‏150 ‏₪"
+  left   dir=rtl hero=false "נותר לקבלה ‏5,200 ‏₪"
+  left   dir=rtl hero=false "‏12,500 ‏₪"
+  left   dir=rtl hero=true "‏68,663 ‏₪"
+  left   dir=rtl hero=true "‏1,724 ‏₪"
+  left   dir=rtl hero=false "‏10,942 ‏₪"
+  left   dir=rtl hero=false "‏17,250 ‏₪"
+  left   dir=rtl hero=true "‏10,942 ‏₪"
+  left   dir=rtl hero=false "‏4,200 ‏₪"
+  left   dir=rtl hero=false "‏6,742 ‏₪"
+  left   dir=rtl hero=false "אחים כהן · ‏573.00 ‏₪"
+  left   dir=rtl hero=false "‏573.00 ‏₪"
+monthly bar chart: 4 bars, 4 axis labels ["יוני 2026","יולי 2026","אוגוסט 2026","ספטמבר 2026"]
+  430px (card 415px): 4 bars, 4 labels ["יוני 2026","יולי 2026","אוגוסט 2026","ספטמבר 2026"]
+  412px (card 397px): 4 bars, 4 labels ["יוני 2026","יולי 2026","אוגוסט 2026","ספטמבר 2026"]
+  390px (card 375px): 4 bars, 4 labels ["יוני 2026","יולי 2026","אוגוסט 2026","ספטמבר 2026"]
+  375px (card 360px): 4 bars, 4 labels ["יוני 2026","יולי 2026","אוגוסט 2026","ספטמבר 2026"]
+  360px (card 345px): 4 bars, 4 labels ["יוני 2026","יולי 2026","אוגוסט 2026","ספטמבר 2026"]
+  344px (card 329px): 4 bars, 4 labels ["יוני 2026","יולי 2026","אוגוסט 2026","ספטמבר 2026"]
+VERDICT RTL-A11Y-12: PASS — labels missing at no width
+
+page errors:   []
+missed routes: [
+  "/rest/v1/rpc/my_subscription"
+]
+screenshots:   [
+  "D:\\משה פרוייקטים\\פיתוח אתרים\\NIR-APP\\.claude\\worktrees\\agent-a72ce96274003d4f1\\docs\\qa\\2026-09-04\\evidence\\PR37-GREEN-09-suppliers-picker-open-1440x900.png",
+  "D:\\משה פרוייקטים\\פיתוח אתרים\\NIR-APP\\.claude\\worktrees\\agent-a72ce96274003d4f1\\docs\\qa\\2026-09-04\\evidence\\PR37-GREEN-11-suppliers-mobile-390x844.png",
+  "D:\\משה פרוייקטים\\פיתוח אתרים\\NIR-APP\\.claude\\worktrees\\agent-a72ce96274003d4f1\\docs\\qa\\2026-09-04\\evidence\\PR37-GREEN-dashboard-desktop-1440x900.png",
+  "D:\\משה פרוייקטים\\פיתוח אתרים\\NIR-APP\\.claude\\worktrees\\agent-a72ce96274003d4f1\\docs\\qa\\2026-09-04\\evidence\\PR37-GREEN-dashboard-mobile-390x844.png",
+  "D:\\משה פרוייקטים\\פיתוח אתרים\\NIR-APP\\.claude\\worktrees\\agent-a72ce96274003d4f1\\docs\\qa\\2026-09-04\\evidence\\PR37-GREEN-12-monthly-chart-344px.png"
+]
+
+SUMMARY: {"RTL-A11Y-09":"PASS","RTL-A11Y-11":"PASS","RTL-A11Y-10":"PASS","RTL-A11Y-12":"PASS"}

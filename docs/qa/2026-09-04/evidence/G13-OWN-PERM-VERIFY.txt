@@ -1,0 +1,486 @@
+G13 CROSS-VERIFICATION — area OWN-* and PERM-*
+================================================================================
+Verifier branch : verify-g13-own-perm
+Tree verified   : 5a56770c62be0e96d75856eefaadfb19670a278b
+                  ("chore(qa-sweep): the cross-verification wave opens…")
+Date            : 05.09.2026
+Author of none of the fixes below. Read, ran, restored, reported. No product
+file and no spec was changed permanently; `git status` was asserted empty after
+every restore and is empty at commit time.
+
+BOOTSTRAP, stated because it deviates from the standing brief
+--------------------------------------------------------------------------------
+`git reset --hard worktree-qa-sweep-20260904` was REFUSED by this session's auto
+-mode classifier, exactly the case §1 of the agent brief anticipates. Rather
+than work on `origin/main`, the assigned worktree was moved onto the campaign
+commit with `git switch --detach worktree-qa-sweep-20260904` followed by
+`git switch -c verify-g13-own-perm` — a detached checkout of a branch that is
+checked out elsewhere is permitted by git and changes NO other branch's state.
+`node_modules` was missing and was re-created as a junction to the main
+checkout; no `npm ci`, no `npm install`. `.env` / `.env.local` copied from the
+main checkout (not needed in the end — every oracle here is a unit/component
+spec or a static guard, so no dev server and no port were taken).
+
+WHAT WAS NOT RUN, AND WHY
+--------------------------------------------------------------------------------
+* The local Supabase stack was NOT touched. `.claude/locks/supabase` names the
+  G13 verifier "SQL" as holder. No `supabase db reset`, no `docker exec … psql`,
+  no `npm run demo:restore`, no `ci-sql-suites.mjs` without `--list`.
+* `npm run verify` whole and `npm run quality` were NOT run.
+* No production read was issued. `OWN-02`'s production measurement is a
+  measurement and cannot be re-run red; it is left exactly as its author
+  recorded it (see the OWN-02 entry).
+* `npx tsc --noEmit` was run once on the restored tree: exit 0.
+
+METHOD FOR THE RED
+--------------------------------------------------------------------------------
+Preferred, and used wherever it applied: `git diff <fix>^ <fix> -- <product
+files> | git apply -R` on this worktree — a surgical reverse of exactly that
+commit's behavioural lines, leaving every later unrelated commit in place and
+leaving the ORACLE at HEAD. Where later commits had rewritten the same regions
+and the reverse patch could not apply, the fallback was the verify brief's
+"Best" route: `git checkout <fix>^ -- <product files>`, oracle still at HEAD.
+Each such case is named below. The oracle was never edited to make it fail.
+
+Every red run carries at least one control: either a labelled CONTROL test
+inside the same file, or a neighbouring spec file in the same vitest process, or
+both. Where a file has NO test that passes in both runs, that is stated.
+
+--------------------------------------------------------------------------------
+GREEN BASELINE — one run, current tree, 15 files
+--------------------------------------------------------------------------------
+  npx vitest run \
+    src/pages/offboardingStepUp.spec.tsx src/pages/offboardingContract.spec.ts \
+    src/components/ReauthModal.spec.tsx src/routeNotFound.spec.tsx \
+    src/pages/documentOperationsDecisionQueue.spec.tsx \
+    src/pages/documentOperationsContract.spec.ts \
+    src/pages/subscriptionQuotaDisclosure.spec.tsx \
+    src/pages/webhookSettings.spec.tsx src/pages/supplierLogLedger.spec.tsx \
+    src/lib/tolerances.spec.ts src/pages/settingsNumericBounds.spec.tsx \
+    src/lib/inputBounds.spec.ts src/pages/onboardingLiveRecordNotice.spec.tsx \
+    src/lib/vatRateOneSource.spec.ts src/pages/accountColumnBoundary.spec.tsx
+
+  Test Files  15 passed (15)
+       Tests  140 passed (140)     exit 0
+
+  per file:
+    ReauthModal.spec.tsx                       24 passed
+    accountColumnBoundary.spec.tsx              6 passed
+    documentOperationsContract.spec.ts          7 passed
+    documentOperationsDecisionQueue.spec.tsx   10 passed
+    inputBounds.spec.ts                        16 passed
+    offboardingContract.spec.ts                 5 passed
+    offboardingStepUp.spec.tsx                  7 passed
+    onboardingLiveRecordNotice.spec.tsx         2 passed
+    routeNotFound.spec.tsx                      3 passed
+    settingsNumericBounds.spec.tsx              5 passed
+    subscriptionQuotaDisclosure.spec.tsx        4 passed
+    supplierLogLedger.spec.tsx                  4 passed
+    tolerances.spec.ts                         31 passed
+    vatRateOneSource.spec.ts                    3 passed
+    webhookSettings.spec.tsx                   13 passed
+
+  Static guard, current tree:
+    npm run check:profile-columns
+    -> "check:profile-columns passed: zero `select('*')` against profiles or
+        organizations across 585 files."   exit 0
+
+================================================================================
+ROW BY ROW
+================================================================================
+
+--- OWN-01 ------------------------------------------------------- MET ---------
+Fix        : 182eef90 (parent 47d6befb)
+Red made by: git apply -R of 182eef90 restricted to src/components/ReauthModal.tsx,
+             src/pages/Settings.tsx, src/lib/i18n/dictionaries/{he,en}.ts
+Command    : npx vitest run src/pages/offboardingStepUp.spec.tsx
+                            src/pages/offboardingContract.spec.ts
+                            src/components/ReauthModal.spec.tsx
+                            src/lib/inputBounds.spec.ts        (external control)
+RED        : Tests 8 failed | 44 passed (52)   exit 1
+             offboardingStepUp   4 failed / 3 passed
+             offboardingContract 1 failed / 4 passed
+             ReauthModal         3 failed / 21 passed
+             inputBounds        16 passed  (control, green in both runs)
+             The three that ARE the finding:
+               "asks for the password before requesting closure, even seconds
+                after signing in"
+               "sends the request only once the password has actually been
+                verified"
+               "asks again before cancelling an open request"   (RTL-A11Y-01's
+                clause, measured separately as the row says)
+             and the contract test "gates the closure request and its
+             cancellation on a step-up the fresh-JWT skip cannot bypass".
+GREEN      : 7 + 5 + 24 = 36 passed, 0 failed (from the baseline above)
+IN-FILE CONTROL, green in BOTH runs: "still skips the prompt for the export link
+             — a download is not the read-only switch". The oracle counts the RPC
+             on the wire (`sensitive.request` 0 before, 1 after), so it asserts
+             the finding and not a rendering.
+VERDICT    : MET.
+
+--- PERM-04 ------------------------------------------------------ MET ---------
+Fix        : b222babb (parent c85f1de4)
+Oracle     : src/routeNotFound.spec.tsx  (the row's files cell says "—"; the
+             oracle is the spec that commit added)
+Red made by: git apply -R of b222babb restricted to src/App.tsx,
+             src/operator/OperatorRoutes.tsx, both dictionaries.
+             ForgotPassword.tsx (the ENTRY-07 half of the same commit) was left
+             at HEAD so the red is this row's and not its neighbour's.
+Command    : npx vitest run src/routeNotFound.spec.tsx src/lib/inputBounds.spec.ts
+RED        : Tests 3 failed | 16 passed (19)   exit 1  — all three of
+             routeNotFound.spec.tsx; inputBounds 16 passed (control)
+GREEN      : 3 passed
+Oracle asserts the finding: the path does NOT change (`getByTestId('pathname')`),
+             an alert IS rendered, and refusal-text !== missing-text — the
+             assertion that fails if the two ever collapse into one message.
+NOTE       : routeNotFound.spec.tsx has no test that passes in both runs; the
+             harness control is the neighbouring file.
+VERDICT    : MET.
+
+--- OWN-02 / OWN-07 / OWN-08 -------------------------------------- MET ---------
+Fix        : b2575d6c (parent 7a5b1084) and, for OWN-08's filter half,
+             d9393233 (parent b2575d6c)
+Red made by: git apply -R of d9393233 (DocumentOperations.tsx) then of b2575d6c
+             (DocumentOperations.tsx, documentOperationsModel.ts, both
+             dictionaries). Both applied cleanly; oracle left at HEAD.
+Command    : npx vitest run src/pages/documentOperationsDecisionQueue.spec.tsx
+                            src/pages/documentOperationsContract.spec.ts
+                            src/lib/inputBounds.spec.ts
+RED        : Tests 7 failed | 26 passed (33)   exit 1
+             documentOperationsDecisionQueue  7 failed / 3 passed
+             documentOperationsContract       7 passed  (control)
+             inputBounds                     16 passed  (control)
+             OWN-02 : 3 failures — "renders one true statement per row, not one
+                      arrow for all of them", "reads a figure with no currency as
+                      no price at all", "draws each sentence from the dictionary"
+             OWN-07 : 1 failure — "names documents on the tile and price-list
+                      lines on the queue"
+             OWN-08 : 3 failures — "keeps the canonical answer instead of
+                      overwriting it with the residual", "shows the scan-approval
+                      state on the row instead of an unknown one", "files the
+                      scan-approval document under דורש טיפול, never under הושלם"
+GREEN      : 10 passed / 0 failed
+IN-FILE CONTROLS, green in BOTH runs — three, and they are the three that
+             survived: "CONTROL — a row with both prices still shows the
+             comparison it was built for", "CONTROL — still answers with the
+             residual for a status nothing can name", "CONTROL — an unnameable
+             status still reads „מצב לא ידוע" on its row". 7 failed of 10 with
+             exactly the 3 controls passing is the cleanest red in this area.
+
+OWN-02, SAID PLAINLY: this row's proof has TWO halves, and only one of them is a
+             test. The oracle half is reproduced above, red to green. The other
+             half is a PRODUCTION MEASUREMENT — 737 rows for the sweep's tenant,
+             one empty run and not 737, 675 rows `create_product` with no
+             previous price, `current_unit_price` null on every row of all three
+             tenants. A measurement cannot be re-run red: there is no tree at
+             which it fails, only a database at which it was true on 05.09.2026.
+             It was NOT re-run here and NOTHING in this MET covers it. It stands
+             as its author recorded it, verified by one agent, not two.
+             `MET` above is the oracle's transition and only that.
+VERDICT    : OWN-02 MET (oracle only, measurement half unverified — see above).
+             OWN-07 MET. OWN-08 MET (both halves: the naming and the filter).
+
+--- OWN-06 ------------------------------------------------------- MET ---------
+Fix        : d4a64b9c (parent d9aa45f3)
+Red made by: git apply -R of d4a64b9c restricted to src/components/PlanUsagePanel.tsx
+             (which the reverse deletes, as it was new), src/lib/planEntitlements.ts,
+             src/pages/Subscription.tsx, both dictionaries.
+Command    : npx vitest run src/pages/subscriptionQuotaDisclosure.spec.tsx
+                            src/lib/inputBounds.spec.ts
+RED        : Tests 4 failed | 16 passed (20)   exit 1  — all four of the oracle,
+             each on a missing testid (`period-usage`, `current-plan-includes`);
+             inputBounds 16 passed (control)
+GREEN      : 4 passed
+Oracle asserts the finding: 180/200 and 1,420/2,000 rendered, the assistant named,
+             and — the assertion that matters to the constitution —
+             `expect(assistant).toHaveTextContent('—')` together with
+             `expect(assistant.textContent).not.toMatch(/(^|\D)0(\D|$)/)`, so a
+             ceiling nobody set can never be reported as 0. Plus the retired
+             `legacy` rung being described at all.
+NOTE       : no test in this file passes in both runs; the control is external.
+VERDICT    : MET.
+
+--- OWN-03 / OWN-15 ---------------------------------------------- MET ---------
+Fix        : d3ecf1d5 (parent 292959dd)
+Red made by: git apply -R of d3ecf1d5 restricted to src/pages/WebhookSettings.tsx
+             and both dictionaries.
+Command    : npx vitest run src/pages/webhookSettings.spec.tsx
+                            src/lib/inputBounds.spec.ts
+RED        : Tests 2 failed | 27 passed (29)   exit 1
+             webhookSettings 2 failed / 11 passed  (the eleven neighbours the
+             row names, green in both runs), inputBounds 16 passed
+             OWN-03: "shows the failure on the card and stops showing an open
+                     verification window" — Unable to find /החזירה סטטוס 405/
+             OWN-15: "names which class the typed address falls into, and takes
+                     it back when it is fixed" — Unable to find
+                     /רק כתובת HTTPS מתקבלת/
+GREEN      : 13 passed
+Both oracles assert the finding, and both carry the negative half that a weaker
+             test would have dropped: OWN-03 asserts INSIDE the card
+             (`within(settled)`) so a toast cannot satisfy it, AND asserts
+             `queryByText(/בקשת אימות פתוחה/)` is null — the false "window still
+             open" statement is gone, not merely joined by a true one. OWN-15
+             walks three distinct refused classes and then the recovery, and
+             asserts `registerWebhookSubscription` was never called.
+VERDICT    : OWN-03 MET. OWN-15 MET.
+
+--- OWN-04 / OWN-05 / OWN-11 / PERM-06 --------------------------- MET ---------
+Fix        : b2f91be2 (parent 6e5d0059)
+Red made by: FALLBACK ROUTE, and it is named because it is less surgical.
+             `git apply -R` FAILED on src/pages/SupplierLog.tsx and both
+             dictionaries — 03850372 ("fix(prices)…") and later commits rewrote
+             the same regions, including the very line b2f91be2 added for the
+             import subject. `-3` and `-U0 --unidiff-zero` also failed. So the
+             verify brief's "Best" route was used instead:
+               git checkout b2f91be2^ -- src/lib/types.ts src/pages/SupplierLog.tsx
+                                          src/lib/i18n/dictionaries/{he,en}.ts
+             This also removes the later PL-03 / PL-06 work from SupplierLog.tsx
+             and dictionary keys added after b2f91be2. That is acceptable here
+             and was checked rather than assumed: the ONLY change to
+             supplierLogLedger.spec.tsx since b2f91be2 is one loosened substring
+             match for PL-03 (`imported[0].join(' ')` instead of
+             `imported[0]`), so the oracle at HEAD asserts nothing that post-dates
+             the fix. src/lib/supplierLogLedger.ts was deliberately LEFT at HEAD:
+             it did not exist at the parent, and deleting it would have made the
+             whole file fail at import resolution instead of at its assertions.
+             The screen at the parent does not call it, so the behaviour is the
+             unfixed behaviour.
+Command    : npx vitest run src/pages/supplierLogLedger.spec.tsx
+                            src/lib/inputBounds.spec.ts
+RED        : Tests 4 failed | 16 passed (20)   exit 1 — one failure per row, and
+             each message is the one the original evidence recorded:
+             OWN-11 : Unable to find an accessible element with the role "button"
+                      and name `/ישנים יותר/`
+             OWN-04 : expected '…שורת מחירון שנמחקה…' to contain '6 שורות מחירון'
+             OWN-05 : expected [ … ] to have a length of 1 but got 2
+             PERM-06: expected '…מוצר 1 · ספק הבדיקה…' not to contain
+                      'לא נרשמה סיבה'
+             inputBounds 16 passed (control)
+GREEN      : 4 passed
+Oracles assert the findings per row: OWN-11 carries a 405-row fixture (over the
+             400 cap on purpose) and asserts the 401st row is absent from page 1,
+             reachable after the control is pressed, and that the meta states
+             405; OWN-04 asserts the deleted-row label survives on exactly the
+             one row that really is a deletion; OWN-05 asserts ONE row for
+             מוצר 7 carrying both the command's reason and the trigger's
+             before/after.
+NOTE       : this file has no test that passes in both runs — all four fail on
+             the unfixed tree. The harness control is the neighbouring file.
+VERDICT    : OWN-04 MET. OWN-05 MET. OWN-11 MET. PERM-06 MET.
+
+--- OWN-09 ------------------------------------------------------- MET ---------
+Fix        : 760b9b44 (parent 2001b9af)
+Red made by: git apply -R of 760b9b44 restricted to src/lib/tolerances.ts alone.
+Command    : npx vitest run src/lib/tolerances.spec.ts src/lib/vatRateOneSource.spec.ts
+RED        : Tests 2 failed | 32 passed (34)   exit 1
+             tolerances 2 failed / 29 passed; vatRateOneSource 3 passed (control)
+             both failures: AssertionError: expected { ILS: 1 } to be 1
+             — the one-way door, exactly as the row describes it.
+GREEN      : 31 passed
+IN-FILE CONTROLS, green in BOTH runs: "leaves a map that still says something the
+             scalar cannot say" and "reads the same before and after the round
+             trip". The oracle tests the RESULT of `writeTolerance`, not the
+             argument it was handed, which is the point of the fix.
+VERDICT    : MET.
+
+--- OWN-13 ------------------------------------------------------- MET ---------
+Fix        : 760b9b44 (parent 2001b9af)
+Red made by: git apply -R of 760b9b44 for src/lib/inputBounds.ts and both
+             dictionaries; `git checkout 760b9b44^ -- src/pages/Settings.tsx`
+             because the reverse patch would not apply to that file (182eef90,
+             7a5b1084, e8474e72 and ac597467 all touched it afterwards).
+Command    : npx vitest run src/pages/settingsNumericBounds.spec.tsx
+                            src/lib/tolerances.spec.ts   (external control)
+RED        : Tests 4 failed | 32 passed (36)   exit 1
+             settingsNumericBounds 4 failed / 1 passed; tolerances 31 passed
+             "states a floor and a unit in the DOM" — expected null to be '0'
+             "refuses a negative window instead of writing one" —
+                expected [ { name: 'ארגון בדיקה', …(2) } ] to deeply equal []
+                i.e. the screen WROTE bank_match_days: -30 to the organisation row
+             "refuses a fractional day…" and "refuses an empty box…" likewise
+GREEN      : 5 passed
+IN-FILE CONTROL, green in BOTH runs: "still saves an ordinary window, which is
+             the point of the screen" (14 days reaching the row).
+             The oracle asserts min='0' and step='1' on the bank field and
+             min='0'/max='100' on the VAT field beside it — the comparison the
+             finding is made of. It does NOT demand a `max` on the bank field,
+             which is correct: a ceiling there would be an owner's answer.
+             A first side run also included src/lib/inputBounds.spec.ts and
+             src/lib/vatRateOneSource.spec.ts and was DISCARDED as a control:
+             both were themselves reverted surfaces and could not be controls.
+             The recorded run above uses an untouched file instead.
+VERDICT    : MET.
+
+--- OWN-14 ------------------------------------------------------- MET ---------
+Fix        : 760b9b44 (parent 2001b9af)
+Red made by: git apply -R of 760b9b44 restricted to src/pages/Onboarding.tsx and
+             both dictionaries.
+Command    : npx vitest run src/pages/onboardingLiveRecordNotice.spec.tsx
+                            src/lib/vatRateOneSource.spec.ts
+RED        : Tests 1 failed | 4 passed (5)   exit 1
+             onboardingLiveRecordNotice 1 failed / 1 passed; vatRate 3 passed
+             "says so before that button, not after it" — Unable to find an
+             element by: [data-testid="onboarding-live-record-notice"]
+GREEN      : 2 passed
+IN-FILE CONTROL, green in BOTH runs, and it is a good one: the MEASUREMENT test
+             proves the first button really does PATCH
+             /rest/v1/organizations?id=eq.org-test carrying name, vat_rate and
+             settings.business, with the bank keys merged through — it CONFIRMS
+             the finding's premise on the unfixed tree, which is what makes it a
+             control rather than a claim.
+RESERVATION, and it is the one substantive oracle weakness this verifier found —
+             see the list at the end.
+VERDICT    : MET (with the reservation recorded below).
+
+--- PERM-01 ---------------------------------------- STAYS FIXED ---------------
+Fix        : TWO commits that must stay two and stay in order —
+             e8474e72 (parent 1e155bc9, "the shell stops asking", = branch
+             521d34e5) and ac597467 (parent e8474e72, migration 0319 + suite
+             p112, = branch 926e7b55).
+WHAT WAS REPRODUCED — the CLIENT half, both sides:
+  Guard   : npm run check:profile-columns
+            GREEN  exit 0 — "zero `select('*')` against profiles or organizations
+                   across 585 files"
+            RED    exit 1 — reverse of ac597467 then e8474e72 over
+                   src/auth/AuthContext.tsx, src/lib/accountColumns.ts,
+                   src/lib/types.ts, src/pages/Settings.tsx. The guard printed the
+                   three leak sites rather than a count:
+                     auth\AuthContext.tsx:154  …from('organizations').select('*')…
+                     auth\AuthContext.tsx:258  …from('organizations').select('*')…
+                     pages\Settings.tsx:124    …from('profiles').select('*')…
+  Spec    : npx vitest run src/pages/accountColumnBoundary.spec.tsx
+                           src/lib/tolerances.spec.ts
+            A first red reverted accountColumns.ts too and produced only a module
+            -resolution failure — an honest red but a blunt one, so it was
+            DISCARDED and re-made at assertion level by reverting ONLY the two
+            call sites (AuthContext.tsx, Settings.tsx):
+            RED  Tests 5 failed | 32 passed (37) — three of them
+                 `AssertionError: expected '*' not to be '*'`, the star printed
+                 on the wire at each read site; tolerances 31 passed (control)
+            GREEN 6 passed
+            IN-FILE CONTROL green in BOTH runs: "control: the invitations read was
+            already named and is unchanged".
+WHAT WAS NOT REPRODUCED — the DATABASE half. Migration 0319 and suite p112 need
+             the local Supabase stack, and `.claude/locks/supabase` names the G13
+             verifier "SQL" as its holder. No reset, no psql, no suite was run.
+             The row itself says the client commit "closes nothing on its own",
+             so the client half being verified does not make the row `MET`.
+VERDICT    : STAYS FIXED. Client half independently red-to-green by this
+             verifier; SQL half untouched because the stack was held. The row is
+             `MET`-ready the moment the stack-holding verifier reproduces p112.
+
+--- PERM-02 ---------------------------------------- STAYS FIXED ---------------
+Fix        : migration 0323 + suite
+             supabase/tests/p116_a_password_change_is_the_holders_own_record.sql
+NOTHING REPRODUCED. This row has no client half at all: nothing under `src/`
+             reads `password_changed`, the fix is one anchored conjunct on the
+             `audit_select` policy, and its only oracle is an SQL suite. The
+             local stack is held by the G13 "SQL" verifier and was not touched.
+VERDICT    : STAYS FIXED — proof is an SQL suite and the stack was held.
+
+--- OWN-12 ------------------------- STATUS UNCHANGED (ANSWERED) ---------------
+Not a `FIXED` row and not made one. The data half is an owner ANSWER of
+05.09.2026 (the 17.5% stays) and is not a test; the row's own oracle — "one rate,
+agreeing with the documents the business receives" — cannot be met from the
+repository, and this verifier did not invent a way to pretend otherwise.
+The CODE half WAS verified, red to green:
+Fix        : 7a5b1084 (parent 465b5fcb) — src/lib/vatRate.ts created, five copies
+             of the digits 18 across four screens removed
+Red made by: git apply -R of 7a5b1084 restricted to src/lib/vatRate.ts (deleted
+             by the reverse) and src/pages/{Settings,Onboarding,Admin,InvoiceNew}.tsx
+Command    : npx vitest run src/lib/vatRateOneSource.spec.ts src/lib/tolerances.spec.ts
+RED        : Tests 3 failed | 31 passed (34)   exit 1
+             two × Cannot find module '/src/lib/vatRate.ts'
+             one × expected 'import type { TKey } …' to contain "from '../lib/vatRate'"
+             tolerances 31 passed (control)
+GREEN      : 3 passed
+The oracle is honest about its own scope: its header says it deliberately does
+NOT assert any tenant's stored rate, and it pins VAT_RATE_DEFAULT to the literal
+`vat_rate numeric(5,2) not null default 18.00` read out of migration 0001 by
+NUMBER (not by filename, so the numbering guards do not read it as a citation),
+and asserts `organizationVatRate(0) === 0` — the `??`-not-`||` rule that stops a
+genuinely zero-rated organisation being promoted to 18 in silence.
+VERDICT    : status stays ANSWERED. Code half reproduced red-to-green by this
+             verifier; data half is an owner answer and is not a test.
+
+================================================================================
+ORACLES THAT DO NOT FULLY ASSERT THEIR FINDING — the list the brief asks for
+================================================================================
+None of these is a false green in the sense of "passes on the unfixed tree";
+every oracle above was SEEN failing. These are the places where the assertion is
+weaker than the claim the row makes, in descending order of how much it matters.
+
+1. OWN-14 — src/pages/onboardingLiveRecordNotice.spec.tsx:138
+   "says so before that button, not after it" asserts ONLY that an element with
+   `data-testid="onboarding-live-record-notice"` exists and precedes the save
+   button in document order. It asserts NOTHING about what the notice says. An
+   empty `<div data-testid="onboarding-live-record-notice" />` in the right place
+   satisfies it completely. The finding is "nothing marks its first button as a
+   write to the live record" — the marking's CONTENT is the finding, and the
+   content is untested. Every other row in this area that turns on a sentence
+   (OWN-02, OWN-03, OWN-04, OWN-15, PERM-06) asserts the sentence. This one does
+   not. Reported, not repaired.
+
+2. PERM-06 — src/pages/supplierLogLedger.spec.tsx:251
+   `expect(imported.length).toBeGreaterThanOrEqual(6)` and, worse,
+   `expect(rowsWhere(cell => cell.includes(IMPORT_REASON)).length)
+      .toBeGreaterThanOrEqual(6)`
+   are COUNT assertions, which this campaign's own brief forbids ("assert per
+   row, never by count"). The per-row loop beside them —
+   `for (const cells of imported) expect(...).not.toContain('לא נרשמה סיבה')` —
+   is what saves the test. The second `>= 6` would be satisfied by six rows
+   carrying the reason while a seventh silently did not.
+
+3. OWN-07 — src/pages/documentOperationsDecisionQueue.spec.tsx:248
+   `expect(he.documentOps.sub).toBe('מסמכים שממתינים להחלטה שלך')` is the
+   dictionary asserting itself: it pins a literal to the entry that literal was
+   copied from and cannot fail for any product reason. It is harmless here
+   because the two `getByText` render assertions beside it do the real work — but
+   it is the kind of line that reads as evidence later and is not.
+
+4. Four oracle files have NO test that passes in both runs, so on those files a
+   broken harness and a real red are indistinguishable from the output alone:
+   routeNotFound.spec.tsx (3 of 3 fail), subscriptionQuotaDisclosure.spec.tsx
+   (4 of 4), supplierLogLedger.spec.tsx (4 of 4), vatRateOneSource.spec.ts
+   (3 of 3). Every red above therefore carried a neighbouring file as the
+   harness control, and each is named. This is not wrong — but three files in
+   this same area (documentOperationsDecisionQueue, offboardingStepUp,
+   onboardingLiveRecordNotice) show what a labelled in-file CONTROL buys, and
+   the difference is visible.
+
+5. Bookkeeping, not an oracle defect: OWN-15's `files` cell names
+   `src/lib/webhooks.ts`, which the fixing commit d3ecf1d5 did not touch — the
+   whole fix is in `src/pages/WebhookSettings.tsx` and the dictionaries. A reader
+   chasing the fix through the named file finds nothing.
+
+6. Read PERM-01's row carefully before treating the client half as the fix. Its
+   own text is right and worth repeating: the client commit closes NOTHING on its
+   own, and deploying the database commit without it "would turn every open tab's
+   next read into a 403 on the whole statement". Two commits, in order.
+
+================================================================================
+RESTORE PROOF
+================================================================================
+After every red the reverted files were restored with `git checkout` (and
+`git reset` where a checkout-from-a-commit had staged them), and
+`git status --porcelain` was asserted EMPTY each time — 12 times in all. One
+zero-byte junk file, `a.status!`, was created at the repo root by a `!==` inside
+a `node -e` one-liner reaching the shell; it was swept before commit and
+`git status` is clean of it. `npx tsc --noEmit` exits 0 on the restored tree.
+No product file and no spec file is modified by this verifier's commit; it adds
+this evidence file and edits only the status cells of the rows named above.
+
+TALLY
+================================================================================
+Rows taken (FIXED, area OWN-*/PERM-*)              : 17
+Reached MET                                        : 15
+Stayed FIXED                                       : 2  (PERM-01 — SQL half, stack
+                                                     held; PERM-02 — proof is an
+                                                     SQL suite, stack held)
+Additionally verified without changing its status  : 1  (OWN-12, code half only;
+                                                     row stays ANSWERED)
+Skipped as not mine per the brief                  : OWN-10 (BLOCKED),
+                                                     PERM-03 / PERM-05 (NOT A
+                                                     DEFECT), PERM-R1, OWN-16
+                                                     (retractions), RTL-A11Y-01
+                                                     (not an OWN/PERM id)

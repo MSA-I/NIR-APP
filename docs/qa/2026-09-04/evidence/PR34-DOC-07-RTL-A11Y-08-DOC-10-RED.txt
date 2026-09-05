@@ -1,0 +1,252 @@
+﻿=== PR 34 RED — DOC-07, RTL-A11Y-08, DOC-10 ===
+Tree: UNFIXED product (git stash push -- src, restored immediately after this run). The only
+things present are the oracles themselves.
+HEAD 2001b9af3a187927ddcb5a5e8b358230bf5dd320   branch worktree-agent-a034934b5cca8e8d5
+Headed Microsoft Edge via playwright-core; the bundled chromium fails spawn UNKNOWN here.
+NO DATABASE: every Supabase call is answered from a fixture and the client points at a dead port,
+so the shared local stack (migration head 0245 against this tree's 0314) is never touched.
+
+--- oracle 1 of 3, THE ONE THAT MATTERS: node scripts/filename-bidi-visual-check.cjs
+Per-character Range rectangles on the real /documents screen, grouped into lines and sorted by
+screen x. That is the reader's order, not the DOM string's — reading textContent here would report
+the logical name and call a scrambled screen correct, which is exactly how the source scan below
+stayed green beside it.
+waiting for vite on 5933...
+[vite] 
+  VITE v6.4.3  ready in 2132 ms
+
+[vite]   ➜  Local:   http://localhost:5933/
+  ➜  Network: use --host to expose
+[vite] [BABEL] Note: The code generator has deoptimised the styling of D:\משה פרוייקטים\פיתוח אתרים\NIR-APP\.claude\worktrees\agent-a034934b5cca8e8d5\.tmp\pr34-filename-bidi\.vite\deps\react-dom_client.js?v=42056d4b as it exceeds the max of 500KB.
+
+--- measured (visual order, left to right) ---
+FAIL  desktop  <BDI dir=null> direction=rtl unicode-bidi=isolate
+      logical: 93_00002007 — חלק 3.pdf
+      visual : pdf.3 קלח — 00002007_93
+      ! the extension ".pdf" is not last — the rendered name ends "02007_93"
+      ! the run "93_00002007" is broken or reordered
+FAIL  desktop  <BDI dir=null> direction=rtl unicode-bidi=isolate
+      logical: א.ע עלים ירוקים — חשבונית 2026-08.jpeg
+      visual : jpeg.2026-08 תינובשח — םיקורי םילע ע.א
+      ! the extension ".jpeg" is not last — the rendered name ends "םילע ע.א"
+FAIL  desktop  <BDI dir=null> direction=rtl unicode-bidi=isolate
+      logical: חשבונית ספק לבדיקה.pdf
+      visual : pdf.הקידבל קפס תינובשח
+      ! the extension ".pdf" is not last — the rendered name ends " תינובשח"
+PASS  desktop  <BDI dir=null> direction=ltr unicode-bidi=isolate
+      logical: invoice-2026-08 סופי.pdf
+      visual : invoice-2026-08 יפוס.pdf
+PASS  desktop  <BDI dir=null> direction=ltr unicode-bidi=isolate
+      logical: ADTV Ltd receipt 7352.pdf
+      visual : ADTV Ltd receipt 7352.pdf
+FAIL  mobile  <BDI dir=null> direction=rtl unicode-bidi=isolate
+      logical: 93_00002007 — חלק 3.pdf
+      visual : pdf.3 קלח — 00002007_93
+      ! the extension ".pdf" is not last — the rendered name ends "02007_93"
+      ! the run "93_00002007" is broken or reordered
+FAIL  mobile  <BDI dir=null> direction=rtl unicode-bidi=isolate
+      logical: א.ע עלים ירוקים — חשבונית 2026-08.jpeg
+      visual : תינובשח — םיקורי םילע ע.א ⏎ jpeg.2026-08
+      ! the extension ".jpeg" is not last — the rendered name ends ".2026-08"
+FAIL  mobile  <BDI dir=null> direction=rtl unicode-bidi=isolate
+      logical: חשבונית ספק לבדיקה.pdf
+      visual : pdf.הקידבל קפס תינובשח
+      ! the extension ".pdf" is not last — the rendered name ends " תינובשח"
+PASS  mobile  <BDI dir=null> direction=ltr unicode-bidi=isolate
+      logical: invoice-2026-08 סופי.pdf
+      visual : invoice-2026-08 יפוס.pdf
+PASS  mobile  <BDI dir=null> direction=ltr unicode-bidi=isolate
+      logical: ADTV Ltd receipt 7352.pdf
+      visual : ADTV Ltd receipt 7352.pdf
+
+screenshots:
+  D:\משה פרוייקטים\פיתוח אתרים\NIR-APP\.claude\worktrees\agent-a034934b5cca8e8d5\docs\qa\2026-09-04\evidence\PR34-documents-desktop-1440x900-BEFORE.png
+  D:\משה פרוייקטים\פיתוח אתרים\NIR-APP\.claude\worktrees\agent-a034934b5cca8e8d5\docs\qa\2026-09-04\evidence\PR34-documents-mobile-390x844-BEFORE.png
+
+routes answered empty: desktop: /rest/v1/rpc/organization_usage_snapshot, desktop: /rest/v1/rpc/get_document_processing_statuses, mobile: /rest/v1/rpc/organization_usage_snapshot, mobile: /rest/v1/rpc/get_document_processing_statuses
+node : 
+At line:15 char:44
++ ... oding utf8; node "scripts/filename-bidi-visual-check.cjs" 2>&1 | Out- ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+FINDINGS (6):
+  desktop: <BDI dir=null> "93_00002007 — חלק 3.pdf"
+      renders as "pdf.3 קלח — 00002007_93"
+      the extension ".pdf" is not last — the rendered name ends "02007_93"
+      the run "93_00002007" is broken or reordered
+  desktop: <BDI dir=null> "א.ע עלים ירוקים — חשבונית 2026-08.jpeg"
+      renders as "jpeg.2026-08 תינובשח — םיקורי םילע ע.א"
+      the extension ".jpeg" is not last — the rendered name ends "םילע ע.א"
+  desktop: <BDI dir=null> "חשבונית ספק לבדיקה.pdf"
+      renders as "pdf.הקידבל קפס תינובשח"
+      the extension ".pdf" is not last — the rendered name ends " תינובשח"
+  mobile: <BDI dir=null> "93_00002007 — חלק 3.pdf"
+      renders as "pdf.3 קלח — 00002007_93"
+      the extension ".pdf" is not last — the rendered name ends "02007_93"
+      the run "93_00002007" is broken or reordered
+  mobile: <BDI dir=null> "א.ע עלים ירוקים — חשבונית 2026-08.jpeg"
+      renders as "תינובשח — םיקורי םילע ע.א ⏎ jpeg.2026-08"
+      the extension ".jpeg" is not last — the rendered name ends ".2026-08"
+  mobile: <BDI dir=null> "חשבונית ספק לבדיקה.pdf"
+      renders as "pdf.הקידבל קפס תינובשח"
+      the extension ".pdf" is not last — the rendered name ends " תינובשח"
+
+--- oracle 2 of 3, the source scan KEPT and narrowed: npx vitest run src/lib/fileNameIsolation.spec.ts
+The scan was green on the deploy where the sweep measured the broken screen, and it was not lying:
+it sanctioned <bdi>, bidiIsolate() and dir="auto", all of which resolve direction from the FIRST
+STRONG character. Narrowed to an explicit LTR isolate — and with the two-line spoken-channel window
+no longer excusing a line that opens markup of its own — it names every site, DocumentsInbox:1020
+included, which the browser above measured broken while the old window excused it.
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a034934b5cca8e8d5
+
+ ❯ src/lib/fileNameIsolation.spec.ts (2 tests | 1 failed) 105ms
+     × finds no file-name render left to first-strong direction anywhere under src/ 79ms
+node.exe : 
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/lib/fileNameIsolation.spec.ts > every file name rendered inline carries an explicit LTR isolate (DESIGN.md, 
+חוק בידוד השמות) > finds no file-name render left to first-strong direction anywhere under src/
+AssertionError: a file name is an atomic technical identifier: wrap it in <bdi dir="ltr"> (markup), put dir="ltr" on 
+the element already there, or use ltrIsolate() inside a translated sentence:
+components\AttachmentsPanel.tsx:233  <bdi className="truncate">{doc.file_name}</bdi>
+components\AttachmentsPanel.tsx:282  title={t('attachments.removeTitle')} message={t('attachments.removeMessage', { 
+file: bidiIsolate(pendingDelete?.file_nam
+components\FileUpload.tsx:1031  <button className="link min-w-32 flex-1 truncate text-start" onClick={() => void 
+open(d)}><bdi>{d.file_name}</bdi></butt
+components\FileUpload.tsx:1082  message={t('fileUpload.removeConfirm', { file: bidiIsolate(pending?.file_name ?? '') 
+})}
+components\OfflineQueueStatus.tsx:172  <bdi>{photo.fileName}</bdi>: {errorText(photo.reason)}{photo.needsAttention && 
+t('offline.errorText')}{photo.attempts > 
+components\UploadCenter.tsx:742  <span className="min-w-0 flex-1 truncate text-sm text-ink-mid" 
+title={entry.fileName}><bdi>{entry.fileName}</bdi></span>
+pages\ConsolidatedInvoices.tsx:501  <p className="font-medium">{t('consolidated.pageWord')} {fmtNum(page.page_number)} 
+· <bdi>{page.file_name}</bdi></p>
+pages\DocumentOperations.tsx:263  render: (row) => <span className="font-medium 
+text-ink"><bdi>{row.file_name}</bdi></span>,
+pages\DocumentOperations.tsx:283  render: (row) => <span><strong className="block 
+text-ink"><bdi>{row.file_name}</bdi></strong><span className="text-xs te
+pages\DocumentOperations.tsx:376  <h2 className="mt-1 truncate text-lg font-semibold 
+text-ink"><bdi>{currentIssue.file_name}</bdi></h2>
+pages\DocumentReview.tsx:198  meta={<span className="min-w-0 break-words"><bdi>{snapshot.document?.file_name ?? 
+t('documentReviewPage.text_2')}</bdi><
+pages\DocumentsInbox.tsx:255  <p className="mb-3 truncate text-sm text-ink-soft">{t('documents.text_9')} 
+<bdi>{doc.file_name}</bdi></p>
+pages\DocumentsInbox.tsx:823  <span className="min-w-0 truncate font-medium 
+text-ink-body"><bdi>{doc.file_name}</bdi></span>
+pages\DocumentsInbox.tsx:1020  mobileTitle={(doc) => <bdi>{doc.file_name}</bdi>}
+pages\DocumentsInbox.tsx:1108  message={t('documentsInboxTail.rescueMessage', { fileName: 
+bidiIsolate(rescueDoc?.file_name ?? '') })}
+pages\DocumentsInbox.tsx:1130  message={t('documentsInboxTail.deleteMessage', { fileName: 
+bidiIsolate(deleteDoc?.file_name ?? '') })}
+pages\Onboarding.tsx:647  <b><bdi>{sheet.fileName}</bdi></b> — {t('onboarding.rowsReady', { count: parsed.valid.length 
+})}
+pages\Onboarding.tsx:687  <b><bdi>{sheet.fileName}</bdi></b> — {t('onboarding.mapEachField', { count: 
+sheet.rows.length })}
+pages\PriceLists.tsx:324  <bdi>{submission.file_name ?? t('priceLists.text_14')}</bdi> · 
+{t('priceListsTail.accepted')}{' '}<span className="num">
+pages\Receiving.tsx:401  {source.fileName ? <strong><bdi>{source.fileName}</bdi></strong> : t('receiving.text_8')}
+pages\Suppliers.tsx:1047  <bdi>{submission.file_name ?? t('suppliers.text_57')}</bdi> · {t('suppliers.acceptedWord')} 
+<span className="num">{submi: expected [ …(21) ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   "components\\AttachmentsPanel.tsx:233  <bdi className=\"truncate\">{doc.file_name}</bdi>",
++   "components\\AttachmentsPanel.tsx:282  title={t('attachments.removeTitle')} 
+message={t('attachments.removeMessage', { file: bidiIsolate(pendingDelete?.file_nam",
++   "components\\FileUpload.tsx:1031  <button className=\"link min-w-32 flex-1 truncate text-start\" onClick={() => 
+void open(d)}><bdi>{d.file_name}</bdi></butt",
++   "components\\FileUpload.tsx:1082  message={t('fileUpload.removeConfirm', { file: bidiIsolate(pending?.file_name ?? 
+'') })}",
++   "components\\OfflineQueueStatus.tsx:172  <bdi>{photo.fileName}</bdi>: 
+{errorText(photo.reason)}{photo.needsAttention && t('offline.errorText')}{photo.attempts > ",
++   "components\\UploadCenter.tsx:742  <span className=\"min-w-0 flex-1 truncate text-sm text-ink-mid\" 
+title={entry.fileName}><bdi>{entry.fileName}</bdi></span>",
++   "pages\\ConsolidatedInvoices.tsx:501  <p className=\"font-medium\">{t('consolidated.pageWord')} 
+{fmtNum(page.page_number)} · <bdi>{page.file_name}</bdi></p>",
++   "pages\\DocumentOperations.tsx:263  render: (row) => <span className=\"font-medium 
+text-ink\"><bdi>{row.file_name}</bdi></span>,",
++   "pages\\DocumentOperations.tsx:283  render: (row) => <span><strong className=\"block 
+text-ink\"><bdi>{row.file_name}</bdi></strong><span className=\"text-xs te",
++   "pages\\DocumentOperations.tsx:376  <h2 className=\"mt-1 truncate text-lg font-semibold 
+text-ink\"><bdi>{currentIssue.file_name}</bdi></h2>",
++   "pages\\DocumentReview.tsx:198  meta={<span className=\"min-w-0 break-words\"><bdi>{snapshot.document?.file_name 
+?? t('documentReviewPage.text_2')}</bdi><",
++   "pages\\DocumentsInbox.tsx:255  <p className=\"mb-3 truncate text-sm text-ink-soft\">{t('documents.text_9')} 
+<bdi>{doc.file_name}</bdi></p>",
++   "pages\\DocumentsInbox.tsx:823  <span className=\"min-w-0 truncate font-medium 
+text-ink-body\"><bdi>{doc.file_name}</bdi></span>",
++   "pages\\DocumentsInbox.tsx:1020  mobileTitle={(doc) => <bdi>{doc.file_name}</bdi>}",
++   "pages\\DocumentsInbox.tsx:1108  message={t('documentsInboxTail.rescueMessage', { fileName: 
+bidiIsolate(rescueDoc?.file_name ?? '') })}",
++   "pages\\DocumentsInbox.tsx:1130  message={t('documentsInboxTail.deleteMessage', { fileName: 
+bidiIsolate(deleteDoc?.file_name ?? '') })}",
++   "pages\\Onboarding.tsx:647  <b><bdi>{sheet.fileName}</bdi></b> — {t('onboarding.rowsReady', { count: 
+parsed.valid.length })}",
++   "pages\\Onboarding.tsx:687  <b><bdi>{sheet.fileName}</bdi></b> — {t('onboarding.mapEachField', { count: 
+sheet.rows.length })}",
++   "pages\\PriceLists.tsx:324  <bdi>{submission.file_name ?? t('priceLists.text_14')}</bdi> · 
+{t('priceListsTail.accepted')}{' '}<span className=\"num\">",
++   "pages\\Receiving.tsx:401  {source.fileName ? <strong><bdi>{source.fileName}</bdi></strong> : 
+t('receiving.text_8')}",
++   "pages\\Suppliers.tsx:1047  <bdi>{submission.file_name ?? t('suppliers.text_57')}</bdi> · 
+{t('suppliers.acceptedWord')} <span className=\"num\">{submi",
++ ]
+
+ ❯ src/lib/fileNameIsolation.spec.ts:125:8
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 passed (2)
+   Start at  15:17:35
+   Duration  1.83s (transform 66ms, setup 409ms, import 19ms, tests 105ms, environment 1.09s)
+
+
+--- oracle 3 of 3, DOC-10: npx vitest run src/components/uploadDocument.spec.ts
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a034934b5cca8e8d5
+
+ ❯ src/components/uploadDocument.spec.ts (29 tests | 1 failed) 37ms
+     × carries a Hebrew file name into the storage key transliterated, not deleted 5ms
+node.exe : 
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/components/uploadDocument.spec.ts > uploadDocument registration recovery > carries a Hebrew file name into 
+the storage key transliterated, not deleted
+AssertionError: expected '_._2026-08.jpeg' not to be '_._2026-08.jpeg' // Object.is equality
+ ❯ src/components/uploadDocument.spec.ts:361:22
+    359|
+    360|     // The shape of the defect, named so a future reader knows what th…
+    361|     expect(safe).not.toBe('_._2026-08.jpeg');
+       |                      ^
+    362|     // Every Hebrew word reaches the key as letters, not as an undersc…
+    363|     expect(safe).toContain('alym');   // עלים
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 28 passed (29)
+   Start at  15:17:38
+   Duration  2.77s (transform 825ms, setup 439ms, import 1.11s, tests 37ms, environment 949ms)
+

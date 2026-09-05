@@ -307,11 +307,24 @@ export function PriceListReviewConfirmation({
   const prefilledFor = useRef<string | null>(null);
   const payloadMatchesCurrent = attemptedPayload?.documentId === snapshot.documentId
     && attemptedPayload.interpretationId === interpretation?.id;
-  const canStart = ownsDocument
-    && snapshot.job?.status === 'review'
+  /**
+   * THE DOCUMENT'S OWN STATE, with nothing about the reader in it (`PL-11`).
+   *
+   * `canStart` folds two different questions together — "has this document finished being read"
+   * and "may YOU press the button" — and the badge and the sentence beside it were computed from
+   * the folded answer. So an office user who did not upload the file was told „בעיבוד · המערכת
+   * קוראת את המחירון… התוצאה תופיע כאן בסיום" about a document that had finished being read, had
+   * 79 lines on screen, and was waiting for a person. The sweep read that as a stuck pipeline; it
+   * was a permission wearing a progress label.
+   *
+   * A state belongs to the document. Whether this reader may act on it is a different sentence,
+   * and the screen already has one just below.
+   */
+  const awaitingApproval = snapshot.job?.status === 'review'
     && !autoDecision?.submission_id
     && !attemptedPayload
     && !receipt;
+  const canStart = ownsDocument && awaitingApproval;
   const canReplay = ownsDocument
     && payloadMatchesCurrent
     && !receipt
@@ -814,17 +827,25 @@ export function PriceListReviewConfirmation({
               ? t('priceListReview.text_9')
               : showControls
                 ? t('priceListReview.text_10')
-                : t('priceListReview.text_11')}
+                : awaitingApproval
+                  ? t('priceListReview.awaitingUploader')
+                  : t('priceListReview.text_11')}
           </p>
         </div>
         {/* „הקליטה בעיבוד” was shown on a document whose reading had finished and whose intake was
-            waiting for a person — a reassurance about work nobody was doing. */}
+            waiting for a person — a reassurance about work nobody was doing. It was shown again,
+            for a second reason, to every reader who did not upload the file: `awaitingApproval` is
+            the document's state and `showControls` is this reader's permission, and only the first
+            of the two belongs in a badge. */}
         <span className={receipt || autoDecision?.submission_id
           ? 'badge-done'
-          : autoDecision || showControls ? 'badge-await' : 'badge-info'}>
+          : autoDecision || awaitingApproval ? 'badge-await' : 'badge-info'}>
           {receipt || autoDecision?.submission_id
             ? t('priceListReview.text_12')
-            : autoDecision ? t('priceListReview.text_13') : showControls ? t('priceListReview.text_14') : t('priceListReview.text_15')}
+            : autoDecision ? t('priceListReview.text_13')
+              : showControls ? t('priceListReview.text_14')
+                : awaitingApproval ? t('priceListReview.awaitingApproval')
+                  : t('priceListReview.text_15')}
         </span>
       </div>
 

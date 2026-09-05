@@ -1,0 +1,268 @@
+PR 17 — QA-sweep-20260904 — DOC-02 / DOC-03 / DOC-04 / DOC-08
+SUITE p111_a_price_the_reader_can_say.sql — THE RED, on the genuinely unfixed tree
+================================================================================
+
+RESULT: 13 passed / 23 failed / 36 total.  CONTROLS: 10 of 10 GREEN IN THE SAME RUN.
+
+HOW THE RED WAS PRODUCED. Migration 0324 was MOVED OUT of supabase/migrations entirely and the
+local stack rebuilt from scratch with `npx supabase db reset` from this worktree. The head was
+then READ, not assumed — another campaign on this machine has rebuilt this shared database twice
+today and each rebuild dropped our 0315:
+
+    select string_agg(version, ' ' order by version)
+    from supabase_migrations.schema_migrations where version >= '0315';
+    -> 0315 0319 0320 0322 0323
+
+0315 IS PRESENT and 0324 IS ABSENT. That is the tree this red was measured on.
+
+SUITE FILE IDENTITY, read back INSIDE the container it ran in:
+    sha256  4025bffe2cee68422849c6c1f016c5d9020994250e9e176732879cabedde7650
+            /var/lib/postgresql/p4-p111.sql
+
+THE ORACLE WAS CORRECTED THREE TIMES BEFORE THIS RUN, AND BOTH SIDES WERE THEN RUN AGAINST THE
+CORRECTED FILE. Stated here rather than left for a reader to notice a hash change:
+  1. The fixture INSERTed an `org_autonomy_policies` row for `document.interpretation`. Every
+     organisation is BORN with one, so it died on `org_autonomy_policies_org_key` before a single
+     case was recorded. It is an upsert now.
+  2. The fixture wrote `document_interpretations.suggested_supplier_id`. That column is GENERATED
+     from `payload -> 'supplier' ->> 'suggested_id'` and the database refuses a non-default value
+     for it. The suggestion now reaches the ladder the only way it ever does — through the payload.
+  3. `p111_seed` inherited whatever JWT subject the previous case had read as, so the first seed
+     for the SECOND tenant was a JWT-authored write for another organisation and `audit_row_change`
+     refused it by name (`audit_source_org_mismatch: documents`). The seed clears the JWT itself
+     now, because forgetting it once at a call site is silent until it is not.
+  Five EXPECTATIONS were also wrong and were corrected against what the unfixed tree actually
+  returns, never the other way round: `price_baseline_unknown` is a pre-existing WARNING (0105)
+  that fires on every mapped line for which this tenant holds no contracted price. It is now
+  NAMED in the expected string rather than filtered out, so those cases state the line's complete
+  verdict and a new finding appearing there would fail them.
+
+WHAT THE RED SHOWS, and it is the finding rather than a harness fault — the ten controls prove
+that in the same run:
+
+  * `shekel-word/unit-price-line-{0,1,2}` — all three read `(null)`. The payload prints
+    `4.20 ש"ח`, `50.00 ש"ח`, `12.90 ש"ח`, exactly as production does. This is DOC-08: the review
+    grid's `מחיר במסמך` column IS `lines[].unit_price`, and it is empty on every line.
+  * `shekel-word/lines-net` — `0.00`. A MEASURED zero over three lines that were all skipped.
+  * `shekel-word/lines-vs-header-gap` — `-969.00`, a subtraction performed against that zero.
+  * `shekel-word/missing-rungs` — `[]` and it PASSES in the red, which is the point: the ladder
+    whose only job is to name the number it could not read reported that none was missing while
+    `lines_net` was a fiction. It is the one case whose observed value is right for the wrong
+    reason before the fix, and it stays `[]` after, because after the fix the sum is real.
+  * `shekel-word/no-header-mismatch-finding` — `present`. The document is blocked with
+    `header_total_differs_from_lines` on a comparison against a number nobody measured. That is
+    DOC-03 verbatim.
+  * `shekel-word/state` — `blocked`, `approval_blocked` `true`, on a document whose lines sum to
+    exactly its header. That is DOC-04: read accurately, and no business record.
+  * `price-absent/*` — the general defect that SURVIVES the parser fix. One of two lines has no
+    printed price, and the sum published `20.00` — a partial sum presented as the document's,
+    with `lines_counted` absent, `lines_net` not in `missing_rungs`, no finding naming the missing
+    price, and a header block on the difference.
+  * `other-currency/*` — `$12.50` on an ILS document falls silent: same `(null)` as a price that
+    was never printed, and no reason recorded anywhere.
+  * `filing/date-unreadable-names-the-date` and `filing/number-unreadable-names-the-number` — both
+    observe `invoice_identity_missing`. One code, one sentence, two obstacles. On production that
+    sentence told a reader the invoice number was missing while the screen displayed
+    `SI266001312` at confidence 0.95.
+
+THE TEN CONTROLS, ALL GREEN HERE AND ALL GREEN IN THE GREEN RUN:
+  * `control/plain-price-still-reads` (3.50) and `control/comma-line-total-still-reads`
+    (1,890.00 -> 1890.00). The entire risk of swapping a money parser lives in these two.
+  * `control/header-mismatch-still-blocks` — a document whose lines really DO disagree with its
+    header still raises `header_total_differs_from_lines`. 0324 gates that comparison on coverage;
+    it must not have deleted it.
+  * `control/quantity-unreadable-still-fires`, `control/product-unidentified-still-fires`.
+  * `control/cross-tenant-read-refused` — `document_not_found`. A red here would mean the harness
+    lost its tenant and nothing else in the run is evidence.
+  * `control/filing-both-missing-unchanged` — `invoice_identity_missing` survives for the one
+    state it always described correctly.
+  * The three `structure/*` rows, including the two that state what may NOT execute: the private
+    readers hold no EXECUTE for `authenticated` or `anon`, and the apply command grants
+    `service_role` and not `authenticated`. Every EXECUTE question in this suite is answered from
+    `has_function_privilege`, never by calling — that denial segfaults this Postgres image.
+
+THE GUARDED PATH, AND IT IS TWO. Sections 1-3 read through `public.get_document_review_assessment`
+as role `authenticated` with a real JWT subject, so `auth.uid()`, `auth_org()`, `auth_role()` and
+`auth_scopes()` are all in the path; `private.document_reconciliation_assessment` holds no EXECUTE
+for any client role and is never called directly. Section 5 reaches the filing ladder through
+`public.apply_document_interpretation` with no JWT — the trusted shape the Edge Function uses —
+because that command grants EXECUTE to `service_role` and NOT to `authenticated`, so calling it as
+a browser role would have measured the missing grant and never the ladder.
+
+--------------------------------------------------------------------------------
+RAW TRANSCRIPT (psql, ON_ERROR_STOP=1, exit code at the end)
+--------------------------------------------------------------------------------
+
+BEGIN
+CREATE TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+ set_config 
+------------
+ 
+(1 row)
+
+ set_config 
+------------
+ 
+(1 row)
+
+INSERT 0 2
+INSERT 0 2
+INSERT 0 2
+INSERT 0 2
+INSERT 0 3
+INSERT 0 1
+ p111_case 
+-----------
+ 
+(1 row)
+
+ p111_case 
+-----------
+ 
+(1 row)
+
+ p111_case 
+-----------
+ 
+(1 row)
+
+DO
+DO
+DO
+DO
+DO
+ set_config 
+------------
+ none
+(1 row)
+
+ seq |                       case_id                        |  kind   |                     expected                      |               observed                | result 
+-----+------------------------------------------------------+---------+---------------------------------------------------+---------------------------------------+--------
+   1 | structure/guarded-read-exists                        | control | present, authenticated=true                       | present, authenticated=true           | ok
+   2 | structure/apply-command-is-service-role-only         | control | authenticated=false service_role=true             | authenticated=false service_role=true | ok
+   3 | structure/private-readers-shut-to-clients            | control | authenticated=false anon=false                    | authenticated=false anon=false        | ok
+   4 | shekel-word/unit-price-line-0                        | case    | 4.20                                              | (null)                                | FAILED
+   5 | shekel-word/unit-price-line-1                        | case    | 50.00                                             | (null)                                | FAILED
+   6 | shekel-word/unit-price-line-2                        | case    | 12.90                                             | (null)                                | FAILED
+   7 | shekel-word/printed-price-line-0                     | case    | 4.20 ש"ח                                          | (null)                                | FAILED
+   8 | shekel-word/lines-net                                | case    | 969.00                                            | 0.00                                  | FAILED
+   9 | shekel-word/lines-counted                            | case    | 3                                                 | (null)                                | FAILED
+  10 | shekel-word/missing-rungs                            | case    | []                                                | []                                    | ok
+  11 | shekel-word/lines-vs-header-gap                      | case    | 0.00                                              | -969.00                               | FAILED
+  12 | shekel-word/no-header-mismatch-finding               | case    | absent                                            | present                               | FAILED
+  13 | shekel-word/line-0-carries-only-the-baseline-warning | case    | price_baseline_unknown                            | price_baseline_unknown                | ok
+  14 | shekel-word/approval-blocked                         | case    | false                                             | true                                  | FAILED
+  15 | shekel-word/state                                    | case    | ready_for_approval                                | blocked                               | FAILED
+  16 | price-absent/lines-net-is-null                       | case    | (null)                                            | 20.00                                 | FAILED
+  17 | price-absent/lines-counted                           | case    | 1                                                 | (null)                                | FAILED
+  18 | price-absent/lines-vs-header-gap-is-null             | case    | (null)                                            | -30.00                                | FAILED
+  19 | price-absent/missing-rungs-names-lines-net           | case    | yes                                               | no                                    | FAILED
+  20 | price-absent/line-1-names-the-missing-price          | case    | line_unit_price_missing,price_baseline_unknown    | price_baseline_unknown                | FAILED
+  21 | price-absent/document-says-sum-not-measured          | case    | present                                           | absent                                | FAILED
+  22 | price-absent/no-header-mismatch-finding              | case    | absent                                            | present                               | FAILED
+  23 | price-absent/line-0-still-clean                      | case    | price_baseline_unknown                            | price_baseline_unknown                | ok
+  24 | other-currency/line-0-names-unreadable               | case    | line_unit_price_unreadable,price_baseline_unknown | price_baseline_unknown                | FAILED
+  25 | other-currency/refusal-reason-is-named               | case    | price_currency_mismatch                           | (null)                                | FAILED
+  26 | other-currency/printed-cell-is-quoted                | case    | $12.50                                            | (null)                                | FAILED
+  27 | other-currency/lines-net-is-null                     | case    | (null)                                            | 0.00                                  | FAILED
+  28 | control/plain-price-still-reads                      | control | 3.50                                              | 3.50                                  | ok
+  29 | control/comma-line-total-still-reads                 | control | 1890.00                                           | 1890.00                               | ok
+  30 | control/header-mismatch-still-blocks                 | control | present                                           | present                               | ok
+  31 | control/quantity-unreadable-still-fires              | control | yes                                               | yes                                   | ok
+  32 | control/product-unidentified-still-fires             | control | yes                                               | yes                                   | ok
+  33 | control/cross-tenant-read-refused                    | control | document_not_found                                | document_not_found                    | ok
+  34 | filing/date-unreadable-names-the-date                | case    | invoice_date_missing                              | invoice_identity_missing              | FAILED
+  35 | filing/number-unreadable-names-the-number            | case    | invoice_number_missing                            | invoice_identity_missing              | FAILED
+  36 | control/filing-both-missing-unchanged                | control | invoice_identity_missing                          | invoice_identity_missing              | ok
+(36 rows)
+
+ passed | failed | total | controls_green | controls_total 
+--------+--------+-------+----------------+----------------
+     13 |     23 |    36 |             10 |             10
+(1 row)
+
+psql:/var/lib/postgresql/p4-p111.sql:692: ERROR:  P111 document price and coverage: 23 case(s) failed:
+  shekel-word/unit-price-line-0  [case]
+      expected: 4.20
+      observed: (null)
+  shekel-word/unit-price-line-1  [case]
+      expected: 50.00
+      observed: (null)
+  shekel-word/unit-price-line-2  [case]
+      expected: 12.90
+      observed: (null)
+  shekel-word/printed-price-line-0  [case]
+      expected: 4.20 ש"ח
+      observed: (null)
+  shekel-word/lines-net  [case]
+      expected: 969.00
+      observed: 0.00
+  shekel-word/lines-counted  [case]
+      expected: 3
+      observed: (null)
+  shekel-word/lines-vs-header-gap  [case]
+      expected: 0.00
+      observed: -969.00
+  shekel-word/no-header-mismatch-finding  [case]
+      expected: absent
+      observed: present
+  shekel-word/approval-blocked  [case]
+      expected: false
+      observed: true
+  shekel-word/state  [case]
+      expected: ready_for_approval
+      observed: blocked
+  price-absent/lines-net-is-null  [case]
+      expected: (null)
+      observed: 20.00
+  price-absent/lines-counted  [case]
+      expected: 1
+      observed: (null)
+  price-absent/lines-vs-header-gap-is-null  [case]
+      expected: (null)
+      observed: -30.00
+  price-absent/missing-rungs-names-lines-net  [case]
+      expected: yes
+      observed: no
+  price-absent/line-1-names-the-missing-price  [case]
+      expected: line_unit_price_missing,price_baseline_unknown
+      observed: price_baseline_unknown
+  price-absent/document-says-sum-not-measured  [case]
+      expected: present
+      observed: absent
+  price-absent/no-header-mismatch-finding  [case]
+      expected: absent
+      observed: present
+  other-currency/line-0-names-unreadable  [case]
+      expected: line_unit_price_unreadable,price_baseline_unknown
+      observed: price_baseline_unknown
+  other-currency/refusal-reason-is-named  [case]
+      expected: price_currency_mismatch
+      observed: (null)
+  other-currency/printed-cell-is-quoted  [case]
+      expected: $12.50
+      observed: (null)
+  other-currency/lines-net-is-null  [case]
+      expected: (null)
+      observed: 0.00
+  filing/date-unreadable-names-the-date  [case]
+      expected: invoice_date_missing
+      observed: invoice_identity_missing
+  filing/number-unreadable-names-the-number  [case]
+      expected: invoice_number_missing
+      observed: invoice_identity_missing
+CONTEXT:  PL/pgSQL function inline_code_block line 27 at RAISE
+EXIT=3

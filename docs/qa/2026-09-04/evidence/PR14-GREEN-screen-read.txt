@@ -1,0 +1,7 @@
+signed in as the demo accountant; landed on http://localhost:5299/dashboard
+dashboard label(s) reading "יתרת חשבוניות פתוחות…": ["יתרת חשבוניות פתוחות — מאושרות בלבד"]
+  -> D:\משה פרוייקטים\פיתוח אתרים\NIR-APP\.claude\worktrees\agent-ae47027df0053d26d\docs\qa\2026-09-04\evidence\PR14-GREEN-accountant-dashboard-1440x900.png
+  -> D:\משה פרוייקטים\פיתוח אתרים\NIR-APP\.claude\worktrees\agent-ae47027df0053d26d\docs\qa\2026-09-04\evidence\PR14-GREEN-accountant-supplier-card-1440x900.png
+supplier card KPI values: ["‏150 ‏₪","—","0","0"]
+supplier heading: "כרטיס ספק פיננסי — אריזות הדרום"
+/invoices column headers: ["מס׳ חשבונית","ספק","תאריך","סה״כ","יתרה (מאושרות)","בדיקה","תשלום","רו״ח","פעולות"]

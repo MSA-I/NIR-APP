@@ -191,6 +191,14 @@ test('invoice draft leaves an unparseable date empty rather than plausible', () 
   assert.equal(normalizeInvoiceDate('April 3, 2026'), '');
   assert.equal(normalizeInvoiceDate('03/13/2026'), '');   // month 13: not day-first, so not read
   assert.equal(normalizeInvoiceDate(null), '');
+  // DOC-05: the two-digit year a supplier actually prints. Refusing it did not leave the field
+  // empty — `InvoiceNew` falls back to today — so the refusal produced the invisible wrong date
+  // this test is named after, on a July invoice that arrived on the form dated September.
+  assert.equal(normalizeInvoiceDate('31/07/26'), '2026-07-31');
+  assert.equal(normalizeInvoiceDate('3.4.26'), '2026-04-03');
+  assert.equal(normalizeInvoiceDate('31/13/26'), '');     // still a real month, or nothing
+  assert.equal(normalizeInvoiceDate('31/07/2'), '');      // one digit is not a year
+  assert.equal(normalizeInvoiceDate('31/07/206'), '');    // nor is three
 });
 
 test('delivery note lines are read from either vocabulary the model uses', () => {

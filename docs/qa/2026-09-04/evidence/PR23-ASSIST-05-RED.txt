@@ -1,0 +1,36 @@
+PR23 — ASSIST-05 — RED (static; the emitters are in SQL and in an Edge function)
+
+Oracle: a refusal must tell the person when they may ask again and tell an operator which
+ceiling fired. Stated as a property of the wire: the six ceilings must not share one code.
+
+Measured on supabase/migrations/0202_assistant_quota_and_intro_window.sql — the two database ceilings, both raising the same code:
+  line 395   raise exception 'assistant_limit_reached' using errcode = 'P0001';
+  line 434   || '      raise exception ''assistant_limit_reached'' using errcode = ''P0001'';' || e'\n'
+  line 453   || '      raise exception ''assistant_limit_reached'' using errcode = ''P0001'';' || e'\n'
+  line 463   || '        raise exception ''assistant_limit_reached'' using errcode = ''P0001'';' || e'\n'
+  (the first is the pre-spend door public.assistant_assert_run_allowed; the rest are inside the
+   anchored replacement that rebuilds public.assistant_record_run - one for the introductory
+   branch and one for the plan/override branch, plus the 0164 anchor being matched)
+
+Measured on supabase/functions/assistant/auth.ts — the environment ceilings:
+  ceilings declared: daily_user, daily_org, monthly_org, hard_cost, soft_cost
+  every hard one throws the SAME code at line(s): 219
+
+  a per-hour ceiling that DOES carry its own code exists: YES — assistant_rate_limited
+
+RESULT: FAIL — one code, assistant_limit_reached, for the introductory window, the
+plan/override quota, the per-user day, the per-org day, the per-org month and the hard cost
+cap. The wire body carries only { error: { code } } (supabase/functions/assistant/errors.ts,
+fail()), and the one Hebrew sentence behind it names no period. The hourly limit is the proof
+that the product already knows how to do this: it has its own code and its own sentence.
+
+WHY THIS ROW IS BLOCKED RATHER THAN FIXED: the closed union lives in
+src/lib/assistant/errorCodes.ts, which is product source — but every EMITTER is in
+supabase/functions/assistant/auth.ts (four ceilings) and in the SQL door
+public.assistant_assert_run_allowed() plus public.assistant_record_run() (two more). Adding
+codes and dictionary entries without moving the emitters would ship keys nothing can ever
+raise, which check:key-manifest exists to catch.
+
+CONSEQUENCE FOR PR 22, RECORDED SO IT IS NOT MISSED: because this split did NOT happen,
+src/components/assistant/assistantHistoryAdoption.spec.tsx keeps reading
+he.errors.assistant_limit_reached, unchanged. It is re-run green in PR23-VERIFY.txt.

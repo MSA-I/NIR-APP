@@ -1,0 +1,55 @@
+PR 11 · MON-04 · the /bank un-match dialog, drawn and READ at 1440x900
+=====================================================================
+
+Command : node scripts/bank-over-allocation-visual-check.cjs
+Browser : system Edge, HEADED, viewport 1440x900, locale he-IL, the compiled stylesheet from
+          `vite preview` over a real `npm run build`
+Date    : 2026-09-05
+Result  : findings: []  — both scenarios drawn, both read
+
+WHY EDGE AND NOT PLAYWRIGHT'S CHROMIUM. The bundled build fails to start on this machine
+(`browserType.launch: spawn UNKNOWN`), and headless misses injected CSS here in any case. The
+script takes the browser from `VISUAL_CHECK_BROWSER` and defaults to the installed Edge.
+
+FIXTURES, NOT THE DEMO STACK. This campaign serialises the local Supabase and PR 11 does not hold
+it. Every response is routed by Playwright — auth, profile, organisation, `my_entitlements`
+(`/bank` sits behind the `bank.reconciliation` capability and renders an upgrade page without it),
+one matched 2,950.00 ILS line, and the allocations under test. Nothing was read from or written to
+anybody's database.
+
+SHOTS
+  docs/qa/2026-09-04/evidence/PR11-GREEN-bank-unmatch-over-allocated-1440x900.png
+  docs/qa/2026-09-04/evidence/PR11-GREEN-bank-unmatch-split-1440x900.png
+
+WHAT THE MACHINE MEASURED WHILE THEY WERE ON SCREEN
+
+  over-allocated       allocatedRow  "משויך מהתנועה (מאושר) ‏5,900.00 ‏₪"
+    (2,950 + 2,950     alertText     "לתנועה הזו משויך ‏5,900.00 ‏₪ בעוד שסכום התנועה הוא
+     on a 2,950 line)                 ‏2,950.00 ‏₪ — עודף של ‏2,950.00 ‏₪. אחד השיוכים אינו אמור
+                                      להיות כאן: יש להסיר או להקטין שיוך קיים."
+                       alertFullyVisible  true   (inside the dialog body, not below its scroll)
+                       dialogScrolls      false
+                       direction          rtl
+
+  split-that-adds-up   allocatedRow  "משויך מהתנועה (מאושר) ‏2,950.00 ‏₪"
+    (1,000 + 1,950     alertText     null      — no alert at all
+     on a 2,950 line)  dialogScrolls false
+                       direction     rtl
+
+WHAT I READ IN THE IMAGES, which is the part a probe cannot assert
+
+  Over-allocated. The grey summary panel at the top of the dialog carries two rows in one column:
+  the line's own 2,950.00 in bold on the first, and 5,900.00 beneath it against the label
+  "משויך מהתנועה (מאושר)". Directly under the panel, a rose band states the excess. It sits ABOVE
+  the existing amber note about what un-matching does, so the money discrepancy is read before the
+  procedural explanation rather than after it. The whole dialog fits without scrolling and the
+  primary "הסרת התאמה" is still reachable — the alert informs, it does not block, which is the
+  right shape for a screen whose job is recording what the bank already did.
+
+  Split that adds up. The same panel, the same two rows — 2,950.00 over 2,950.00 — and NO rose
+  band anywhere. The amber note moves up into the space the alert would have taken. A screen that
+  flagged an ordinary two-invoice split would be crying wolf, and it does not.
+
+  Both are RTL throughout: labels start at the right edge, the figures are in the `num` column at
+  the left, and the Hebrew reads correctly with no bidi damage around the ₪ or the digits.
+

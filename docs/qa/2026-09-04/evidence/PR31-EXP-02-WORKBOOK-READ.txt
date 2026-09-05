@@ -1,0 +1,21 @@
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/qa-sweep-20260904
+
+SCREEN CAPTION: 2 מוצרים · 2026-07-01 עד 2026-07-31
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+FILE NAME: product-purchases-2026-07-01-2026-07-31.xlsx
+FILE BYTES: 7322
+SHEETS: ["רכישות מוצרים"]
+--- sheet "רכישות מוצרים"
+  A1 (title)   : ריכוז רכישות מוצרים — ארגון הבדיקה
+  A2 (window)  : 01.07.2026 – 31.07.2026 · הופק 04.09.2026
+  ROW: ["מוצר","יחידה","הוזמן","התקבל","חויב","נרכש בפועל","מספר ספקים","מספר הזמנות","מספר חשבוניות","עלות לפי ההזמנה","הוצאה ברוטו","מחיר יחידה ממוצע"]
+  ROW: ["קמח לבן","kg","10","10","10","10","1","1","1","‏118.00 ‏₪","‏120.50 ‏₪","‏12.05 ‏₪"]
+  ROW: ["שמן זית","l","4","4","4","4","2","2","2","‏195.00 ‏₪","‏200.00 ‏₪ · ‏50.00 ‏$","בכמה מטבעות"]
+  FORMULA ERRORS FOUND: 0 []
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  13:21:37
+   Duration  4.34s (transform 728ms, setup 572ms, import 1.26s, tests 886ms, environment 1.40s)
+

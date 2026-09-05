@@ -1,0 +1,766 @@
+PR 27 — DASH-02 — on-time rate needs five receipts (ruling #356)
+oracle:  src/pages/onTimeThreshold.spec.tsx
+command: npx vitest run src/pages/onTimeThreshold.spec.tsx --reporter=verbose
+tree:    pristine pr27 sources, oracle added
+verdict: 4 failed | 2 passed (6) — the 2 passes are controls
+
+WHERE THIS WAS RUN. The harness pinned this agent's shell and write access to the worktree
+.claude/worktrees/qa-sweep-20260904, not to the assigned .claude/worktrees/pr27-ontime-threshold,
+so neither run could be performed inside the assigned worktree. Both runs were made against a
+byte-identical copy of pr27-ontime-threshold (branch qa/pr27-ontime-threshold @ 0618b846) taken
+into a scratch directory with node_modules junctioned to the repository's own. The RED run used
+the pristine pr27 sources; the GREEN run used the same tree with only the patch applied, and the
+oracle file was byte-identical in both. See the report for the blocker.
+
+
+ RUN  v4.1.10 C:/Users/art1/AppData/Local/Temp/claude/D----------------------------NIR-APP--claude-worktrees-qa-sweep-20260904/cf142aac-14f0-440f-9074-ba2294d57b9b/scratchpad/verify
+
+ × src/pages/onTimeThreshold.spec.tsx > /analytics — on-time rate below the reportable sample size > draws the em dash at 4 receipts and the percentage at 5 358ms
+   → expected '95%' to be '—' // Object.is equality
+ × src/pages/onTimeThreshold.spec.tsx > /analytics — on-time rate below the reportable sample size > does not print the unreportable figure anywhere on the screen 89ms
+   → Found multiple elements with the text: 95%
+
+Here are the matching elements:
+
+Ignored nodes: comments, script, style
+[36m<span[39m
+  [33mclass[39m=[32m"text-ink-muted"[39m
+[36m>[39m
+  [0m95%[0m
+[36m</span>[39m
+
+Ignored nodes: comments, script, style
+[36m<span[39m
+  [33mclass[39m=[32m"text-ink-muted"[39m
+[36m>[39m
+  [0m95%[0m
+[36m</span>[39m
+
+(If this is intentional, then use the `*AllBy*` variant of the query (like `queryAllByText`, `getAllByText`, or `findAllByText`)).
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"space-y-5"[39m
+    [36m>[39m
+      [36m<header[39m
+        [33mclass[39m=[32m"flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between "[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"min-w-0 space-y-1"[39m
+        [36m>[39m
+          [36m<h1[39m
+            [33mclass[39m=[32m"page-title break-words"[39m
+          [36m>[39m
+            [0mביצועי ספקים[0m
+          [36m</h1>[39m
+          [36m<span[39m
+            [33maria-hidden[39m=[32m"true"[39m
+            [33mclass[39m=[32m"section-mark"[39m
+          [36m/>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"text-sm text-ink-muted"[39m
+          [36m>[39m
+            [0mהשוואת הספקים זה מול זה: זמן אספקה, עמידה בזמנים, תנודתיות מחיר וחריגים פתוחים.[0m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"text-sm text-ink-soft"[39m
+          [36m>[39m
+            [0m2 ספקים · עמידה בזמנים מוצגת לאחר 5 קבלות לפחות לספק[0m
+          [36m</div>[39m
+        [36m</div>[39m
+      [36m</header>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"card overflow-hidden"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex flex-wrap items-center gap-2 p-3 border-b border-line-soft"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"relative flex-1 min-w-44 max-w-xs"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"lucide lucide-search absolute top-1/2 -translate-y-1/2 start-3 text-ink-faint"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"15"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"15"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m21 21-4.34-4.34"[39m
+              [36m/>[39m
+              [36m<circle[39m
+                [33mcx[39m=[32m"11"[39m
+                [33mcy[39m=[32m"11"[39m
+                [33mr[39m=[32m"8"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [36m<input[39m
+              [33maria-label[39m=[32m"חיפוש ספק"[39m
+              [33mclass[39m=[32m"input ps-9!"[39m
+              [33mplaceholder[39m=[32m"חיפוש..."[39m
+              [33mvalue[39m=[32m""[39m
+            [36m/>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<ul[39m
+          [33mclass[39m=[32m"lg:hidden divide-y divide-line-soft"[39m
+        [36m>[39m
+          [36m<li[39m
+            [33mclass[39m=[32m"mobile-data-card p-4  "[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"min-w-0 flex-1"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"flex items-center justify-between gap-3"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"min-w-0 break-words font-medium text-ink-body"[39m
+                [36m>[39m
+                  [36m<span[39m
+                    [33mclass[39m=[32m"font-medium"[39m
+                  [36m>[39m
+                    [0mספק דל מדגם[0m
+                  [36m</span>[39m
+                [36m</div>[39m
+              [36m</div>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"flex flex-wrap gap-x-4 gap-y-1 mt-1.5 text-sm text-ink-mid"[39m
+              [36m>[39m
+                [36m<span[39m
+                  [33mclass[39m=[32m"inline-flex min-w-0 flex-wrap items-baseline gap-1"[39m
+                [36m>[39m
+                  [36m<span[39m
+                    [33mclass[39m=[32m"text-xs text-ink-muted"[39m
+                  [36m>[39m
+                    [0mדירוג[0m
+                    [0m:[0m
+                  [36m</span>[39m
+                  [36m<span[39m
+                    [33mclass[39m=[32m"inline-flex items-center gap-1"[39m
+                  [36m>[39m
+                    [36m<svg[39m
+                      [33maria-hidden[39m=[32m"true"[39m
+                      [33mclass[39m=[32m"lucide lucide-star fill-star text-star"[39m
+                      [33mfill[39m=[32m"none"[39m
+                      [33mheight[39m=[32m"13"[39m
+                      [33mstroke[39m=[32m"currentColor"[39m
+                      [33mstroke-linecap[39m=[32m"round"[39m
+                      [33mstroke-linejoin[39m=[32m"round"[39m
+                      [33mstroke-width[39m=[32m"2"[39m
+                      [33mviewBox[39m=[32m"0 0 24 24"[39m
+                      [33mwidth[39m=[32m"13"[39m
+                      [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+                    [36m>[39m
+                      [36m<path[39m
+                        [33md[39m=[32m"M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"[39m
+                      [36m/>[39m
+                    [36m</svg>[39m
+                    [0m4[0m
+                  [36m</span>[39m
+                [36m</span>[39m
+                [36m<span[39m
+                  [33mclass[39m=[32m"inline-flex min-w-0 flex-wrap items-baseline gap-1"[39m
+                [36m>[39m
+                  [36m<span[39m
+                    [33mclass[39m=[32m"text-xs text-ink-muted"[39m
+                  [36m>[39m
+                    [0mזמן אספקה[0m
+                    [0m:[0m
+                  [36m</span>[39m
+                  [0m2.5 ימים[0m
+                [36m</span>[39m
+                [36m<span[39m
+                  [33mclass[39m=[32m"inline-flex min-w-0 flex-wrap items-baseline gap-1"[39m
+                [36m>[39m
+                  [36m<span[39m
+                    [33mclass[39m=[32m"text-xs text-ink-muted"[39m
+                  [36m>[39m
+                    [0mעמידה בזמנים[0m
+                    [0m:[0m
+                  [36m</span>[39m
+                  [36m<span[39m
+                    [33mclass[39m=[32m"text-ink-muted"[39m
+                  [36m>[39m
+                    [0m95%[0m
+                  [36m</span>[39m
+                [36m</span>[39m
+                [36m<span[39m
+          ...
+ × src/pages/onTimeThreshold.spec.tsx > /analytics — on-time rate below the reportable sample size > does not rank a supplier by the figure it refuses to show 3204ms
+   → expected [ 'ספק דל מדגם', 'ספק מבוסס' ] to deeply equal [ 'ספק מבוסס', 'ספק דל מדגם' ]
+
+Ignored nodes: comments, script, style
+[36m<html>[39m
+  [36m<head />[39m
+  [36m<body>[39m
+    [36m<div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"space-y-5"[39m
+      [36m>[39m
+        [36m<header[39m
+          [33mclass[39m=[32m"flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between "[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"min-w-0 space-y-1"[39m
+          [36m>[39m
+            [36m<h1[39m
+              [33mclass[39m=[32m"page-title break-words"[39m
+            [36m>[39m
+              [0mביצועי ספקים[0m
+            [36m</h1>[39m
+            [36m<span[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"section-mark"[39m
+            [36m/>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"text-sm text-ink-muted"[39m
+            [36m>[39m
+              [0mהשוואת הספקים זה מול זה: זמן אספקה, עמידה בזמנים, תנודתיות מחיר וחריגים פתוחים.[0m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"text-sm text-ink-soft"[39m
+            [36m>[39m
+              [0m2 ספקים · עמידה בזמנים מוצגת לאחר 5 קבלות לפחות לספק[0m
+            [36m</div>[39m
+          [36m</div>[39m
+        [36m</header>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"card overflow-hidden"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex flex-wrap items-center gap-2 p-3 border-b border-line-soft"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"relative flex-1 min-w-44 max-w-xs"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-search absolute top-1/2 -translate-y-1/2 start-3 text-ink-faint"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"15"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"15"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m21 21-4.34-4.34"[39m
+                [36m/>[39m
+                [36m<circle[39m
+                  [33mcx[39m=[32m"11"[39m
+                  [33mcy[39m=[32m"11"[39m
+                  [33mr[39m=[32m"8"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [36m<input[39m
+                [33maria-label[39m=[32m"חיפוש ספק"[39m
+                [33mclass[39m=[32m"input ps-9!"[39m
+                [33mplaceholder[39m=[32m"חיפוש..."[39m
+                [33mvalue[39m=[32m""[39m
+              [36m/>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<ul[39m
+            [33mclass[39m=[32m"lg:hidden divide-y divide-line-soft"[39m
+          [36m>[39m
+            [36m<li[39m
+              [33mclass[39m=[32m"mobile-data-card p-4  "[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"min-w-0 flex-1"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"flex items-center justify-between gap-3"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"min-w-0 break-words font-medium text-ink-body"[39m
+                  [36m>[39m
+                    [36m<span[39m
+                      [33mclass[39m=[32m"font-medium"[39m
+                    [36m>[39m
+                      [0mספק דל מדגם[0m
+                    [36m</span>[39m
+                  [36m</div>[39m
+                [36m</div>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"flex flex-wrap gap-x-4 gap-y-1 mt-1.5 text-sm text-ink-mid"[39m
+                [36m>[39m
+                  [36m<span[39m
+                    [33mclass[39m=[32m"inline-flex min-w-0 flex-wrap items-baseline gap-1"[39m
+                  [36m>[39m
+                    [36m<span[39m
+                      [33mclass[39m=[32m"text-xs text-ink-muted"[39m
+                    [36m>[39m
+                      [0mדירוג[0m
+                      [0m:[0m
+                    [36m</span>[39m
+                    [36m<span[39m
+                      [33mclass[39m=[32m"inline-flex items-center gap-1"[39m
+                    [36m>[39m
+                      [36m<svg[39m
+                        [33maria-hidden[39m=[32m"true"[39m
+                        [33mclass[39m=[32m"lucide lucide-star fill-star text-star"[39m
+                        [33mfill[39m=[32m"none"[39m
+                        [33mheight[39m=[32m"13"[39m
+                        [33mstroke[39m=[32m"currentColor"[39m
+                        [33mstroke-linecap[39m=[32m"round"[39m
+                        [33mstroke-linejoin[39m=[32m"round"[39m
+                        [33mstroke-width[39m=[32m"2"[39m
+                        [33mviewBox[39m=[32m"0 0 24 24"[39m
+                        [33mwidth[39m=[32m"13"[39m
+                        [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+                      [36m>[39m
+                        [36m<path[39m
+                          [33md[39m=[32m"M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"[39m
+                        [36m/>[39m
+                      [36m</svg>[39m
+                      [0m4[0m
+                    [36m</span>[39m
+                  [36m</span>[39m
+                  [36m<span[39m
+                    [33mclass[39m=[32m"inline-flex min-w-0 flex-wrap items-baseline gap-1"[39m
+                  [36m>[39m
+                    [36m<span[39m
+                      [33mclass[39m=[32m"text-xs text-ink-muted"[39m
+                    [36m>[39m
+                      [0mזמן אספקה[0m
+                      [0m:[0m
+                    [36m</span>[39m
+                    [0m2.5 ימים[0m
+                  [36m</span>[39m
+                  [36m<span[39m
+                    [33mclass[39m=[32m"inline-flex min-w-0 flex-wrap items-baseline gap-1"[39m
+                  [36m>[39m
+                    [36m<span[39m
+                      [33mclass[39m=[32m"text-xs text-ink-muted"[39m
+                    [36m>[39m
+                      [0mעמידה בזמנים[0m
+       ...
+ ✓ src/pages/onTimeThreshold.spec.tsx > /analytics — on-time rate below the reportable sample size > states the threshold it enforces in its own header 62ms
+ × src/pages/onTimeThreshold.spec.tsx > supplier card — the same word, the same threshold > draws the em dash at 4 receipts, where it used to print a percentage 98ms
+   → expected '95%' to be '—' // Object.is equality
+ ✓ src/pages/onTimeThreshold.spec.tsx > supplier card — the same word, the same threshold > prints the percentage at 5 receipts 90ms
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 2 passed (6)
+   Start at  13:24:26
+   Duration  7.75s (transform 1.02s, setup 511ms, import 2.02s, tests 3.91s, environment 1.07s)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/onTimeThreshold.spec.tsx > /analytics — on-time rate below the reportable sample size > draws the em dash at 4 receipts and the percentage at 5
+AssertionError: expected '95%' to be '—' // Object.is equality
+
+Expected: "—"
+Received: "95%"
+
+ ❯ src/pages/onTimeThreshold.spec.tsx:141:48
+    139|
+    140|     // The row this finding is about: four receipts is not a record, a…
+    141|     expect(await onTimeCellFor('ספק דל מדגם')).toBe('—');
+       |                                                ^
+    142|     // …and the fix must not silence the suppliers that do have a samp…
+    143|     expect(await onTimeCellFor('ספק מבוסס')).toBe('80%');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  src/pages/onTimeThreshold.spec.tsx > /analytics — on-time rate below the reportable sample size > does not print the unreportable figure anywhere on the screen
+TestingLibraryElementError: Found multiple elements with the text: 95%
+
+Here are the matching elements:
+
+Ignored nodes: comments, script, style
+[36m<span[39m
+  [33mclass[39m=[32m"text-ink-muted"[39m
+[36m>[39m
+  [0m95%[0m
+[36m</span>[39m
+
+Ignored nodes: comments, script, style
+[36m<span[39m
+  [33mclass[39m=[32m"text-ink-muted"[39m
+[36m>[39m
+  [0m95%[0m
+[36m</span>[39m
+
+(If this is intentional, then use the `*AllBy*` variant of the query (like `queryAllByText`, `getAllByText`, or `findAllByText`)).
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"space-y-5"[39m
+    [36m>[39m
+      [36m<header[39m
+        [33mclass[39m=[32m"flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between "[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"min-w-0 space-y-1"[39m
+        [36m>[39m
+          [36m<h1[39m
+            [33mclass[39m=[32m"page-title break-words"[39m
+          [36m>[39m
+            [0mביצועי ספקים[0m
+          [36m</h1>[39m
+          [36m<span[39m
+            [33maria-hidden[39m=[32m"true"[39m
+            [33mclass[39m=[32m"section-mark"[39m
+          [36m/>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"text-sm text-ink-muted"[39m
+          [36m>[39m
+            [0mהשוואת הספקים זה מול זה: זמן אספקה, עמידה בזמנים, תנודתיות מחיר וחריגים פתוחים.[0m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"text-sm text-ink-soft"[39m
+          [36m>[39m
+            [0m2 ספקים · עמידה בזמנים מוצגת לאחר 5 קבלות לפחות לספק[0m
+          [36m</div>[39m
+        [36m</div>[39m
+      [36m</header>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"card overflow-hidden"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex flex-wrap items-center gap-2 p-3 border-b border-line-soft"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"relative flex-1 min-w-44 max-w-xs"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"lucide lucide-search absolute top-1/2 -translate-y-1/2 start-3 text-ink-faint"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"15"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"15"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m21 21-4.34-4.34"[39m
+              [36m/>[39m
+              [36m<circle[39m
+                [33mcx[39m=[32m"11"[39m
+                [33mcy[39m=[32m"11"[39m
+                [33mr[39m=[32m"8"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [36m<input[39m
+              [33maria-label[39m=[32m"חיפוש ספק"[39m
+              [33mclass[39m=[32m"input ps-9!"[39m
+              [33mplaceholder[39m=[32m"חיפוש..."[39m
+              [33mvalue[39m=[32m""[39m
+            [36m/>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<ul[39m
+          [33mclass[39m=[32m"lg:hidden divide-y divide-line-soft"[39m
+        [36m>[39m
+          [36m<li[39m
+            [33mclass[39m=[32m"mobile-data-card p-4  "[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"min-w-0 flex-1"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"flex items-center justify-between gap-3"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"min-w-0 break-words font-medium text-ink-body"[39m
+                [36m>[39m
+                  [36m<span[39m
+                    [33mclass[39m=[32m"font-medium"[39m
+                  [36m>[39m
+                    [0mספק דל מדגם[0m
+                  [36m</span>[39m
+                [36m</div>[39m
+              [36m</div>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"flex flex-wrap gap-x-4 gap-y-1 mt-1.5 text-sm text-ink-mid"[39m
+              [36m>[39m
+                [36m<span[39m
+                  [33mclass[39m=[32m"inline-flex min-w-0 flex-wrap items-baseline gap-1"[39m
+                [36m>[39m
+                  [36m<span[39m
+                    [33mclass[39m=[32m"text-xs text-ink-muted"[39m
+                  [36m>[39m
+                    [0mדירוג[0m
+                    [0m:[0m
+                  [36m</span>[39m
+                  [36m<span[39m
+                    [33mclass[39m=[32m"inline-flex items-center gap-1"[39m
+                  [36m>[39m
+                    [36m<svg[39m
+                      [33maria-hidden[39m=[32m"true"[39m
+                      [33mclass[39m=[32m"lucide lucide-star fill-star text-star"[39m
+                      [33mfill[39m=[32m"none"[39m
+                      [33mheight[39m=[32m"13"[39m
+                      [33mstroke[39m=[32m"currentColor"[39m
+                      [33mstroke-linecap[39m=[32m"round"[39m
+                      [33mstroke-linejoin[39m=[32m"round"[39m
+                      [33mstroke-width[39m=[32m"2"[39m
+                      [33mviewBox[39m=[32m"0 0 24 24"[39m
+                      [33mwidth[39m=[32m"13"[39m
+                      [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+                    [36m>[39m
+                      [36m<path[39m
+                        [33md[39m=[32m"M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"[39m
+                      [36m/>[39m
+                    [36m</svg>[39m
+                    [0m4[0m
+                  [36m</span>[39m
+                [36m</span>[39m
+                [36m<span[39m
+                  [33mclass[39m=[32m"inline-flex min-w-0 flex-wrap items-baseline gap-1"[39m
+                [36m>[39m
+                  [36m<span[39m
+                    [33mclass[39m=[32m"text-xs text-ink-muted"[39m
+                  [36m>[39m
+                    [0mזמן אספקה[0m
+                    [0m:[0m
+                  [36m</span>[39m
+                  [0m2.5 ימים[0m
+                [36m</span>[39m
+                [36m<span[39m
+                  [33mclass[39m=[32m"inline-flex min-w-0 flex-wrap items-baseline gap-1"[39m
+                [36m>[39m
+                  [36m<span[39m
+                    [33mclass[39m=[32m"text-xs text-ink-muted"[39m
+                  [36m>[39m
+                    [0mעמידה בזמנים[0m
+                    [0m:[0m
+                  [36m</span>[39m
+                  [36m<span[39m
+                    [33mclass[39m=[32m"text-ink-muted"[39m
+                  [36m>[39m
+                    [0m95%[0m
+                  [36m</span>[39m
+                [36m</span>[39m
+                [36m<span[39m
+          ...
+ ❯ Object.getElementError D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ getElementError D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/node_modules/@testing-library/dom/dist/query-helpers.js:20:35
+ ❯ getMultipleElementsFoundError D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/node_modules/@testing-library/dom/dist/query-helpers.js:23:10
+ ❯ D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/node_modules/@testing-library/dom/dist/query-helpers.js:55:13
+ ❯ D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/pages/onTimeThreshold.spec.tsx:152:19
+    150|     // Not only the cell: the phone card renders the same value, and t…
+    151|     // both. Neither surface may carry a figure the sample cannot supp…
+    152|     expect(screen.queryByText('95%')).toBeNull();
+       |                   ^
+    153|   });
+    154|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  src/pages/onTimeThreshold.spec.tsx > /analytics — on-time rate below the reportable sample size > does not rank a supplier by the figure it refuses to show
+AssertionError: expected [ 'ספק דל מדגם', 'ספק מבוסס' ] to deeply equal [ 'ספק מבוסס', 'ספק דל מדגם' ]
+
+Ignored nodes: comments, script, style
+[36m<html>[39m
+  [36m<head />[39m
+  [36m<body>[39m
+    [36m<div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"space-y-5"[39m
+      [36m>[39m
+        [36m<header[39m
+          [33mclass[39m=[32m"flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between "[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"min-w-0 space-y-1"[39m
+          [36m>[39m
+            [36m<h1[39m
+              [33mclass[39m=[32m"page-title break-words"[39m
+            [36m>[39m
+              [0mביצועי ספקים[0m
+            [36m</h1>[39m
+            [36m<span[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"section-mark"[39m
+            [36m/>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"text-sm text-ink-muted"[39m
+            [36m>[39m
+              [0mהשוואת הספקים זה מול זה: זמן אספקה, עמידה בזמנים, תנודתיות מחיר וחריגים פתוחים.[0m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"text-sm text-ink-soft"[39m
+            [36m>[39m
+              [0m2 ספקים · עמידה בזמנים מוצגת לאחר 5 קבלות לפחות לספק[0m
+            [36m</div>[39m
+          [36m</div>[39m
+        [36m</header>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"card overflow-hidden"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex flex-wrap items-center gap-2 p-3 border-b border-line-soft"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"relative flex-1 min-w-44 max-w-xs"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-search absolute top-1/2 -translate-y-1/2 start-3 text-ink-faint"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"15"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"15"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m21 21-4.34-4.34"[39m
+                [36m/>[39m
+                [36m<circle[39m
+                  [33mcx[39m=[32m"11"[39m
+                  [33mcy[39m=[32m"11"[39m
+                  [33mr[39m=[32m"8"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [36m<input[39m
+                [33maria-label[39m=[32m"חיפוש ספק"[39m
+                [33mclass[39m=[32m"input ps-9!"[39m
+                [33mplaceholder[39m=[32m"חיפוש..."[39m
+                [33mvalue[39m=[32m""[39m
+              [36m/>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<ul[39m
+            [33mclass[39m=[32m"lg:hidden divide-y divide-line-soft"[39m
+          [36m>[39m
+            [36m<li[39m
+              [33mclass[39m=[32m"mobile-data-card p-4  "[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"min-w-0 flex-1"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"flex items-center justify-between gap-3"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"min-w-0 break-words font-medium text-ink-body"[39m
+                  [36m>[39m
+                    [36m<span[39m
+                      [33mclass[39m=[32m"font-medium"[39m
+                    [36m>[39m
+                      [0mספק דל מדגם[0m
+                    [36m</span>[39m
+                  [36m</div>[39m
+                [36m</div>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"flex flex-wrap gap-x-4 gap-y-1 mt-1.5 text-sm text-ink-mid"[39m
+                [36m>[39m
+                  [36m<span[39m
+                    [33mclass[39m=[32m"inline-flex min-w-0 flex-wrap items-baseline gap-1"[39m
+                  [36m>[39m
+                    [36m<span[39m
+                      [33mclass[39m=[32m"text-xs text-ink-muted"[39m
+                    [36m>[39m
+                      [0mדירוג[0m
+                      [0m:[0m
+                    [36m</span>[39m
+                    [36m<span[39m
+                      [33mclass[39m=[32m"inline-flex items-center gap-1"[39m
+                    [36m>[39m
+                      [36m<svg[39m
+                        [33maria-hidden[39m=[32m"true"[39m
+                        [33mclass[39m=[32m"lucide lucide-star fill-star text-star"[39m
+                        [33mfill[39m=[32m"none"[39m
+                        [33mheight[39m=[32m"13"[39m
+                        [33mstroke[39m=[32m"currentColor"[39m
+                        [33mstroke-linecap[39m=[32m"round"[39m
+                        [33mstroke-linejoin[39m=[32m"round"[39m
+                        [33mstroke-width[39m=[32m"2"[39m
+                        [33mviewBox[39m=[32m"0 0 24 24"[39m
+                        [33mwidth[39m=[32m"13"[39m
+                        [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+                      [36m>[39m
+                        [36m<path[39m
+                          [33md[39m=[32m"M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"[39m
+                        [36m/>[39m
+                      [36m</svg>[39m
+                      [0m4[0m
+                    [36m</span>[39m
+                  [36m</span>[39m
+                  [36m<span[39m
+                    [33mclass[39m=[32m"inline-flex min-w-0 flex-wrap items-baseline gap-1"[39m
+                  [36m>[39m
+                    [36m<span[39m
+                      [33mclass[39m=[32m"text-xs text-ink-muted"[39m
+                    [36m>[39m
+                      [0mזמן אספקה[0m
+                      [0m:[0m
+                    [36m</span>[39m
+                    [0m2.5 ימים[0m
+                  [36m</span>[39m
+                  [36m<span[39m
+                    [33mclass[39m=[32m"inline-flex min-w-0 flex-wrap items-baseline gap-1"[39m
+                  [36m>[39m
+                    [36m<span[39m
+                      [33mclass[39m=[32m"text-xs text-ink-muted"[39m
+                    [36m>[39m
+                      [0mעמידה בזמנים[0m
+       ...
+
+- Expected
++ Received
+
+  [
+-   "ספק מבוסס",
+    "ספק דל מדגם",
++   "ספק מבוסס",
+  ]
+
+ ❯ src/pages/onTimeThreshold.spec.tsx:170:21
+    168|         .slice(1)  // drop the header row
+    169|         .map((row) => (within(row).getAllByRole('cell')[0].textContent…
+    170|       expect(names).toEqual(['ספק מבוסס', 'ספק דל מדגם']);
+       |                     ^
+    171|     });
+    172|   });
+ ❯ runWithExpensiveErrorDiagnosticsDisabled D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/node_modules/@testing-library/dom/dist/config.js:47:12
+ ❯ checkCallback D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/node_modules/@testing-library/dom/dist/wait-for.js:124:77
+ ❯ Timeout.checkRealTimersCallback D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/node_modules/@testing-library/dom/dist/wait-for.js:118:16
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  src/pages/onTimeThreshold.spec.tsx > supplier card — the same word, the same threshold > draws the em dash at 4 receipts, where it used to print a percentage
+AssertionError: expected '95%' to be '—' // Object.is equality
+
+Expected: "—"
+Received: "95%"
+
+ ❯ src/pages/onTimeThreshold.spec.tsx:237:37
+    235|
+    236|     await screen.findByRole('heading', { name: 'אחים כהן' });
+    237|     expect(await onTimeTileValue()).toBe('—');
+       |                                     ^
+    238|     expect(screen.queryByText('95%')).toBeNull();
+    239|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+[process exit code 1]

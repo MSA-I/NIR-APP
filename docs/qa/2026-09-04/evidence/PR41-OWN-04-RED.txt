@@ -1,0 +1,33 @@
+PR41 — OWN-04 — RED
+against the UNFIXED tree — the four product files restored to HEAD 50188f6e with git checkout, and the FINAL spec file. src/lib/supplierLogLedger.ts exists on disk but nothing imports it in this state.
+
+command: npx vitest run src/pages/supplierLogLedger.spec.tsx -t "OWN-04"
+exit code: 1
+
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a3c9bf3ef67ad3992
+
+ ❯ src/pages/supplierLogLedger.spec.tsx (4 tests | 1 failed | 3 skipped) 464ms
+     × names the imported rows, and leaves the deleted-row label to a row that really is one 454ms
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 3 skipped (4)
+   Start at  16:11:44
+   Duration  4.33s (transform 861ms, setup 620ms, import 1.42s, tests 464ms, environment 1.48s)
+
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/supplierLogLedger.spec.tsx > /supplier-log — OWN-04: an import is described as an import > names the imported rows, and leaves the deleted-row label to a row that really is one
+AssertionError: expected [ '04.09.2026, 15:00', …(6) ] to include '6 שורות מחירון'
+ ❯ src/pages/supplierLogLedger.spec.tsx:222:25
+    220|     const imported = rowsWhere((cells) => cells.includes('קליטת מחירון…
+    221|     expect(imported).toHaveLength(1);
+    222|     expect(imported[0]).toContain('6 שורות מחירון');
+       |                         ^
+    223|     expect(imported[0]).not.toContain('שורת מחירון שנמחקה');
+    224|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+

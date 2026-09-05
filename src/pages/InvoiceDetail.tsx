@@ -838,8 +838,16 @@ export default function InvoiceDetail() {
                   ? <Link key={o.order_id} className="link" to={`/orders/${o.order_id}`}>#{o.purchase_orders.number}</Link>
                   : <span key={o.order_id}>#{o.purchase_orders.number}</span>
               )) : '—'}</dd></div>
+            {/* The receipt row now opens the receipt, as the order row above it already did.
+                `/receipts/:receiptId` is guarded by STAFF in App.tsx, which is the same set
+                `canOpenProcurement` names, so the accountant keeps the number as plain text
+                rather than a door that would refuse them (`DOC-12`). */}
             <div className="flex justify-between"><dt className="text-ink-muted">{t('invoices.text_8')}</dt>
-              <dd>{inv.receipts.length ? inv.receipts.map((r) => `#${r.goods_receipts.number}`).join(', ') : '—'}</dd></div>
+              <dd className="flex gap-2">{inv.receipts.length ? inv.receipts.map((r) => (
+                canOpenProcurement
+                  ? <Link key={r.receipt_id} className="link" to={`/receipts/${r.receipt_id}`}>#{r.goods_receipts.number}</Link>
+                  : <span key={r.receipt_id}>#{r.goods_receipts.number}</span>
+              )) : '—'}</dd></div>
           </dl>
           {inv.notes && <div className="text-sm text-ink-soft bg-surface-sunken rounded-lg px-3 py-2">{inv.notes}</div>}
         </Card>

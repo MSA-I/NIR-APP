@@ -10,6 +10,7 @@ import { Breadcrumbs, Card, EmptyState, ErrorNote, Note, RecordHeader, RecordSke
 import { MoneyByCurrency, totalsByCurrency } from '../components/Money';
 import { useAuth } from '../auth/AuthContext';
 import type { MoneyAmount } from '../lib/types';
+import type { SupplierCreditBalance } from './AccountantPaymentQueue';
 
 type SupplierFinance = { id: string; name: string; tax_id: string | null; payment_terms: string | null; status: string };
 type InvoiceRow = { id: string; invoice_number: string; invoice_date: string; total_amount: number; currency: string; payment_status: string };
@@ -31,6 +32,38 @@ export function financialDueExposure(requests: RequestRow[], today: string): Mon
   if (dated.length === 0) return null;
   return totalsByCurrency(dated.filter((request) => request.due_date! <= today)
     .map((request) => ({ currency: request.currency, amount: request.amount })));
+}
+
+/**
+ * What each credit actually took off the debt — the SAME rule the headline balance uses.
+ *
+ * `FIN-02`. Migration `0173` ("Invoice balance consumes allocated credit, not lifecycle labels")
+ * moved every balance reader off `credit_requests.status in ('offset','closed')` and onto the
+ * money an allocation records against the credit. This screen kept a client twin of the rule
+ * `0173` deleted: its feed subtracted a credit's NOMINAL amount whenever the label said `offset`.
+ * The headline above the feed comes from `supplier_balances_by_currency`, which uses the
+ * allocation rule — so one card answered "what did this credit take off" twice, and the sweep read
+ * the difference: headline `150`, ledger `900 − 750 − 150 = 0`.
+ *
+ * Both stale directions are corrected by deriving from `credit_request_balance_rows` (`0173`'s own
+ * canonical computed credit balance) rather than re-deriving here:
+ *   - a pre-`0173` credit labelled `offset` with no allocation moved nothing, so it is not a
+ *     ledger line at all;
+ *   - a credit half consumed is still labelled `received`, and the label rule showed nothing for
+ *     it while 60 of its 150 had genuinely left the debt.
+ *
+ * A credit with no balance row is not assumed to be zero: it is a credit this reader could not
+ * value, and inventing a `0` for it would be the same mistake in the other direction.
+ */
+export function financialCreditLedger(
+  credits: CreditRow[],
+  balances: SupplierCreditBalance[] | null,
+): Array<{ credit: CreditRow; applied: number }> {
+  if (!balances) return [];
+  const appliedByCredit = new Map(balances.map((row) => [row.credit_id, row.allocated_amount]));
+  return credits
+    .map((credit) => ({ credit, applied: appliedByCredit.get(credit.id) ?? 0 }))
+    .filter((row) => row.applied > 0);
 }
 
 export function financialBankStatusCounts(rows: BankRow[]) {
@@ -72,13 +105,17 @@ export default function FinancialSupplier() {
 
     const invoiceIds = invoices.map((invoice) => invoice.id);
     const paymentIds = payments.map((payment) => payment.id);
-    const [balances, allocations] = await Promise.all([
+    const [balances, allocations, creditBalances] = await Promise.all([
       invoiceIds.length ? fetchAll<BalanceRow>((from, to) => supabase.from('invoice_balances_by_currency')
         .select('invoice_id, currency, balance_in_currency, paid_amount, credited_amount').in('invoice_id', invoiceIds)
         .order('invoice_id').range(from, to)) : Promise.resolve([]),
       paymentIds.length ? fetchAll<AllocationRow>((from, to) => supabase.from('payment_allocations')
         .select('payment_id, amount, currency').in('payment_id', paymentIds).order('id').range(from, to)) : Promise.resolve([]),
+      // `0173`'s canonical computed credit balance. Asked for even when this supplier holds no
+      // credit, so the feed never has to tell "no credits" from "credits not read".
+      supabase.rpc('credit_request_balance_rows', { p_supplier_id: supplier.id }),
     ]);
+    if (creditBalances.error) throw creditBalances.error;
 
     const balanceByInvoice = new Map(balances.map((row) => [row.invoice_id, row]));
     const today = todayISO();
@@ -99,8 +136,8 @@ export default function FinancialSupplier() {
     const activity = [
       ...invoices.map((row) => ({ date: row.invoice_date, label: t('financialSupplier.activityInvoice', { number: row.invoice_number }), amount: row.total_amount, currency: row.currency })),
       ...payments.map((row) => ({ date: row.paid_date, label: t('financialSupplier.activityPayment', { number: row.number }), amount: -row.amount, currency: row.currency })),
-      ...credits.filter((row) => ['offset', 'closed'].includes(row.status))
-        .map((row) => ({ date: row.created_at, label: t('financialSupplier.activityCredit', { number: row.number }), amount: -row.amount, currency: row.currency })),
+      ...financialCreditLedger(credits, creditBalances.data as SupplierCreditBalance[] | null)
+        .map(({ credit, applied }) => ({ date: credit.created_at, label: t('financialSupplier.activityCredit', { number: credit.number }), amount: -applied, currency: credit.currency })),
     ].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 10);
 
     return { supplier, invoices, credits, payments, requests, bank, balanceByInvoice, allocatedByPayment, openBalances, dueExposure, bankStatusCounts, activity };

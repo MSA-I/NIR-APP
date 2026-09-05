@@ -1,0 +1,54 @@
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a183f8959614045c8
+
+stderr | src/components/document-review/priceListReadinessRefusal.spec.tsx > PL-04 · המחירון בלי ספק — הסיבה על המסך, לא פנייה לתמיכה > אומר שהמחירון אינו משויך לספק ומה לעשות
+[supplyflow] qualified_product_dry_run_context_invalid
+
+stderr | src/components/document-review/priceListReadinessRefusal.spec.tsx > PL-04 · המחירון בלי ספק — הסיבה על המסך, לא פנייה לתמיכה > ממפה את הקוד עצמו, ולא דרך הנוסח על המסך בלבד
+[supplyflow] qualified_product_dry_run_context_invalid
+
+ ❯ src/components/document-review/priceListReadinessRefusal.spec.tsx (3 tests | 2 failed) 280ms
+     × אומר שהמחירון אינו משויך לספק ומה לעשות 222ms
+     × ממפה את הקוד עצמו, ולא דרך הנוסח על המסך בלבד 14ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/components/document-review/priceListReadinessRefusal.spec.tsx > PL-04 · המחירון בלי ספק — הסיבה על המסך, לא פנייה לתמיכה > אומר שהמחירון אינו משויך לספק ומה לעשות
+Error: [2mexpect([22m[31melement[39m[2m).toHaveTextContent()[22m
+
+Expected element to have text content:
+[32m  /אינו משויך לספק/[39m
+Received:
+[31m  בדיקת הכשירות נכשלה: הפעולה נכשלה. אם הבעיה חוזרת — פנה לתמיכה.[39m
+ ❯ src/components/document-review/priceListReadinessRefusal.spec.tsx:60:18
+     58|     const note = await screen.findByRole('alert');
+     59|     // The cause, in the reader's own vocabulary — a supplier that is …
+     60|     expect(note).toHaveTextContent(/אינו משויך לספק/);
+       |                  ^
+     61|     // And the action. A state without an instruction is what the swee…
+     62|     expect(note).toHaveTextContent(/שייכו ספק|לשייך ספק/);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/components/document-review/priceListReadinessRefusal.spec.tsx > PL-04 · המחירון בלי ספק — הסיבה על המסך, לא פנייה לתמיכה > ממפה את הקוד עצמו, ולא דרך הנוסח על המסך בלבד
+AssertionError: expected 'fallback' to be 'qualified_product_dry_run_context_inv…' // Object.is equality
+
+Expected: "qualified_product_dry_run_context_invalid"
+Received: "fallback"
+
+ ❯ src/components/document-review/priceListReadinessRefusal.spec.tsx:71:8
+     69|     // too: a future refactor of the wrapper cannot quietly restore th…
+     70|     expect(toErrorKey(new Error('qualified_product_dry_run_context_inv…
+     71|       .toBe('qualified_product_dry_run_context_invalid');
+       |        ^
+     72|   });
+     73|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 1 passed (3)
+   Start at  17:21:20
+   Duration  3.33s (transform 721ms, setup 485ms, import 1.01s, tests 280ms, environment 1.23s)
+

@@ -1,0 +1,16 @@
+PR41 — OWN-11 — GREEN
+with the fix applied — src/pages/SupplierLog.tsx, src/lib/supplierLogLedger.ts, src/lib/types.ts and both dictionaries
+
+command: npx vitest run src/pages/supplierLogLedger.spec.tsx -t "OWN-11"
+exit code: 0
+
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a3c9bf3ef67ad3992
+
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 3 skipped (4)
+   Start at  16:36:36
+   Duration  4.74s (transform 742ms, setup 460ms, import 1.21s, tests 1.79s, environment 1.03s)
+
+

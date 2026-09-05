@@ -1,0 +1,212 @@
+PR21 — RTL-A11Y-06 and RTL-A11Y-07
+Rendered-pixel contrast, measured on the pixels the product actually paints.
+
+HOW
+  scripts/measure-composited-contrast.mjs, headed Microsoft Edge driven through playwright-core,
+  1440x900, deviceScaleFactor 1, prefers-reduced-motion: reduce, signed in as the local demo
+  owner through the login screen's own disclosure (no password is read, typed or printed).
+  For every route and both themes the orb's centre is parked on the page description — the WORST
+  position, and one every reader can reach, because the orb follows the pointer. The viewport is
+  photographed twice: once as it is, and once with the measured text set to transparent colour.
+  Every pixel of the second photograph inside a text box is the composited GROUND, and the
+  verdict is taken on the worst of them, not on an average that would hide the dark end of a
+  gradient. Integrity: hiding the text must CHANGE the box, or the capture is not showing what
+  the page is showing, and the run aborts rather than reporting a comfortable number. (The first
+  draft measured the modal colour of the box instead and aborted on its own check at the first
+  route — 474x20 pixels held 849 distinct colours, because the ground is a radial gradient and
+  has no single background pixel to find. That abort is why the method above exists.)
+
+  src/pages/noDataMarker.spec.ts is the source half for RTL-A11Y-07: the mandated marker may not
+  be drawn in a token the palette itself declares below AA. The exempt list is READ from
+  scripts/contrast-pairs.mjs (ink-faint — "placeholder text and empty-state hints"; ink-ghost —
+  "disabled lettering") rather than copied, so a token excused tomorrow is covered tomorrow.
+
+WHAT IS NOT MEASURED, AND WHY IT IS SAID OUT LOUD
+  /suppliers does not render against this machine's shared local Supabase stack. The stack sits
+  at migration head 0245 while the tree carries 305 migrations up to 0314, so the screen's query
+  names a column (suppliers.logo_path, added by migration 0275) the database has not got, and the
+  page shows an error card with no heading at all. That is a fact about a stale shared stack, not
+  a contrast result, and the run reports it as NOT MEASURED instead of quietly measuring thirteen
+  routes and claiming fourteen. The four /suppliers markers are therefore closed by the source
+  oracle above; the token they were moved to is measured live on /prices, which paints the same
+  kind of table cell on the same ground.
+
+================================================================================
+RED — the oracle run against the UNFIXED tree. It must fail, and it does.
+================================================================================
+
+--- A. rendered-pixel measurement, 13 routes x 2 themes -------------------------
+
+measure-composited-contrast [RED] — worst composited ground under each text, 1440x900
+
+light /settings    description  4.626:1 on #cdd7d7
+light /alerts      description  4.613:1 on #ccd7d6
+light /reports     description  4.616:1 on #ccd7d7
+light /orders      description  4.613:1 on #ccd7d6
+light /prices      description  4.613:1 on #ccd7d6   |  11 "—" marker(s), worst 5.009:1
+light /inventory   description  4.616:1 on #ccd7d7
+light /invoices    description  4.613:1 on #ccd7d6
+light /payments    description  4.613:1 on #ccd7d6
+light /bank        description  4.613:1 on #ccd7d6
+light /analytics   description  4.613:1 on #ccd7d6
+light /exceptions  description  4.613:1 on #ccd7d6
+light /dashboard   description  4.616:1 on #ccd7d7
+light /documents   description  4.613:1 on #ccd7d6
+dark  /settings    description  2.877:1 on #435152
+dark  /alerts      description  3.028:1 on #3f4e4e
+dark  /reports     description  3.024:1 on #3f4e4f
+dark  /orders      description  3.112:1 on #3e4c4d
+dark  /prices      description  3.112:1 on #3e4c4d   |  11 "—" marker(s), worst 4.372:1
+dark  /inventory   description  3.012:1 on #404e50
+dark  /invoices    description  3.064:1 on #3f4d4e
+dark  /payments    description  3.266:1 on #3b4949
+dark  /bank        description  3.258:1 on #3b494b
+dark  /analytics   description  3.207:1 on #3c4a4c
+dark  /exceptions  description  3.258:1 on #3b494b
+dark  /dashboard   description  3.024:1 on #3f4e4f
+dark  /documents   description  3.266:1 on #3b4949
+
+light-theme ground, per route — the hash of the text-free capture:
+  /settings    #cdd7d7  ground c17964c135d089d5a3b37637df595076886b368c6ec6941fc69c94ce3b38504b
+  /alerts      #ccd7d6  ground e8441709aa5c023d8fc1a44f81a6785eeed6dc01e7ae5550f5de1155b7de53c7
+  /reports     #ccd7d7  ground 4e75ddaf43ae1fb8eeae8338bb125871e9909fee995d7d4aea43c4850ca24a28
+  /orders      #ccd7d6  ground 3fed7745b1797906854e749a1774b1dbeeaeea057ead3831db9c410299d24a2c
+  /prices      #ccd7d6  ground 70bbba94daf50eab57d2ce03b112d206f32905b756273d1d26701c1c38de7c60
+  /inventory   #ccd7d7  ground b4bccd4bc77c07246d504523b9d4c849784088c3b459cccca1afa26ff8666abd
+  /invoices    #ccd7d6  ground d58471c1813f48bd19ae396fb98753dba03b20520c17e1757e75f3e74714828f
+  /payments    #ccd7d6  ground e88e58763f874b5b67c7988c11fc6f8837461f667d3e046b62e3bdbd27df0eb8
+  /bank        #ccd7d6  ground 084e49daa3ef4f80e9268ab207c5866863ddfddc695e8d82091db757344fcfdd
+  /analytics   #ccd7d6  ground 281248045201cecfcdd954e0e0679839cbb6a1f9b1bf02082833f4405e53dd36
+  /exceptions  #ccd7d6  ground d61ac4229c230ad8c192b89a6e31822b0a6c3544e0695a81a7c2cf76891582eb
+  /dashboard   #ccd7d7  ground 9a3c8db41b4dd13e0b1de973eb1366ef190fa57fc8c9d797053bca979f8e87b9
+  /documents   #ccd7d6  ground 74e1cbd1261aaa2257eb966bf2859a0671adf399bd7119749050069ed6126079
+
+NOT MEASURED — the route did not render against this stack:
+  [light] /suppliers — הפעולה נכשלה. אם הבעיה חוזרת — פנה לתמיכה.
+  [dark] /suppliers — הפעולה נכשלה. אם הבעיה חוזרת — פנה לתמיכה.
+node : 
+At line:8 char:1
++ node scripts/measure-composited-contrast.mjs *> "$w\.tmp-red.txt"
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+measure-composited-contrast [RED] FAILED — 24 measurement(s) below 4.5:1:
+  [dark] /settings page-description "הגדרת פרטי העסק והלוגו, ניהול המשתמשים והרשאותיה" = 2.877:1 (median 3.301) on the 
+composited ground #435152 — needs 4.5:1 — text-sm text-ink-muted
+  [dark] /alerts page-description "התור המלא של כל מה שדורש טיפול, מהדחוף ועד המידע" = 3.028:1 (median 3.546) on the 
+composited ground #3f4e4e — needs 4.5:1 — text-sm text-ink-muted
+  [dark] /reports page-description "החבילה החודשית לרואת החשבון: חשבוניות, תשלומים ו" = 3.024:1 (median 3.532) on the 
+composited ground #3f4e4f — needs 4.5:1 — text-sm text-ink-muted
+  [dark] /orders page-description "מעקב אחר הזמנות הרכש שנשלחו לספקים ואחר מצב הביצ" = 3.112:1 (median 3.564) on the 
+composited ground #3e4c4d — needs 4.5:1 — text-sm text-ink-muted
+  [dark] /prices page-description "השוואת מחירי הספקים לכל מוצר, איתור התייקרויות ו" = 3.112:1 (median 3.541) on the 
+composited ground #3e4c4d — needs 4.5:1 — text-sm text-ink-muted
+  [dark] /prices no-data-dash "—" = 4.372:1 (median 4.372) on the composited ground #011519 — needs 4.5:1 — 
+text-ink-faint
+  [dark] /prices no-data-dash "—" = 4.372:1 (median 4.372) on the composited ground #011519 — needs 4.5:1 — 
+text-ink-faint
+  [dark] /prices no-data-dash "—" = 4.372:1 (median 4.372) on the composited ground #011519 — needs 4.5:1 — 
+text-ink-faint
+  [dark] /prices no-data-dash "—" = 4.372:1 (median 4.372) on the composited ground #011519 — needs 4.5:1 — 
+text-ink-faint
+  [dark] /prices no-data-dash "—" = 4.372:1 (median 4.372) on the composited ground #011519 — needs 4.5:1 — 
+text-ink-faint
+  [dark] /prices no-data-dash "—" = 4.372:1 (median 4.372) on the composited ground #011519 — needs 4.5:1 — 
+text-ink-faint
+  [dark] /prices no-data-dash "—" = 4.372:1 (median 4.372) on the composited ground #011519 — needs 4.5:1 — 
+text-ink-faint
+  [dark] /prices no-data-dash "—" = 4.372:1 (median 4.372) on the composited ground #011519 — needs 4.5:1 — 
+text-ink-faint
+  [dark] /prices no-data-dash "—" = 4.372:1 (median 4.372) on the composited ground #011519 — needs 4.5:1 — 
+text-ink-faint
+  [dark] /prices no-data-dash "—" = 4.372:1 (median 4.372) on the composited ground #011519 — needs 4.5:1 — 
+text-ink-faint
+  [dark] /prices no-data-dash "—" = 4.372:1 (median 4.372) on the composited ground #011519 — needs 4.5:1 — 
+text-ink-faint
+  [dark] /inventory page-description "מעקב אחר היתרות שנספרו ואחר תנועות המלאי, וזיהוי" = 3.012:1 (median 3.482) on 
+the composited ground #404e50 — needs 4.5:1 — text-sm text-ink-muted
+  [dark] /invoices page-description "מעקב אחר חשבוניות הספקים: מצב הבדיקה, מצב התשלום" = 3.064:1 (median 3.578) on the 
+composited ground #3f4d4e — needs 4.5:1 — text-sm text-ink-muted
+  [dark] /payments page-description "צפייה בתשלומים שכבר נרשמו, באסמכתאות שלהם ובחשבו" = 3.266:1 (median 3.71) on the 
+composited ground #3b4949 — needs 4.5:1 — text-sm text-ink-muted
+  [dark] /bank page-description "ייבוא תדפיס הבנק והתאמת התנועות שבו לתשלומים ולח" = 3.258:1 (median 3.7) on the 
+composited ground #3b494b — needs 4.5:1 — text-sm text-ink-muted
+  [dark] /analytics page-description "השוואת הספקים זה מול זה: זמן אספקה, עמידה בזמנים" = 3.207:1 (median 3.705) on 
+the composited ground #3c4a4c — needs 4.5:1 — text-sm text-ink-muted
+  [dark] /exceptions page-description "טיפול בפערים שהמערכת סימנה — הפרשי כמות, מחיר או" = 3.258:1 (median 3.811) on 
+the composited ground #3b494b — needs 4.5:1 — text-sm text-ink-muted
+  [dark] /dashboard page-description "פותחים כאן את היום: מה דורש טיפול עכשיו, מה עלול" = 3.024:1 (median 3.523) on 
+the composited ground #3f4e4f — needs 4.5:1 — text-sm text-ink-muted
+  [dark] /documents page-description "איתור כל מסמך שנקלט למערכת ושיוכו לרשומה העסקית " = 3.266:1 (median 3.714) on 
+the composited ground #3b4949 — needs 4.5:1 — text-sm text-ink-muted
+
+--- B. source oracle: the mandated marker in a token excused from AA ------------
+
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-af9a849043342b925
+
+ ❯ src/pages/noDataMarker.spec.ts (1 test | 1 failed) 82ms
+     × is never painted in a token the palette declares below AA 74ms
+node.exe : 
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/noDataMarker.spec.ts > the no-data marker > is never painted in a token the palette declares below AA
+AssertionError: src\pages\Onboarding.tsx:1148 — the mandated "—" is drawn in text-ink-ghost
+src\pages\PriceLists.tsx:171 — the mandated "—" is drawn in text-ink-faint
+src\pages\PriceLists.tsx:174 — the mandated "—" is drawn in text-ink-faint
+src\pages\PriceLists.tsx:184 — the mandated "—" is drawn in text-ink-faint
+src\pages\Suppliers.tsx:65 — the mandated "—" is drawn in text-ink-ghost
+src\pages\Suppliers.tsx:211 — the mandated "—" is drawn in text-ink-ghost
+src\pages\Suppliers.tsx:1000 — the mandated "—" is drawn in text-ink-faint
+src\pages\Suppliers.tsx:1014 — the mandated "—" is drawn in text-ink-ghost: expected [ …(8) ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   "src\\pages\\Onboarding.tsx:1148 — the mandated \"—\" is drawn in text-ink-ghost",
++   "src\\pages\\PriceLists.tsx:171 — the mandated \"—\" is drawn in text-ink-faint",
++   "src\\pages\\PriceLists.tsx:174 — the mandated \"—\" is drawn in text-ink-faint",
++   "src\\pages\\PriceLists.tsx:184 — the mandated \"—\" is drawn in text-ink-faint",
++   "src\\pages\\Suppliers.tsx:65 — the mandated \"—\" is drawn in text-ink-ghost",
++   "src\\pages\\Suppliers.tsx:211 — the mandated \"—\" is drawn in text-ink-ghost",
++   "src\\pages\\Suppliers.tsx:1000 — the mandated \"—\" is drawn in text-ink-faint",
++   "src\\pages\\Suppliers.tsx:1014 — the mandated \"—\" is drawn in text-ink-ghost",
++ ]
+
+ ❯ src/pages/noDataMarker.spec.ts:81:43
+     79|     }
+     80|
+     81|     expect(offences, offences.join('\n')).toEqual([]);
+       |                                           ^
+     82|   });
+     83| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed (1)
+   Start at  14:16:40
+   Duration  2.49s (transform 84ms, setup 623ms, import 24ms, tests 82ms, environment 1.44s)
+
+--- READING THE RED ------------------------------------------------------------
+  * dark, page description: 2.877 - 3.266:1 on every one of the thirteen routes that render.
+    The ground under it is #3b4949 .. #435152 — a mid band, not the dark canvas #011519. The
+    finding recorded 3.07 - 3.95:1 at the orb's resting position; this run parks the orb on the
+    text and reads lower, which is the same defect measured at its worst.
+  * dark, the mandated marker: 4.372:1, and on the dark canvas #011519 itself. That figure is
+    the one the sweep recorded for text-ink-faint, to three digits, from an independent
+    measurement. It is a TOKEN failure and not a glow failure — the marker sits inside an opaque
+    table and the orb, at z-index -1, never reaches it.
+  * light: descriptions 4.613 - 4.626:1 and markers 5.009:1 — both above 4.5. The light theme is
+    not the defect, which is exactly why the fix must not move it.
+

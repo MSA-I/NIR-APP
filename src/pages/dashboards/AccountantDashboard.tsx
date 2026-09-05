@@ -64,9 +64,33 @@ export default function AccountantDashboard() {
     );
     const unmatchedBank = bank.filter((b) => b.status === 'unmatched').length;
     const suggestedBank = bank.filter((b) => b.status === 'suggested').length;
-    // Fix (was `status === 'active'`, never true): open credits are open/requested/received (enum values).
+    // Fix (was `status === 'active'`, never true): the not-yet-offset set is open/requested/received
+    // (enum values) — the same three `0218`'s `credit_metrics` and `supplier_metrics.open_credits`
+    // count, and `DASH-10` is why the label over them no longer says "open".
     const openCreditRows = credits.filter((c) => ['open', 'requested', 'received'].includes(c.status));
     const openCreditsByCurrency = totalsByCurrency(openCreditRows.map((c) => ({ currency: c.currency, amount: c.amount })));
+    /**
+     * `ASSIST-12` — WHAT AN EMPTY CREDITS READ MEANS FOR THIS ROLE, AND WHY IT IS NOT ZERO.
+     *
+     * `credit_requests` carries a restrictive rider (`0073:208-240`): a row is visible only when
+     * its anchor is. An invoice-anchored credit needs the invoice, and the accountant's `invoices`
+     * scope stops at approved; a receipt-anchored credit needs the receipt's purchase order, which
+     * is outside this role's scope entirely. So an accountant can be shown NOTHING while the
+     * organisation holds nine credits worth ₪3,423.20 — measured on 04.09.2026, when this tile
+     * read `0` beside an assistant that answered the same question with a named refusal.
+     *
+     * An empty array is therefore two different facts wearing one shape, and the count is only
+     * one of them. `null` says the honest thing — this role cannot measure it — and the
+     * constitution's rule then draws `—` rather than a zero that claims the credits do not exist.
+     * `getDashboardSnapshot.ts:40-48` already reached this conclusion for office and the bank
+     * figures: a named `not_permitted` "instead of a false zero".
+     *
+     * A read that returned rows is a different matter. Rows came back, none of them is open, and
+     * `0` is then a measurement — hiding THAT behind an em dash would be the mirror mistake, and
+     * the constitution forbids that one too.
+     */
+    const creditsAreReadable = credits.length > 0;
+    const openCreditCount = creditsAreReadable ? openCreditRows.length : null;
     const notSent = invoices.filter((i) => i.export_status === 'not_sent' && i.review_status === 'approved').length;
 
     const asLines = (entries: { currency: string; amount: number }[]) => (entries.length
@@ -77,7 +101,14 @@ export default function AccountantDashboard() {
       { label: t('accountantDashboard.fmtMoneyRounded_2'), value: asLines(openInvoiceBalance), tone: openInvoiceBalance.length ? 'await' : 'idle' },
       { label: t('accountantDashboard.fmtNum'), value: fmtNum(unmatchedBank), tone: unmatchedBank ? 'await' : 'idle' },
       { label: t('accountantDashboard.fmtNum_2'), value: fmtNum(suggestedBank), tone: suggestedBank ? 'await' : 'idle' },
-      { label: t('accountantDashboard.fmtNum_3'), value: fmtNum(openCreditRows.length), sub: openCreditsByCurrency.length ? asLines(openCreditsByCurrency) : undefined },
+      {
+        label: t('accountantDashboard.fmtNum_3'),
+        value: fmtNum(openCreditCount),
+        // An unexplained dash reads as a broken screen. The reason belongs beside it — the same
+        // way the assistant names its refusal rather than returning an empty answer.
+        sub: openCreditsByCurrency.length ? asLines(openCreditsByCurrency)
+          : creditsAreReadable ? undefined : t('accountantDashboard.creditsOutOfScope'),
+      },
       { label: t('accountantDashboard.fmtNum_4'), value: fmtNum(notSent), tone: notSent ? 'await' : 'idle' },
     ];
 
@@ -90,7 +121,10 @@ export default function AccountantDashboard() {
       { key: 'not-sent', label: t('accountantDashboard.text_3'), count: notSent, tone: 'await', to: '/invoices', clearLabel: t('accountantDashboard.text_4') },
       { key: 'bank', label: t('accountantDashboard.text_5'), count: unmatchedBank, tone: 'await', to: '/bank', clearLabel: t('accountantDashboard.text_6') },
       { key: 'bank-suggested', label: t('accountantDashboard.text_7'), count: suggestedBank, tone: 'await', to: '/bank?status=suggested', clearLabel: t('accountantDashboard.text_8') },
-      { key: 'credits', label: t('accountantDashboard.text_9'), count: openCreditRows.length, amounts: openCreditsByCurrency, tone: 'info', to: '/credits?status=active', clearLabel: t('accountantDashboard.text_10') },
+      // `count: null` here is load-bearing: `AttentionZone` routes an unmeasurable row to its own
+      // neutral tier instead of the muted all-clear list, so the screen never says "אין זיכויים
+      // שטרם קוזזו" about a population it was not shown.
+      { key: 'credits', label: t('accountantDashboard.text_9'), count: openCreditCount, amounts: openCreditsByCurrency, tone: 'info', to: '/credits?status=active', hint: creditsAreReadable ? undefined : t('accountantDashboard.creditsOutOfScope'), clearLabel: t('accountantDashboard.text_10') },
     ];
 
     // ── charts

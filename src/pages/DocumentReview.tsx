@@ -257,7 +257,7 @@ export default function DocumentReview() {
           <BackAction fallback="/documents" label={t('documentReviewPage.label')} carrySearch />
         }
         title={t('documentReviewPage.title')}
-        meta={<span className="min-w-0 break-words"><bdi>{snapshot.document?.file_name ?? t('documentReviewPage.text_2')}</bdi></span>}
+        meta={<span className="min-w-0 break-words"><bdi dir="ltr">{snapshot.document?.file_name ?? t('documentReviewPage.text_2')}</bdi></span>}
         secondaryActions={processing.fetching ? (
           <span className="inline-flex min-h-11 items-center gap-2 text-sm text-ink-muted" role="status">
             <RefreshCw className="animate-spin" size={ICON.md} aria-hidden="true" /> {t('documentReviewPage.updatingData')}

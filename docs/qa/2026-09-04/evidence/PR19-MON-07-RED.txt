@@ -1,0 +1,392 @@
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a38a04215f5153dab
+
+ ❯ src/pages/consolidatedAwaitingScan.spec.tsx (3 tests | 2 failed) 3349ms
+     × קורא למצב בשם הקנוני של המוצר ולא בשם פרטי של המסך הזה 220ms
+     × אומר מה תקוע ומה לעשות, ולא רק באיזה מצב זה נמצא 3040ms
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 1 passed (3)
+   Start at  05:11:41
+   Duration  6.78s (transform 961ms, setup 681ms, import 1.40s, tests 3.35s, environment 1.11s)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/consolidatedAwaitingScan.spec.tsx > MON-07 · עמוד חבילה שממתין לאישור סריקה > קורא למצב בשם הקנוני של המוצר ולא בשם פרטי של המסך הזה
+Error: [2mexpect([22m[31melement[39m[2m).toHaveTextContent()[22m
+
+Expected element to have text content:
+[32m  ממתין לאישור סריקה[39m
+Received:
+[31m  עמוד 1 · consolidated-page-1.pngעוגן החשבונית · ממתין לזיהוי · ממתין לסריקהבדיקת העמוד[39m
+ ❯ src/pages/consolidatedAwaitingScan.spec.tsx:128:19
+    126|     // asserting against the wrong ancestor is a red that has nothing …
+    127|     const block = (await screen.findByText(/consolidated-page-1\.png/)…
+    128|     expect(block).toHaveTextContent(he.documentStatus.awaitingScanAppr…
+       |                   ^
+    129|     // The private wording. It reads as a machine queue the owner can …
+    130|     // exactly the reading that let one page sit for a day with nobody…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/pages/consolidatedAwaitingScan.spec.tsx > MON-07 · עמוד חבילה שממתין לאישור סריקה > אומר מה תקוע ומה לעשות, ולא רק באיזה מצב זה נמצא
+TestingLibraryElementError: Unable to find an element with the text: צריך לפתוח את המסמך ולאשר את הסריקה כדי שהקריאה תתחיל.. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"space-y-6"[39m
+    [36m>[39m
+      [36m<header[39m
+        [33mclass[39m=[32m"flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between "[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"min-w-0 space-y-1"[39m
+        [36m>[39m
+          [36m<h1[39m
+            [33mclass[39m=[32m"page-title break-words"[39m
+          [36m>[39m
+            [0mחשבוניות מרכזות[0m
+          [36m</h1>[39m
+          [36m<span[39m
+            [33maria-hidden[39m=[32m"true"[39m
+            [33mclass[39m=[32m"section-mark"[39m
+          [36m/>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"text-sm text-ink-muted"[39m
+          [36m>[39m
+            [0mקליטת חשבונית מרכזת של ספק והתאמת מסמכי אותו חודש אליה כעוגן חוב אחד.[0m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"text-sm text-ink-soft"[39m
+          [36m>[39m
+            [0mחשבונית ספק אחת מרכזת את מסמכי אותו ספק בחודש הקודם ומשמשת כעוגן החוב היחיד.[0m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex shrink-0 flex-wrap items-center gap-2"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"btn-secondary min-h-11"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [0mכל תיקי ההתאמה[0m
+          [36m</button>[39m
+        [36m</div>[39m
+      [36m</header>[39m
+      [36m<section[39m
+        [33maria-labelledby[39m=[32m"consolidated-intake-title"[39m
+        [33mclass[39m=[32m"card card-pad  space-y-4"[39m
+      [36m>[39m
+        [36m<div>[39m
+          [36m<h2[39m
+            [33mclass[39m=[32m"section-title"[39m
+            [33mid[39m=[32m"consolidated-intake-title"[39m
+          [36m>[39m
+            [0mקליטת חשבונית מרכזת[0m
+          [36m</h2>[39m
+          [36m<p[39m
+            [33mclass[39m=[32m"mt-1 text-sm text-ink-soft"[39m
+          [36m>[39m
+            [0mבחרו ספק וישות משפטית, ואז צלמו או העלו את כל עמודי החשבונית בפעולה אחת.[0m
+          [36m</p>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"grid gap-4 lg:grid-cols-3"[39m
+        [36m>[39m
+          [36m<div>[39m
+            [36m<label[39m
+              [33mclass[39m=[32m"label"[39m
+              [33mfor[39m=[32m"consolidated-supplier"[39m
+            [36m>[39m
+              [0mספק קנוני *[0m
+            [36m</label>[39m
+            [36m<div[39m
+              [33maria-label[39m=[32m"ספק קנוני — בחירה או יצירה"[39m
+              [33mclass[39m=[32m"flex items-center gap-2"[39m
+              [33mrole[39m=[32m"group"[39m
+            [36m>[39m
+              [36m<select[39m
+                [33maria-describedby[39m=[32m"consolidated-supplier-quick-create-field-hint"[39m
+                [33mclass[39m=[32m"input min-w-0"[39m
+                [33mid[39m=[32m"consolidated-supplier"[39m
+              [36m>[39m
+                [36m<option[39m
+                  [33mvalue[39m=[32m""[39m
+                [36m>[39m
+                  [0mבחירת ספק[0m
+                [36m</option>[39m
+                [36m<option[39m
+                  [33mvalue[39m=[32m"sup-1"[39m
+                [36m>[39m
+                  [0mאריזות הדרום[0m
+                [36m</option>[39m
+              [36m</select>[39m
+              [36m<button[39m
+                [33maria-describedby[39m=[32m"consolidated-supplier-quick-create-hint"[39m
+                [33mclass[39m=[32m"btn-secondary shrink-0"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [36m<svg[39m
+                  [33maria-hidden[39m=[32m"true"[39m
+                  [33mclass[39m=[32m"lucide lucide-plus"[39m
+                  [33mfill[39m=[32m"none"[39m
+                  [33mheight[39m=[32m"15"[39m
+                  [33mstroke[39m=[32m"currentColor"[39m
+                  [33mstroke-linecap[39m=[32m"round"[39m
+                  [33mstroke-linejoin[39m=[32m"round"[39m
+                  [33mstroke-width[39m=[32m"2"[39m
+                  [33mviewBox[39m=[32m"0 0 24 24"[39m
+                  [33mwidth[39m=[32m"15"[39m
+                  [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+                [36m>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"M5 12h14"[39m
+                  [36m/>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"M12 5v14"[39m
+                  [36m/>[39m
+                [36m</svg>[39m
+                [0m [0m
+                [0mספק חדש[0m
+              [36m</button>[39m
+            [36m</div>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"sr-only"[39m
+              [33mid[39m=[32m"consolidated-supplier-quick-create-field-hint"[39m
+            [36m>[39m
+              [0mאין ספק מתאים ברשימה? הכפתור ״ספק חדש״ שליד יוצר ספק ובוחר אותו כאן.[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"sr-only"[39m
+              [33mid[39m=[32m"consolidated-supplier-quick-create-hint"[39m
+            [36m>[39m
+              [0mהספק החדש ייווצר וייבחר מיד בשדה זה[0m
+            [36m</span>[39m
+          [36m</div>[39m
+          [36m<div>[39m
+            [36m<label[39m
+              [33mclass[39m=[32m"label"[39m
+              [33mfor[39m=[32m"consolidated-legal-entity"[39m
+            [36m>[39m
+              [0mישות משפטית *[0m
+            [36m</label>[39m
+            [36m<select[39m
+              [33mclass[39m=[32m"input"[39m
+              [33mid[39m=[32m"consolidated-legal-entity"[39m
+            [36m>[39m
+              [36m<option[39m
+                [33mvalue[39m=[32m""[39m
+              [36m>[39m
+                [0mבחירת ישות משפטית[0m
+              [36m</option>[39m
+              [36m<option[39m
+                [33mvalue[39m=[32m"le-1"[39m
+              [36m>[39m
+                [0mישות משפטית[0m
+              [36m</option>[39m
+            [36m</select>[39m
+          [36m</div>[39m
+          [36m<div>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"label"[39m
+            [36m>[39m
+              [0mחודש החשבונית[0m
+            [36m</span>[39m
+            [36m<div[39m
+              [33maria-label[39m=[32m"חודש נעול: אוגוסט 2026"[39m
+              [33mclass[39m=[32m"input flex min-h-11 items-center bg-surface-sunken font-medium"[39m
+            [36m>[39m
+              [0mאוגוסט 2026[0m
+            [36m</div>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"mt-1 text-xs text-ink-muted"[39m
+            [36m>[39m
+              [0mהחודש הקלנדרי הקודם לפי שעון ישראל; לא ניתן לש...
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"space-y-6"[39m
+    [36m>[39m
+      [36m<header[39m
+        [33mclass[39m=[32m"flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between "[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"min-w-0 space-y-1"[39m
+        [36m>[39m
+          [36m<h1[39m
+            [33mclass[39m=[32m"page-title break-words"[39m
+          [36m>[39m
+            [0mחשבוניות מרכזות[0m
+          [36m</h1>[39m
+          [36m<span[39m
+            [33maria-hidden[39m=[32m"true"[39m
+            [33mclass[39m=[32m"section-mark"[39m
+          [36m/>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"text-sm text-ink-muted"[39m
+          [36m>[39m
+            [0mקליטת חשבונית מרכזת של ספק והתאמת מסמכי אותו חודש אליה כעוגן חוב אחד.[0m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"text-sm text-ink-soft"[39m
+          [36m>[39m
+            [0mחשבונית ספק אחת מרכזת את מסמכי אותו ספק בחודש הקודם ומשמשת כעוגן החוב היחיד.[0m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex shrink-0 flex-wrap items-center gap-2"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"btn-secondary min-h-11"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [0mכל תיקי ההתאמה[0m
+          [36m</button>[39m
+        [36m</div>[39m
+      [36m</header>[39m
+      [36m<section[39m
+        [33maria-labelledby[39m=[32m"consolidated-intake-title"[39m
+        [33mclass[39m=[32m"card card-pad  space-y-4"[39m
+      [36m>[39m
+        [36m<div>[39m
+          [36m<h2[39m
+            [33mclass[39m=[32m"section-title"[39m
+            [33mid[39m=[32m"consolidated-intake-title"[39m
+          [36m>[39m
+            [0mקליטת חשבונית מרכזת[0m
+          [36m</h2>[39m
+          [36m<p[39m
+            [33mclass[39m=[32m"mt-1 text-sm text-ink-soft"[39m
+          [36m>[39m
+            [0mבחרו ספק וישות משפטית, ואז צלמו או העלו את כל עמודי החשבונית בפעולה אחת.[0m
+          [36m</p>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"grid gap-4 lg:grid-cols-3"[39m
+        [36m>[39m
+          [36m<div>[39m
+            [36m<label[39m
+              [33mclass[39m=[32m"label"[39m
+              [33mfor[39m=[32m"consolidated-supplier"[39m
+            [36m>[39m
+              [0mספק קנוני *[0m
+            [36m</label>[39m
+            [36m<div[39m
+              [33maria-label[39m=[32m"ספק קנוני — בחירה או יצירה"[39m
+              [33mclass[39m=[32m"flex items-center gap-2"[39m
+              [33mrole[39m=[32m"group"[39m
+            [36m>[39m
+              [36m<select[39m
+                [33maria-describedby[39m=[32m"consolidated-supplier-quick-create-field-hint"[39m
+                [33mclass[39m=[32m"input min-w-0"[39m
+                [33mid[39m=[32m"consolidated-supplier"[39m
+              [36m>[39m
+                [36m<option[39m
+                  [33mvalue[39m=[32m""[39m
+                [36m>[39m
+                  [0mבחירת ספק[0m
+                [36m</option>[39m
+                [36m<option[39m
+                  [33mvalue[39m=[32m"sup-1"[39m
+                [36m>[39m
+                  [0mאריזות הדרום[0m
+                [36m</option>[39m
+              [36m</select>[39m
+              [36m<button[39m
+                [33maria-describedby[39m=[32m"consolidated-supplier-quick-create-hint"[39m
+                [33mclass[39m=[32m"btn-secondary shrink-0"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [36m<svg[39m
+                  [33maria-hidden[39m=[32m"true"[39m
+                  [33mclass[39m=[32m"lucide lucide-plus"[39m
+                  [33mfill[39m=[32m"none"[39m
+                  [33mheight[39m=[32m"15"[39m
+                  [33mstroke[39m=[32m"currentColor"[39m
+                  [33mstroke-linecap[39m=[32m"round"[39m
+                  [33mstroke-linejoin[39m=[32m"round"[39m
+                  [33mstroke-width[39m=[32m"2"[39m
+                  [33mviewBox[39m=[32m"0 0 24 24"[39m
+                  [33mwidth[39m=[32m"15"[39m
+                  [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+                [36m>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"M5 12h14"[39m
+                  [36m/>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"M12 5v14"[39m
+                  [36m/>[39m
+                [36m</svg>[39m
+                [0m [0m
+                [0mספק חדש[0m
+              [36m</button>[39m
+            [36m</div>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"sr-only"[39m
+              [33mid[39m=[32m"consolidated-supplier-quick-create-field-hint"[39m
+            [36m>[39m
+              [0mאין ספק מתאים ברשימה? הכפתור ״ספק חדש״ שליד יוצר ספק ובוחר אותו כאן.[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"sr-only"[39m
+              [33mid[39m=[32m"consolidated-supplier-quick-create-hint"[39m
+            [36m>[39m
+              [0mהספק החדש ייווצר וייבחר מיד בשדה זה[0m
+            [36m</span>[39m
+          [36m</div>[39m
+          [36m<div>[39m
+            [36m<label[39m
+              [33mclass[39m=[32m"label"[39m
+              [33mfor[39m=[32m"consolidated-legal-entity"[39m
+            [36m>[39m
+              [0mישות משפטית *[0m
+            [36m</label>[39m
+            [36m<select[39m
+              [33mclass[39m=[32m"input"[39m
+              [33mid[39m=[32m"consolidated-legal-entity"[39m
+            [36m>[39m
+              [36m<option[39m
+                [33mvalue[39m=[32m""[39m
+              [36m>[39m
+                [0mבחירת ישות משפטית[0m
+              [36m</option>[39m
+              [36m<option[39m
+                [33mvalue[39m=[32m"le-1"[39m
+              [36m>[39m
+                [0mישות משפטית[0m
+              [36m</option>[39m
+            [36m</select>[39m
+          [36m</div>[39m
+          [36m<div>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"label"[39m
+            [36m>[39m
+              [0mחודש החשבונית[0m
+            [36m</span>[39m
+            [36m<div[39m
+              [33maria-label[39m=[32m"חודש נעול: אוגוסט 2026"[39m
+              [33mclass[39m=[32m"input flex min-h-11 items-center bg-surface-sunken font-medium"[39m
+            [36m>[39m
+              [0mאוגוסט 2026[0m
+            [36m</div>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"mt-1 text-xs text-ink-muted"[39m
+            [36m>[39m
+              [0mהחודש הקלנדרי הקודם לפי שעון ישראל; לא ניתן לש...
+ ❯ waitForWrapper ../../../node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ src/pages/consolidatedAwaitingScan.spec.tsx:138:25
+    136|     renderCase();
+    137|
+    138|     expect(await screen.findByText(he.documentStatus.awaitingScanAppro…
+       |                         ^
+    139|   });
+    140|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+

@@ -1,0 +1,44 @@
+PR05 - PERM-01 - GREEN - the client half
+=========================================
+Same tree as PR05-PERM01-RED.txt plus the four narrowed reads:
+
+  src/auth/AuthContext.tsx:152   profiles      select('*') -> select(PROFILE_COLUMNS)
+  src/auth/AuthContext.tsx:159   organizations select('*') -> select(ORGANIZATION_COLUMNS)
+  src/auth/AuthContext.tsx:263   organizations select('*') -> select(ORGANIZATION_COLUMNS)
+  src/pages/Settings.tsx:128     profiles      select('*') -> select(PROFILE_COLUMNS)
+
+WHAT THIS COMMIT DOES NOT DO. It closes nothing. Every column it stopped ASKING for is still
+SERVED to office and accountant by a crafted PostgREST request; PERM-01 stays DIAGNOSED until
+migration 0319 and suite p112 land. What it buys is that the revoke in 0319 can be deployed
+without 403-ing an open tab: `*` expands to every column, and PostgreSQL refuses the whole
+statement rather than the one column it may not read.
+
+1) The oracle
+   Command: npx vitest run src/pages/accountColumnBoundary.spec.tsx
+   Result:  4 passed (4)          [ RED was 3 failed | 1 passed ]
+   The control -- `invitations` was already read by name -- is green in BOTH runs.
+
+2) The static guard, same command that was red
+   Command: npm run check:profile-columns
+   check:profile-columns passed: zero `select('*')` against profiles or organizations across 580 files.
+
+3) The guard is actually wired, derived rather than asserted
+   Command: npm run check:gate-controls
+     wiring
+       + all 12 guards reachable from package.json and build.yml
+       + all 33 `verify` sub-commands appear in build.yml
+     check:gate-controls passed: 49 controls, every guard failed exactly when it should.
+   33 was 32 before this commit. The second line is the control the brief asked for: a guard added
+   to `verify` alone, with no step in build.yml, turns it red instead of running nowhere.
+
+4) Nothing else moved
+   npm run typecheck            clean
+   npm run check:workflow-triggers   2 pull_request trigger(s), none filtered by base branch
+   npm run check:decision-numbers    333 rulings, none duplicated, 1862 code citations resolve
+   npm run check:renumber-closure    306 migrations, 750 filename references resolve
+   npm run check:dead-code           knip: no unused files/exports (5 pre-existing config hints)
+   npx vitest run                    290 files, 2778 passed (2778)
+
+NOT RUN, and why: `npm run verify` whole and `npm run quality` -- the campaign runs one baseline
+verify on an idle machine and the local Supabase stack is held by another agent. No SQL ran for
+this commit; it touches no migration.

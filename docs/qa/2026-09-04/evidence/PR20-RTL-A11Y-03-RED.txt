@@ -1,0 +1,2265 @@
+RTL-A11Y-03 — /prices at 390px loses the unit of measure and the previous price, on the screen
+whose job is comparing prices.
+
+ORACLE (GATES.md): at 390px /prices shows unit of measure and previous price. The ui.tsx override
+alone does not close it — /prices passed no columnPicker, so there was nothing to turn on.
+
+WHAT IS RUN: the real /prices screen rendered at a phone viewport with its data served from a
+fixture. Two claims: the mobile sheet contains a column checklist at all, and ticking יחידה and
+מחיר קודם puts both on the card — with 12.50, the base the −74.4% was computed from.
+
+The same file carries RTL-A11Y-04's two claims; both ids share one run.
+
+RUN AGAINST THE UNFIXED TREE. An oracle that has never been seen failing is a claim, not a
+check (plan §6, gate G14).
+
+COMMAND: npx vitest run src/pages/mobileColumnScreens.spec.tsx
+  (run from another worktree in this session, so the actual invocation carried the tree
+   explicitly: npx vitest run --root <worktree> --config <worktree>/vitest.config.ts <spec>)
+
+------------------------------------------------------------------------------
+
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/pr20-mobile-columns
+
+ ❯ src/pages/mobileColumnScreens.spec.tsx (4 tests | 4 failed) 1393ms
+     × offers a column checklist in the mobile sheet at all 560ms
+     × puts יחידה and מחיר קודם on the card when the viewer turns them on 297ms
+     × offers a column checklist in the mobile sheet at all 241ms
+     × puts איש קשר and מינ׳ הזמנה on the card when the viewer turns them on 288ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/mobileColumnScreens.spec.tsx > /prices at 390px — the unit and the previous price are reachable (RTL-A11Y-03) > offers a column checklist in the mobile sheet at all
+TestingLibraryElementError: Unable to find an accessible element with the role "group" and name "בחירת עמודות"
+
+Here are the accessible roles:
+
+  banner:
+
+  Name "":
+  <header
+    class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between "
+  />
+
+  --------------------------------------------------
+  heading:
+
+  Name "מחירונים":
+  <h1
+    class="page-title break-words"
+  />
+
+  Name "הגשות מחירון חודשיות":
+  <h2
+    class="section-title"
+    id="price-submissions-heading"
+  />
+
+  --------------------------------------------------
+  button:
+
+  Name "ייבוא רב־ספקים מ־Excel":
+  <button
+    class="btn-secondary"
+  />
+
+  Name "העלאת מחירון":
+  <button
+    class="btn-primary"
+    data-tour-anchor="prices-upload"
+  />
+
+  Name "סינון ותצוגה":
+  <button
+    aria-expanded="true"
+    aria-haspopup="dialog"
+    class="btn-secondary"
+    type="button"
+  />
+
+  Name "פעולות עבור חסה ערבית אצל משק ירוק":
+  <button
+    aria-expanded="false"
+    aria-haspopup="menu"
+    aria-label="פעולות עבור חסה ערבית אצל משק ירוק"
+    class="btn-ghost btn-icon rounded-none!"
+    type="button"
+  />
+
+  Name "מוצר":
+  <button
+    class="inline-flex min-h-11 min-w-11 items-center gap-1 hover:text-shell-ink cursor-pointer focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+    type="button"
+  />
+
+  Name "ספק":
+  <button
+    class="inline-flex min-h-11 min-w-11 items-center gap-1 hover:text-shell-ink cursor-pointer focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+    type="button"
+  />
+
+  Name "מחיר נוכחי":
+  <button
+    class="inline-flex min-h-11 min-w-11 items-center gap-1 hover:text-shell-ink cursor-pointer focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+    type="button"
+  />
+
+  Name "שינוי":
+  <button
+    class="inline-flex min-h-11 min-w-11 items-center gap-1 hover:text-shell-ink cursor-pointer focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+    type="button"
+  />
+
+  Name "בתוקף מ־":
+  <button
+    class="inline-flex min-h-11 min-w-11 items-center gap-1 hover:text-shell-ink cursor-pointer focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+    type="button"
+  />
+
+  Name "פעולות עבור חסה ערבית אצל משק ירוק":
+  <button
+    aria-expanded="false"
+    aria-haspopup="menu"
+    aria-label="פעולות עבור חסה ערבית אצל משק ירוק"
+    class="btn-ghost btn-icon rounded-none!"
+    type="button"
+  />
+
+  --------------------------------------------------
+  textbox:
+
+  Name "חיפוש במחירונים":
+  <input
+    aria-label="חיפוש במחירונים"
+    class="input ps-9!"
+    placeholder="חיפוש..."
+    value=""
+  />
+
+  --------------------------------------------------
+  list:
+
+  Name "":
+  <ul
+    class="lg:hidden divide-y divide-line-soft"
+  />
+
+  --------------------------------------------------
+  listitem:
+
+  Name "":
+  <li
+    class="mobile-data-card p-4  flex items-start gap-2"
+  />
+
+  --------------------------------------------------
+  region:
+
+  Name "טבלת נתונים — ניתן לגלול אופקית":
+  <div
+    aria-label="טבלת נתונים — ניתן לגלול אופקית"
+    class="table-scroll overflow-x-auto hidden lg:block"
+    role="region"
+    tabindex="0"
+  />
+
+  Name "הגשות מחירון חודשיות":
+  <section
+    aria-labelledby="price-submissions-heading"
+    class="card p-4"
+  />
+
+  --------------------------------------------------
+  table:
+
+  Name "":
+  <table
+    class="w-full"
+  />
+
+  --------------------------------------------------
+  rowgroup:
+
+  Name "":
+  <thead
+    class="table-head border-b border-line-soft"
+  />
+
+  Name "":
+  <tbody
+    class="divide-y divide-line-soft"
+  />
+
+  --------------------------------------------------
+  row:
+
+  Name "מוצר ספק יחידה מחיר נוכחי מחיר קודם שינוי בתוקף מ־ זמינות פעולות":
+  <tr />
+
+  Name "חסה ערבית משק ירוק kg ‏3.20 ‏₪ ‏12.50 ‏₪ ‎-74.4% 01.08.2026 זמין":
+  <tr
+    class=""
+  />
+
+  --------------------------------------------------
+  columnheader:
+
+  Name "מוצר":
+  <th
+    aria-sort="none"
+    class="th"
+    scope="col"
+  />
+
+  Name "ספק":
+  <th
+    aria-sort="none"
+    class="th"
+    scope="col"
+  />
+
+  Name "יחידה":
+  <th
+    class="th"
+    scope="col"
+  />
+
+  Name "מחיר נוכחי":
+  <th
+    aria-sort="none"
+    class="th"
+    scope="col"
+  />
+
+  Name "מחיר קודם":
+  <th
+    class="th"
+    scope="col"
+  />
+
+  Name "שינוי":
+  <th
+    aria-sort="none"
+    class="th"
+    scope="col"
+  />
+
+  Name "בתוקף מ־":
+  <th
+    aria-sort="none"
+    class="th"
+    scope="col"
+  />
+
+  Name "זמינות":
+  <th
+    class="th"
+    scope="col"
+  />
+
+  Name "פעולות":
+  <th
+    class="th w-12"
+    scope="col"
+  />
+
+  --------------------------------------------------
+  cell:
+
+  Name "חסה ערבית":
+  <td
+    class="td "
+  />
+
+  Name "משק ירוק":
+  <td
+    class="td "
+  />
+
+  Name "kg":
+  <td
+    class="td "
+  />
+
+  Name "‏3.20 ‏₪":
+  <td
+    class="td num"
+  />
+
+  Name "‏12.50 ‏₪":
+  <td
+    class="td num"
+  />
+
+  Name "‎-74.4%":
+  <td
+    class="td "
+  />
+
+  Name "01.08.2026":
+  <td
+    class="td "
+  />
+
+  Name "זמין":
+  <td
+    class="td "
+  />
+
+  Name "":
+  <td
+    class="td w-12 py-0.5!"
+  />
+
+  --------------------------------------------------
+  paragraph:
+
+  Name "":
+  <p
+    class="text-sm text-ink-muted"
+  />
+
+  --------------------------------------------------dialog:
+
+  Name "סינון ותצוגה":
+  <div
+    aria-labelledby="_r_0_"
+    aria-modal="true"
+    class="dialog-panel-safe bg-surface rounded-t-2xl sm:rounded-2xl shadow-dialog w-full sm:max-w-lg flex flex-col focus:outline-none"
+    role="dialog"
+    tabindex="-1"
+  />
+
+  --------------------------------------------------
+  heading:
+
+  Name "סינון ותצוגה":
+  <h3
+    class="font-semibold text-ink focus:outline-none"
+    id="_r_0_"
+    tabindex="-1"
+  />
+
+  --------------------------------------------------
+  button:
+
+  Name "סגירה":
+  <button
+    aria-label="סגירה"
+    class="btn-ghost p-1.5! min-w-11 min-h-11"
+    type="button"
+  />
+
+  --------------------------------------------------
+  combobox:
+
+  Name "סינון מחירונים לפי ספק":
+  <select
+    aria-label="סינון מחירונים לפי ספק"
+    class="input w-auto!"
+  />
+
+  Name "חלון זמן לשינויי מחיר":
+  <select
+    aria-label="חלון זמן לשינויי מחיר"
+    class="input w-auto!"
+  />
+
+  --------------------------------------------------
+  option:
+
+  Name "כל הספקים":
+  <option
+    value=""
+  />
+
+  Name "משק ירוק":
+  <option
+    value="sup-1"
+  />
+
+  Name "בכל זמן":
+  <option
+    value=""
+  />
+
+  Name "7 הימים האחרונים":
+  <option
+    value="7"
+  />
+
+  Name "30 הימים האחרונים":
+  <option
+    value="30"
+  />
+
+  Name "90 הימים האחרונים":
+  <option
+    value="90"
+  />
+
+  --------------------------------------------------
+  checkbox:
+
+  Name "רק התייקרויות":
+  <input
+    class="rounded"
+    type="checkbox"
+  />
+
+  --------------------------------------------------
+
+Ignored nodes: comments, script, style
+<body
+  style="overflow: hidden;"
+>
+  <div>
+    <div
+      class="space-y-4"
+    >
+      <header
+        class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between "
+      >
+        <div
+          class="min-w-0 space-y-1"
+        >
+          <h1
+            class="page-title break-words"
+          >
+            מחירונים
+          </h1>
+          <span
+            aria-hidden="true"
+            class="section-mark"
+          />
+          <div
+            class="text-sm text-ink-muted"
+          >
+            השוואת מחירי הספקים לכל מוצר, איתור התייקרויות וייבוא מחירונים חדשים.
+          </div>
+          <div
+            class="text-sm text-ink-soft"
+          >
+            1 מחירי ספקים · 0 התייקרויות
+          </div>
+        </div>
+        <div
+          class="flex shrink-0 flex-wrap items-center gap-2"
+        >
+          <div
+            class="flex flex-wrap gap-2"
+          >
+            <button
+              class="btn-secondary"
+            >
+              <svg
+                aria-hidden="true"
+                class="lucide lucide-upload"
+                fill="none"
+                height="15"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                viewBox="0 0 24 24"
+                width="15"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M12 3v12"
+                />
+                <path
+                  d="m17 8-5-5-5 5"
+                />
+                <path
+                  d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
+                />
+              </svg>
+               ייבוא רב־ספקים מ־Excel
+            </button>
+            <button
+              class="btn-primary"
+              data-tour-anchor="prices-upload"
+            >
+              <svg
+                aria-hidden="true"
+                class="lucide lucide-upload"
+                fill="none"
+                height="15"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                viewBox="0 0 24 24"
+                width="15"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M12 3v12"
+                />
+                <path
+                  d="m17 8-5-5-5 5"
+                />
+                <path
+                  d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
+                />
+              </svg>
+               העלאת מחירון
+            </button>
+          </div>
+        </div>
+      </header>
+      <div
+        class="card overflow-hidden"
+      >
+        <div
+          class="flex flex-wrap items-center gap-2 p-3 border-b border-line-soft"
+        >
+          <div
+            class="relative flex-1 min-w-44 max-w-xs"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-search absolute top-1/2 -translate-y-1/2 start-3 text-ink-faint"
+              fill="none"
+              height="15"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="15"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="m21 21-4.34-4.34"
+              />
+              <circle
+                cx="11"
+                cy="11"
+                r="8"
+              />
+            </svg>
+            <input
+              aria-label="חיפוש במחירונים"
+              class="input ps-9!"
+              placeholder="חיפוש..."
+              value=""
+            />
+          </div>
+          <button
+            aria-expanded="true"
+            aria-haspopup="dialog"
+            class="btn-secondary"
+            type="button"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-sliders-horizontal"
+              fill="none"
+              height="15"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="15"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M10 5H3"
+              />
+              <path
+                d="M12 19H3"
+              />
+              <path
+                d="M14 3v4"
+              />[3...
+ ❯ Object.getElementError ../../../node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/pages/mobileColumnScreens.spec.tsx:117:19
+    115|     expect((await screen.findAllByText('משק ירוק')).length).toBeGreate…
+    116|     openSheet();
+    117|     expect(screen.getByRole('group', { name: 'בחירת עמודות' })).toBeIn…
+       |                   ^
+    118|   });
+    119|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  src/pages/mobileColumnScreens.spec.tsx > /prices at 390px — the unit and the previous price are reachable (RTL-A11Y-03) > puts יחידה and מחיר קודם on the card when the viewer turns them on
+TestingLibraryElementError: Unable to find an accessible element with the role "checkbox" and name "יחידה"
+
+Here are the accessible roles:
+
+  banner:
+
+  Name "":
+  <header
+    class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between "
+  />
+
+  --------------------------------------------------
+  heading:
+
+  Name "מחירונים":
+  <h1
+    class="page-title break-words"
+  />
+
+  Name "הגשות מחירון חודשיות":
+  <h2
+    class="section-title"
+    id="price-submissions-heading"
+  />
+
+  --------------------------------------------------
+  button:
+
+  Name "ייבוא רב־ספקים מ־Excel":
+  <button
+    class="btn-secondary"
+  />
+
+  Name "העלאת מחירון":
+  <button
+    class="btn-primary"
+    data-tour-anchor="prices-upload"
+  />
+
+  Name "סינון ותצוגה":
+  <button
+    aria-expanded="true"
+    aria-haspopup="dialog"
+    class="btn-secondary"
+    type="button"
+  />
+
+  Name "פעולות עבור חסה ערבית אצל משק ירוק":
+  <button
+    aria-expanded="false"
+    aria-haspopup="menu"
+    aria-label="פעולות עבור חסה ערבית אצל משק ירוק"
+    class="btn-ghost btn-icon rounded-none!"
+    type="button"
+  />
+
+  Name "מוצר":
+  <button
+    class="inline-flex min-h-11 min-w-11 items-center gap-1 hover:text-shell-ink cursor-pointer focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+    type="button"
+  />
+
+  Name "ספק":
+  <button
+    class="inline-flex min-h-11 min-w-11 items-center gap-1 hover:text-shell-ink cursor-pointer focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+    type="button"
+  />
+
+  Name "מחיר נוכחי":
+  <button
+    class="inline-flex min-h-11 min-w-11 items-center gap-1 hover:text-shell-ink cursor-pointer focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+    type="button"
+  />
+
+  Name "שינוי":
+  <button
+    class="inline-flex min-h-11 min-w-11 items-center gap-1 hover:text-shell-ink cursor-pointer focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+    type="button"
+  />
+
+  Name "בתוקף מ־":
+  <button
+    class="inline-flex min-h-11 min-w-11 items-center gap-1 hover:text-shell-ink cursor-pointer focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+    type="button"
+  />
+
+  Name "פעולות עבור חסה ערבית אצל משק ירוק":
+  <button
+    aria-expanded="false"
+    aria-haspopup="menu"
+    aria-label="פעולות עבור חסה ערבית אצל משק ירוק"
+    class="btn-ghost btn-icon rounded-none!"
+    type="button"
+  />
+
+  --------------------------------------------------
+  textbox:
+
+  Name "חיפוש במחירונים":
+  <input
+    aria-label="חיפוש במחירונים"
+    class="input ps-9!"
+    placeholder="חיפוש..."
+    value=""
+  />
+
+  --------------------------------------------------
+  list:
+
+  Name "":
+  <ul
+    class="lg:hidden divide-y divide-line-soft"
+  />
+
+  --------------------------------------------------
+  listitem:
+
+  Name "":
+  <li
+    class="mobile-data-card p-4  flex items-start gap-2"
+  />
+
+  --------------------------------------------------
+  region:
+
+  Name "טבלת נתונים — ניתן לגלול אופקית":
+  <div
+    aria-label="טבלת נתונים — ניתן לגלול אופקית"
+    class="table-scroll overflow-x-auto hidden lg:block"
+    role="region"
+    tabindex="0"
+  />
+
+  Name "הגשות מחירון חודשיות":
+  <section
+    aria-labelledby="price-submissions-heading"
+    class="card p-4"
+  />
+
+  --------------------------------------------------
+  table:
+
+  Name "":
+  <table
+    class="w-full"
+  />
+
+  --------------------------------------------------
+  rowgroup:
+
+  Name "":
+  <thead
+    class="table-head border-b border-line-soft"
+  />
+
+  Name "":
+  <tbody
+    class="divide-y divide-line-soft"
+  />
+
+  --------------------------------------------------
+  row:
+
+  Name "מוצר ספק יחידה מחיר נוכחי מחיר קודם שינוי בתוקף מ־ זמינות פעולות":
+  <tr />
+
+  Name "חסה ערבית משק ירוק kg ‏3.20 ‏₪ ‏12.50 ‏₪ ‎-74.4% 01.08.2026 זמין":
+  <tr
+    class=""
+  />
+
+  --------------------------------------------------
+  columnheader:
+
+  Name "מוצר":
+  <th
+    aria-sort="none"
+    class="th"
+    scope="col"
+  />
+
+  Name "ספק":
+  <th
+    aria-sort="none"
+    class="th"
+    scope="col"
+  />
+
+  Name "יחידה":
+  <th
+    class="th"
+    scope="col"
+  />
+
+  Name "מחיר נוכחי":
+  <th
+    aria-sort="none"
+    class="th"
+    scope="col"
+  />
+
+  Name "מחיר קודם":
+  <th
+    class="th"
+    scope="col"
+  />
+
+  Name "שינוי":
+  <th
+    aria-sort="none"
+    class="th"
+    scope="col"
+  />
+
+  Name "בתוקף מ־":
+  <th
+    aria-sort="none"
+    class="th"
+    scope="col"
+  />
+
+  Name "זמינות":
+  <th
+    class="th"
+    scope="col"
+  />
+
+  Name "פעולות":
+  <th
+    class="th w-12"
+    scope="col"
+  />
+
+  --------------------------------------------------
+  cell:
+
+  Name "חסה ערבית":
+  <td
+    class="td "
+  />
+
+  Name "משק ירוק":
+  <td
+    class="td "
+  />
+
+  Name "kg":
+  <td
+    class="td "
+  />
+
+  Name "‏3.20 ‏₪":
+  <td
+    class="td num"
+  />
+
+  Name "‏12.50 ‏₪":
+  <td
+    class="td num"
+  />
+
+  Name "‎-74.4%":
+  <td
+    class="td "
+  />
+
+  Name "01.08.2026":
+  <td
+    class="td "
+  />
+
+  Name "זמין":
+  <td
+    class="td "
+  />
+
+  Name "":
+  <td
+    class="td w-12 py-0.5!"
+  />
+
+  --------------------------------------------------
+  paragraph:
+
+  Name "":
+  <p
+    class="text-sm text-ink-muted"
+  />
+
+  --------------------------------------------------dialog:
+
+  Name "סינון ותצוגה":
+  <div
+    aria-labelledby="_r_2_"
+    aria-modal="true"
+    class="dialog-panel-safe bg-surface rounded-t-2xl sm:rounded-2xl shadow-dialog w-full sm:max-w-lg flex flex-col focus:outline-none"
+    role="dialog"
+    tabindex="-1"
+  />
+
+  --------------------------------------------------
+  heading:
+
+  Name "סינון ותצוגה":
+  <h3
+    class="font-semibold text-ink focus:outline-none"
+    id="_r_2_"
+    tabindex="-1"
+  />
+
+  --------------------------------------------------
+  button:
+
+  Name "סגירה":
+  <button
+    aria-label="סגירה"
+    class="btn-ghost p-1.5! min-w-11 min-h-11"
+    type="button"
+  />
+
+  --------------------------------------------------
+  combobox:
+
+  Name "סינון מחירונים לפי ספק":
+  <select
+    aria-label="סינון מחירונים לפי ספק"
+    class="input w-auto!"
+  />
+
+  Name "חלון זמן לשינויי מחיר":
+  <select
+    aria-label="חלון זמן לשינויי מחיר"
+    class="input w-auto!"
+  />
+
+  --------------------------------------------------
+  option:
+
+  Name "כל הספקים":
+  <option
+    value=""
+  />
+
+  Name "משק ירוק":
+  <option
+    value="sup-1"
+  />
+
+  Name "בכל זמן":
+  <option
+    value=""
+  />
+
+  Name "7 הימים האחרונים":
+  <option
+    value="7"
+  />
+
+  Name "30 הימים האחרונים":
+  <option
+    value="30"
+  />
+
+  Name "90 הימים האחרונים":
+  <option
+    value="90"
+  />
+
+  --------------------------------------------------
+  checkbox:
+
+  Name "רק התייקרויות":
+  <input
+    class="rounded"
+    type="checkbox"
+  />
+
+  --------------------------------------------------
+
+Ignored nodes: comments, script, style
+<body
+  style="overflow: hidden;"
+>
+  <div>
+    <div
+      class="space-y-4"
+    >
+      <header
+        class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between "
+      >
+        <div
+          class="min-w-0 space-y-1"
+        >
+          <h1
+            class="page-title break-words"
+          >
+            מחירונים
+          </h1>
+          <span
+            aria-hidden="true"
+            class="section-mark"
+          />
+          <div
+            class="text-sm text-ink-muted"
+          >
+            השוואת מחירי הספקים לכל מוצר, איתור התייקרויות וייבוא מחירונים חדשים.
+          </div>
+          <div
+            class="text-sm text-ink-soft"
+          >
+            1 מחירי ספקים · 0 התייקרויות
+          </div>
+        </div>
+        <div
+          class="flex shrink-0 flex-wrap items-center gap-2"
+        >
+          <div
+            class="flex flex-wrap gap-2"
+          >
+            <button
+              class="btn-secondary"
+            >
+              <svg
+                aria-hidden="true"
+                class="lucide lucide-upload"
+                fill="none"
+                height="15"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                viewBox="0 0 24 24"
+                width="15"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M12 3v12"
+                />
+                <path
+                  d="m17 8-5-5-5 5"
+                />
+                <path
+                  d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
+                />
+              </svg>
+               ייבוא רב־ספקים מ־Excel
+            </button>
+            <button
+              class="btn-primary"
+              data-tour-anchor="prices-upload"
+            >
+              <svg
+                aria-hidden="true"
+                class="lucide lucide-upload"
+                fill="none"
+                height="15"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                viewBox="0 0 24 24"
+                width="15"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M12 3v12"
+                />
+                <path
+                  d="m17 8-5-5-5 5"
+                />
+                <path
+                  d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
+                />
+              </svg>
+               העלאת מחירון
+            </button>
+          </div>
+        </div>
+      </header>
+      <div
+        class="card overflow-hidden"
+      >
+        <div
+          class="flex flex-wrap items-center gap-2 p-3 border-b border-line-soft"
+        >
+          <div
+            class="relative flex-1 min-w-44 max-w-xs"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-search absolute top-1/2 -translate-y-1/2 start-3 text-ink-faint"
+              fill="none"
+              height="15"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="15"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="m21 21-4.34-4.34"
+              />
+              <circle
+                cx="11"
+                cy="11"
+                r="8"
+              />
+            </svg>
+            <input
+              aria-label="חיפוש במחירונים"
+              class="input ps-9!"
+              placeholder="חיפוש..."
+              value=""
+            />
+          </div>
+          <button
+            aria-expanded="true"
+            aria-haspopup="dialog"
+            class="btn-secondary"
+            type="button"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-sliders-horizontal"
+              fill="none"
+              height="15"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="15"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M10 5H3"
+              />
+              <path
+                d="M12 19H3"
+              />
+              <path
+                d="M14 3v4"
+              />[3...
+ ❯ Object.getElementError ../../../node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ turnOn src/pages/mobileColumnScreens.spec.tsx:74:22
+     72| /** Tick a column in the sheet's checklist, asserting first that it re…
+     73| const turnOn = (header: string) => {
+     74|   const box = screen.getByRole('checkbox', { name: header });
+       |                      ^
+     75|   expect(box).not.toBeChecked();
+     76|   fireEvent.click(box);
+ ❯ src/pages/mobileColumnScreens.spec.tsx:129:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  src/pages/mobileColumnScreens.spec.tsx > /suppliers at 390px — rating, categories, contact and minimum order (RTL-A11Y-04) > offers a column checklist in the mobile sheet at all
+TestingLibraryElementError: Unable to find an accessible element with the role "group" and name "בחירת עמודות"
+
+Here are the accessible roles:
+
+  banner:
+
+  Name "":
+  <header
+    class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between "
+  />
+
+  --------------------------------------------------
+  heading:
+
+  Name "ספקים":
+  <h1
+    class="page-title break-words"
+  />
+
+  --------------------------------------------------
+  button:
+
+  Name "ספק חדש":
+  <button
+    class="btn-primary"
+    data-tour-anchor="suppliers-new"
+  />
+
+  Name "סינון ותצוגה":
+  <button
+    aria-expanded="true"
+    aria-haspopup="dialog"
+    class="btn-secondary"
+    type="button"
+  />
+
+  Name "אחים כהן":
+  <button
+    class="min-w-0 break-words text-start font-medium text-ink-body focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+    type="button"
+  />
+
+  Name "פעולות עבור ספק אחים כהן":
+  <button
+    aria-expanded="false"
+    aria-haspopup="menu"
+    aria-label="פעולות עבור ספק אחים כהן"
+    class="btn-ghost btn-icon rounded-none!"
+    type="button"
+  />
+
+  Name "ספק":
+  <button
+    class="inline-flex min-h-11 min-w-11 items-center gap-1 hover:text-shell-ink cursor-pointer focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+    type="button"
+  />
+
+  Name "דירוג":
+  <button
+    class="inline-flex min-h-11 min-w-11 items-center gap-1 hover:text-shell-ink cursor-pointer focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+    type="button"
+  />
+
+  Name "מינ׳ הזמנה":
+  <button
+    class="inline-flex min-h-11 min-w-11 items-center gap-1 hover:text-shell-ink cursor-pointer focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+    type="button"
+  />
+
+  Name "יתרה פתוחה":
+  <button
+    class="inline-flex min-h-11 min-w-11 items-center gap-1 hover:text-shell-ink cursor-pointer focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+    type="button"
+  />
+
+  Name "פתיחת ספק אחים כהן":
+  <button
+    aria-label="פתיחת ספק אחים כהן"
+    class="min-h-11 w-full text-start focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+    type="button"
+  />
+
+  Name "פעולות עבור ספק אחים כהן":
+  <button
+    aria-expanded="false"
+    aria-haspopup="menu"
+    aria-label="פעולות עבור ספק אחים כהן"
+    class="btn-ghost btn-icon rounded-none!"
+    type="button"
+  />
+
+  --------------------------------------------------
+  textbox:
+
+  Name "חיפוש בספקים":
+  <input
+    aria-label="חיפוש בספקים"
+    class="input ps-9!"
+    placeholder="חיפוש..."
+    value=""
+  />
+
+  --------------------------------------------------
+  list:
+
+  Name "":
+  <ul
+    class="lg:hidden divide-y divide-line-soft"
+  />
+
+  --------------------------------------------------
+  listitem:
+
+  Name "":
+  <li
+    class="mobile-data-card p-4 row-hover cursor-pointer flex items-start gap-2"
+  />
+
+  --------------------------------------------------
+  region:
+
+  Name "טבלת נתונים — ניתן לגלול אופקית":
+  <div
+    aria-label="טבלת נתונים — ניתן לגלול אופקית"
+    class="table-scroll overflow-x-auto hidden lg:block"
+    role="region"
+    tabindex="0"
+  />
+
+  --------------------------------------------------
+  table:
+
+  Name "":
+  <table
+    class="w-full"
+  />
+
+  --------------------------------------------------
+  rowgroup:
+
+  Name "":
+  <thead
+    class="table-head border-b border-line-soft"
+  />
+
+  Name "":
+  <tbody
+    class="divide-y divide-line-soft"
+  />
+
+  --------------------------------------------------
+  row:
+
+  Name "ספק דירוג קטגוריות איש קשר טלפון מינ׳ הזמנה התראות יתרה פתוחה סטטוס פעולות":
+  <tr />
+
+  Name "אחים כהן 4 ירקות סיגל אברהם 02-5891000 ‏1,250.00 ‏₪ — — פעיל":
+  <tr
+    class="row-hover cursor-pointer"
+  />
+
+  --------------------------------------------------
+  columnheader:
+
+  Name "ספק":
+  <th
+    aria-sort="none"
+    class="th"
+    scope="col"
+  />
+
+  Name "דירוג":
+  <th
+    aria-sort="none"
+    class="th"
+    scope="col"
+  />
+
+  Name "קטגוריות":
+  <th
+    class="th"
+    scope="col"
+  />
+
+  Name "איש קשר":
+  <th
+    class="th"
+    scope="col"
+  />
+
+  Name "טלפון":
+  <th
+    class="th"
+    scope="col"
+  />
+
+  Name "מינ׳ הזמנה":
+  <th
+    aria-sort="none"
+    class="th"
+    scope="col"
+  />
+
+  Name "התראות":
+  <th
+    class="th"
+    scope="col"
+  />
+
+  Name "יתרה פתוחה":
+  <th
+    aria-sort="none"
+    class="th"
+    scope="col"
+  />
+
+  Name "סטטוס":
+  <th
+    class="th"
+    scope="col"
+  />
+
+  Name "פעולות":
+  <th
+    class="th w-12"
+    scope="col"
+  />
+
+  --------------------------------------------------
+  cell:
+
+  Name "אחים כהן":
+  <td
+    class="td "
+  />
+
+  Name "4":
+  <td
+    class="td num"
+  />
+
+  Name "ירקות":
+  <td
+    class="td "
+  />
+
+  Name "סיגל אברהם":
+  <td
+    class="td "
+  />
+
+  Name "02-5891000":
+  <td
+    class="td "
+  />
+
+  Name "‏1,250.00 ‏₪":
+  <td
+    class="td num"
+  />
+
+  Name "—":
+  <td
+    class="td "
+  />
+
+  Name "—":
+  <td
+    class="td num"
+  />
+
+  Name "פעיל":
+  <td
+    class="td "
+  />
+
+  Name "":
+  <td
+    class="td w-12 py-0.5!"
+  />
+
+  --------------------------------------------------dialog:
+
+  Name "סינון ותצוגה":
+  <div
+    aria-labelledby="_r_4_"
+    aria-modal="true"
+    class="dialog-panel-safe bg-surface rounded-t-2xl sm:rounded-2xl shadow-dialog w-full sm:max-w-lg flex flex-col focus:outline-none"
+    role="dialog"
+    tabindex="-1"
+  />
+
+  --------------------------------------------------
+  heading:
+
+  Name "סינון ותצוגה":
+  <h3
+    class="font-semibold text-ink focus:outline-none"
+    id="_r_4_"
+    tabindex="-1"
+  />
+
+  --------------------------------------------------
+  button:
+
+  Name "סגירה":
+  <button
+    aria-label="סגירה"
+    class="btn-ghost p-1.5! min-w-11 min-h-11"
+    type="button"
+  />
+
+  --------------------------------------------------
+  combobox:
+
+  Name "סינון ספקים לפי יתרה פתוחה":
+  <select
+    aria-label="סינון ספקים לפי יתרה פתוחה"
+    class="input w-auto!"
+  />
+
+  Name "סינון ספקים לפי סטטוס":
+  <select
+    aria-label="סינון ספקים לפי סטטוס"
+    class="input w-auto!"
+  />
+
+  --------------------------------------------------
+  option:
+
+  Name "כל הספקים":
+  <option
+    value=""
+  />
+
+  Name "עם יתרה פתוחה":
+  <option
+    value="open"
+  />
+
+  Name "כל הסטטוסים":
+  <option
+    value=""
+  />
+
+  Name "פעיל":
+  <option
+    value="active"
+  />
+
+  Name "לא פעיל":
+  <option
+    value="inactive"
+  />
+
+  Name "בעייתי":
+  <option
+    value="problematic"
+  />
+
+  Name "ממתין לאישור":
+  <option
+    value="pending"
+  />
+
+  --------------------------------------------------
+
+Ignored nodes: comments, script, style
+<body
+  style="overflow: hidden;"
+>
+  <div>
+    <div
+      class="space-y-4"
+    >
+      <header
+        class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between "
+      >
+        <div
+          class="min-w-0 space-y-1"
+        >
+          <h1
+            class="page-title break-words"
+          >
+            ספקים
+          </h1>
+          <span
+            aria-hidden="true"
+            class="section-mark"
+          />
+          <div
+            class="text-sm text-ink-muted"
+          >
+            ניהול רשימת הספקים ופרטיהם, וכניסה לכרטיס ספק לצפייה בהזמנות, בחשבוניות ובזיכויים שלו.
+          </div>
+          <div
+            class="text-sm text-ink-soft"
+          >
+            ספק אחד · 0 עם יתרה פתוחה
+          </div>
+        </div>
+        <div
+          class="flex shrink-0 flex-wrap items-center gap-2"
+        >
+          <button
+            class="btn-primary"
+            data-tour-anchor="suppliers-new"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-plus"
+              fill="none"
+              height="15"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="15"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M5 12h14"
+              />
+              <path
+                d="M12 5v14"
+              />
+            </svg>
+             
+            ספק חדש
+          </button>
+        </div>
+      </header>
+      <div
+        class="card overflow-hidden"
+      >
+        <div
+          class="flex flex-wrap items-center gap-2 p-3 border-b border-line-soft"
+        >
+          <div
+            class="relative flex-1 min-w-44 max-w-xs"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-search absolute top-1/2 -translate-y-1/2 start-3 text-ink-faint"
+              fill="none"
+              height="15"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="15"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="m21 21-4.34-4.34"
+              />
+              <circle
+                cx="11"
+                cy="11"
+                r="8"
+              />
+            </svg>
+            <input
+              aria-label="חיפוש בספקים"
+              class="input ps-9!"
+              placeholder="חיפוש..."
+              value=""
+            />
+          </div>
+          <button
+            aria-expanded="true"
+            aria-haspopup="dialog"
+            class="btn-secondary"
+            type="button"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-sliders-horizontal"
+              fill="none"
+              height="15"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="15"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M10 5H3"
+              />
+              <path
+                d="M12 19H3"
+              />
+              <path
+                d="M14 3v4"
+              />
+              <path
+                d="M16 17v4"
+              />
+              <path
+                d="M21 12h-9"
+              />
+              <path
+                d="M21 19h-5"
+              />
+              <path
+                d="M21 5h-7"
+              />
+              <path
+                d="M8 10v4"
+              />
+              <path
+                d="M8 12H3"
+              />
+            </svg>
+             
+            סינון ותצוגה
+          </button>
+        </div>
+        <ul
+          class="lg:hidden divide-y divide-line-soft"
+        >
+          <li
+            class="mobile-data-card p-4 row-hover cursor-pointer flex items-start gap-2"
+          >
+            <div
+              class="min-w-0 flex-1"
+            >
+              <div
+                class="flex items-center justify-between gap-3"
+              >
+                <button
+                  class="min-w-0 break-words text-start font-medium text-ink-body focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+                  type="button"
+              ...
+ ❯ Object.getElementError ../../../node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/pages/mobileColumnScreens.spec.tsx:160:19
+    158|     expect((await screen.findAllByText('אחים כהן')).length).toBeGreate…
+    159|     openSheet();
+    160|     expect(screen.getByRole('group', { name: 'בחירת עמודות' })).toBeIn…
+       |                   ^
+    161|   });
+    162|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  src/pages/mobileColumnScreens.spec.tsx > /suppliers at 390px — rating, categories, contact and minimum order (RTL-A11Y-04) > puts איש קשר and מינ׳ הזמנה on the card when the viewer turns them on
+TestingLibraryElementError: Unable to find an accessible element with the role "checkbox" and name "איש קשר"
+
+Here are the accessible roles:
+
+  banner:
+
+  Name "":
+  <header
+    class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between "
+  />
+
+  --------------------------------------------------
+  heading:
+
+  Name "ספקים":
+  <h1
+    class="page-title break-words"
+  />
+
+  --------------------------------------------------
+  button:
+
+  Name "ספק חדש":
+  <button
+    class="btn-primary"
+    data-tour-anchor="suppliers-new"
+  />
+
+  Name "סינון ותצוגה":
+  <button
+    aria-expanded="true"
+    aria-haspopup="dialog"
+    class="btn-secondary"
+    type="button"
+  />
+
+  Name "אחים כהן":
+  <button
+    class="min-w-0 break-words text-start font-medium text-ink-body focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+    type="button"
+  />
+
+  Name "פעולות עבור ספק אחים כהן":
+  <button
+    aria-expanded="false"
+    aria-haspopup="menu"
+    aria-label="פעולות עבור ספק אחים כהן"
+    class="btn-ghost btn-icon rounded-none!"
+    type="button"
+  />
+
+  Name "ספק":
+  <button
+    class="inline-flex min-h-11 min-w-11 items-center gap-1 hover:text-shell-ink cursor-pointer focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+    type="button"
+  />
+
+  Name "דירוג":
+  <button
+    class="inline-flex min-h-11 min-w-11 items-center gap-1 hover:text-shell-ink cursor-pointer focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+    type="button"
+  />
+
+  Name "מינ׳ הזמנה":
+  <button
+    class="inline-flex min-h-11 min-w-11 items-center gap-1 hover:text-shell-ink cursor-pointer focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+    type="button"
+  />
+
+  Name "יתרה פתוחה":
+  <button
+    class="inline-flex min-h-11 min-w-11 items-center gap-1 hover:text-shell-ink cursor-pointer focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+    type="button"
+  />
+
+  Name "פתיחת ספק אחים כהן":
+  <button
+    aria-label="פתיחת ספק אחים כהן"
+    class="min-h-11 w-full text-start focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+    type="button"
+  />
+
+  Name "פעולות עבור ספק אחים כהן":
+  <button
+    aria-expanded="false"
+    aria-haspopup="menu"
+    aria-label="פעולות עבור ספק אחים כהן"
+    class="btn-ghost btn-icon rounded-none!"
+    type="button"
+  />
+
+  --------------------------------------------------
+  textbox:
+
+  Name "חיפוש בספקים":
+  <input
+    aria-label="חיפוש בספקים"
+    class="input ps-9!"
+    placeholder="חיפוש..."
+    value=""
+  />
+
+  --------------------------------------------------
+  list:
+
+  Name "":
+  <ul
+    class="lg:hidden divide-y divide-line-soft"
+  />
+
+  --------------------------------------------------
+  listitem:
+
+  Name "":
+  <li
+    class="mobile-data-card p-4 row-hover cursor-pointer flex items-start gap-2"
+  />
+
+  --------------------------------------------------
+  region:
+
+  Name "טבלת נתונים — ניתן לגלול אופקית":
+  <div
+    aria-label="טבלת נתונים — ניתן לגלול אופקית"
+    class="table-scroll overflow-x-auto hidden lg:block"
+    role="region"
+    tabindex="0"
+  />
+
+  --------------------------------------------------
+  table:
+
+  Name "":
+  <table
+    class="w-full"
+  />
+
+  --------------------------------------------------
+  rowgroup:
+
+  Name "":
+  <thead
+    class="table-head border-b border-line-soft"
+  />
+
+  Name "":
+  <tbody
+    class="divide-y divide-line-soft"
+  />
+
+  --------------------------------------------------
+  row:
+
+  Name "ספק דירוג קטגוריות איש קשר טלפון מינ׳ הזמנה התראות יתרה פתוחה סטטוס פעולות":
+  <tr />
+
+  Name "אחים כהן 4 ירקות סיגל אברהם 02-5891000 ‏1,250.00 ‏₪ — — פעיל":
+  <tr
+    class="row-hover cursor-pointer"
+  />
+
+  --------------------------------------------------
+  columnheader:
+
+  Name "ספק":
+  <th
+    aria-sort="none"
+    class="th"
+    scope="col"
+  />
+
+  Name "דירוג":
+  <th
+    aria-sort="none"
+    class="th"
+    scope="col"
+  />
+
+  Name "קטגוריות":
+  <th
+    class="th"
+    scope="col"
+  />
+
+  Name "איש קשר":
+  <th
+    class="th"
+    scope="col"
+  />
+
+  Name "טלפון":
+  <th
+    class="th"
+    scope="col"
+  />
+
+  Name "מינ׳ הזמנה":
+  <th
+    aria-sort="none"
+    class="th"
+    scope="col"
+  />
+
+  Name "התראות":
+  <th
+    class="th"
+    scope="col"
+  />
+
+  Name "יתרה פתוחה":
+  <th
+    aria-sort="none"
+    class="th"
+    scope="col"
+  />
+
+  Name "סטטוס":
+  <th
+    class="th"
+    scope="col"
+  />
+
+  Name "פעולות":
+  <th
+    class="th w-12"
+    scope="col"
+  />
+
+  --------------------------------------------------
+  cell:
+
+  Name "אחים כהן":
+  <td
+    class="td "
+  />
+
+  Name "4":
+  <td
+    class="td num"
+  />
+
+  Name "ירקות":
+  <td
+    class="td "
+  />
+
+  Name "סיגל אברהם":
+  <td
+    class="td "
+  />
+
+  Name "02-5891000":
+  <td
+    class="td "
+  />
+
+  Name "‏1,250.00 ‏₪":
+  <td
+    class="td num"
+  />
+
+  Name "—":
+  <td
+    class="td "
+  />
+
+  Name "—":
+  <td
+    class="td num"
+  />
+
+  Name "פעיל":
+  <td
+    class="td "
+  />
+
+  Name "":
+  <td
+    class="td w-12 py-0.5!"
+  />
+
+  --------------------------------------------------dialog:
+
+  Name "סינון ותצוגה":
+  <div
+    aria-labelledby="_r_8_"
+    aria-modal="true"
+    class="dialog-panel-safe bg-surface rounded-t-2xl sm:rounded-2xl shadow-dialog w-full sm:max-w-lg flex flex-col focus:outline-none"
+    role="dialog"
+    tabindex="-1"
+  />
+
+  --------------------------------------------------
+  heading:
+
+  Name "סינון ותצוגה":
+  <h3
+    class="font-semibold text-ink focus:outline-none"
+    id="_r_8_"
+    tabindex="-1"
+  />
+
+  --------------------------------------------------
+  button:
+
+  Name "סגירה":
+  <button
+    aria-label="סגירה"
+    class="btn-ghost p-1.5! min-w-11 min-h-11"
+    type="button"
+  />
+
+  --------------------------------------------------
+  combobox:
+
+  Name "סינון ספקים לפי יתרה פתוחה":
+  <select
+    aria-label="סינון ספקים לפי יתרה פתוחה"
+    class="input w-auto!"
+  />
+
+  Name "סינון ספקים לפי סטטוס":
+  <select
+    aria-label="סינון ספקים לפי סטטוס"
+    class="input w-auto!"
+  />
+
+  --------------------------------------------------
+  option:
+
+  Name "כל הספקים":
+  <option
+    value=""
+  />
+
+  Name "עם יתרה פתוחה":
+  <option
+    value="open"
+  />
+
+  Name "כל הסטטוסים":
+  <option
+    value=""
+  />
+
+  Name "פעיל":
+  <option
+    value="active"
+  />
+
+  Name "לא פעיל":
+  <option
+    value="inactive"
+  />
+
+  Name "בעייתי":
+  <option
+    value="problematic"
+  />
+
+  Name "ממתין לאישור":
+  <option
+    value="pending"
+  />
+
+  --------------------------------------------------
+
+Ignored nodes: comments, script, style
+<body
+  style="overflow: hidden;"
+>
+  <div>
+    <div
+      class="space-y-4"
+    >
+      <header
+        class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between "
+      >
+        <div
+          class="min-w-0 space-y-1"
+        >
+          <h1
+            class="page-title break-words"
+          >
+            ספקים
+          </h1>
+          <span
+            aria-hidden="true"
+            class="section-mark"
+          />
+          <div
+            class="text-sm text-ink-muted"
+          >
+            ניהול רשימת הספקים ופרטיהם, וכניסה לכרטיס ספק לצפייה בהזמנות, בחשבוניות ובזיכויים שלו.
+          </div>
+          <div
+            class="text-sm text-ink-soft"
+          >
+            ספק אחד · 0 עם יתרה פתוחה
+          </div>
+        </div>
+        <div
+          class="flex shrink-0 flex-wrap items-center gap-2"
+        >
+          <button
+            class="btn-primary"
+            data-tour-anchor="suppliers-new"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-plus"
+              fill="none"
+              height="15"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="15"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M5 12h14"
+              />
+              <path
+                d="M12 5v14"
+              />
+            </svg>
+             
+            ספק חדש
+          </button>
+        </div>
+      </header>
+      <div
+        class="card overflow-hidden"
+      >
+        <div
+          class="flex flex-wrap items-center gap-2 p-3 border-b border-line-soft"
+        >
+          <div
+            class="relative flex-1 min-w-44 max-w-xs"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-search absolute top-1/2 -translate-y-1/2 start-3 text-ink-faint"
+              fill="none"
+              height="15"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="15"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="m21 21-4.34-4.34"
+              />
+              <circle
+                cx="11"
+                cy="11"
+                r="8"
+              />
+            </svg>
+            <input
+              aria-label="חיפוש בספקים"
+              class="input ps-9!"
+              placeholder="חיפוש..."
+              value=""
+            />
+          </div>
+          <button
+            aria-expanded="true"
+            aria-haspopup="dialog"
+            class="btn-secondary"
+            type="button"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-sliders-horizontal"
+              fill="none"
+              height="15"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="15"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M10 5H3"
+              />
+              <path
+                d="M12 19H3"
+              />
+              <path
+                d="M14 3v4"
+              />
+              <path
+                d="M16 17v4"
+              />
+              <path
+                d="M21 12h-9"
+              />
+              <path
+                d="M21 19h-5"
+              />
+              <path
+                d="M21 5h-7"
+              />
+              <path
+                d="M8 10v4"
+              />
+              <path
+                d="M8 12H3"
+              />
+            </svg>
+             
+            סינון ותצוגה
+          </button>
+        </div>
+        <ul
+          class="lg:hidden divide-y divide-line-soft"
+        >
+          <li
+            class="mobile-data-card p-4 row-hover cursor-pointer flex items-start gap-2"
+          >
+            <div
+              class="min-w-0 flex-1"
+            >
+              <div
+                class="flex items-center justify-between gap-3"
+              >
+                <button
+                  class="min-w-0 break-words text-start font-medium text-ink-body focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2"
+                  type="button"
+              ...
+ ❯ Object.getElementError ../../../node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ turnOn src/pages/mobileColumnScreens.spec.tsx:74:22
+     72| /** Tick a column in the sheet's checklist, asserting first that it re…
+     73| const turnOn = (header: string) => {
+     74|   const box = screen.getByRole('checkbox', { name: header });
+       |                      ^
+     75|   expect(box).not.toBeChecked();
+     76|   fireEvent.click(box);
+ ❯ src/pages/mobileColumnScreens.spec.tsx:171:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed (4)
+   Start at  13:17:49
+   Duration  4.87s (transform 962ms, setup 428ms, import 1.81s, tests 1.39s, environment 997ms)

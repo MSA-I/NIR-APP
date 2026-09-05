@@ -15,6 +15,7 @@ import {
   type FieldSpec, type MapResult, type SheetData, type SheetRow,
 } from '../lib/importSheet';
 import { fmtMoneyExact, formatUnit, normalizeUnitInput, todayISO } from '../lib/format';
+import { organizationVatRate } from '../lib/vatRate';
 import { QuickCreateSupplier, type QuickCreatedSupplier } from '../components/QuickCreateSupplier';
 import type { Category } from '../lib/types';
 
@@ -296,9 +297,10 @@ function BusinessStep({ onSaved }: { onSaved: () => void }) {
 
   const [f, setF] = useState({
     name: org?.name ?? '',
-    // 18% is the documented default (docs/OPEN-DECISIONS.md row 1) and the column default;
-    // it is stored per invoice, so changing it later never rewrites history
-    vat_rate: org?.vat_rate?.toString() ?? '18',
+    // The documented default (docs/OPEN-DECISIONS.md, שיעור מע״מ) and the column default, now
+    // read from the one place that holds it; it is stored per invoice, so changing it later
+    // never rewrites history
+    vat_rate: String(organizationVatRate(org?.vat_rate)),
     tax_id: business.tax_id ?? '',
     contact_email: business.contact_email ?? '',
     contact_phone: business.contact_phone ?? '',
@@ -341,6 +343,18 @@ function BusinessStep({ onSaved }: { onSaved: () => void }) {
         title={t('onboarding.title_2')}
         subtitle={t('onboarding.subtitle')}
       />
+      {/* `OWN-14`. This step is not a form for a business being set up — it OPENS pre-filled from
+          the organisation the business is already trading on (the name and the VAT rate above are
+          read straight off `org`), and `save()` below patches that same row. Everything about the
+          screen said otherwise: it is called "הקמת המערכת", its later steps report "הושלם" for an
+          organisation months old, and its first button says only "שמירה והמשך". A wizard that
+          edits the live business record says so BEFORE the first save, which is why this sits
+          above the fields rather than in a toast after the press. `info` and not `alert`: nothing
+          is wrong, and the merge below is safe — the person simply has the right to know which
+          record is under the cursor. */}
+      <Note tone="info">
+        <p data-testid="onboarding-live-record-notice">{t('onboarding.liveRecordNotice')}</p>
+      </Note>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="sm:col-span-2">
           <label className="label" htmlFor="onboarding-business-name">{t('onboarding.text')}</label>
@@ -644,7 +658,7 @@ function SheetImport<T extends ImportRow>({ fields, parse, columns, commit, conf
       <div className="space-y-4">
         {failure && <ErrorNote message={failure} />}
         <div className="text-sm text-ink-soft">
-          <b><bdi>{sheet.fileName}</bdi></b> — {t('onboarding.rowsReady', { count: parsed.valid.length })}
+          <b><bdi dir="ltr">{sheet.fileName}</bdi></b> — {t('onboarding.rowsReady', { count: parsed.valid.length })}
           {parsed.skipped.length > 0 && <>{t('onboarding.rowsWillSkip', { count: parsed.skipped.length })}</>}{t('onboarding.nothingSavedYet')}
         </div>
 
@@ -684,7 +698,7 @@ function SheetImport<T extends ImportRow>({ fields, parse, columns, commit, conf
     return (
       <div className="space-y-4">
         <div className="text-sm text-ink-soft">
-          <b><bdi>{sheet.fileName}</bdi></b> — {t('onboarding.mapEachField', { count: sheet.rows.length })}
+          <b><bdi dir="ltr">{sheet.fileName}</bdi></b> — {t('onboarding.mapEachField', { count: sheet.rows.length })}
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {fields.map((f) => (
@@ -1145,7 +1159,7 @@ function ProductsStep({ onDone }: { onDone: () => void }) {
       render: (r) => {
         if (r.priceNote) return <span className="text-await-fg text-xs">{r.priceNote}</span>;
         if (r.existingProductId) return <span className="text-ink-muted text-xs">{t('onboarding.text_30')}</span>;
-        return <span className="text-ink-ghost">—</span>;
+        return <span className="text-ink-muted">—</span>;
       },
     },
   ];

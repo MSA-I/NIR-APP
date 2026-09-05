@@ -1,0 +1,203 @@
+PR42 / OWN-14 — RED. Oracle: npx vitest run src/pages/onboardingLiveRecordNotice.spec.tsx
+Run against the UNFIXED tree at 2001b9af, before any change to Onboarding.tsx.
+
+The plan filed OWN-14 as "measure: confirm the write path". The measurement is the test that
+PASSES here: pressing שמירה והמשך on step 1 issues PATCH /rest/v1/organizations?id=eq.org-test
+carrying name, vat_rate and settings.business, with the bank-matching keys merged through
+untouched — and the form was pre-filled from that same row (עסק לדוגמה, 17.5). So the finding
+is confirmed, not refuted: the first button is a write to the live business record.
+The red is the second test: nothing on the step says so before that button.
+
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-aa6ab415e44e16b91
+
+ ❯ src/pages/onboardingLiveRecordNotice.spec.tsx (2 tests | 1 failed) 344ms
+     × says so before that button, not after it 49ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/onboardingLiveRecordNotice.spec.tsx > /onboarding — the first button writes to the live business record > says so before that button, not after it
+TestingLibraryElementError: Unable to find an element by: [data-testid="onboarding-live-record-notice"]
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"space-y-5 max-w-4xl"[39m
+    [36m>[39m
+      [36m<header[39m
+        [33mclass[39m=[32m"flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between "[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"min-w-0 space-y-1"[39m
+        [36m>[39m
+          [36m<h1[39m
+            [33mclass[39m=[32m"page-title break-words"[39m
+          [36m>[39m
+            [0mהקמת המערכת[0m
+          [36m</h1>[39m
+          [36m<span[39m
+            [33maria-hidden[39m=[32m"true"[39m
+            [33mclass[39m=[32m"section-mark"[39m
+          [36m/>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"text-sm text-ink-muted"[39m
+          [36m>[39m
+            [0mארבעה שלבים קצרים שממלאים את המערכת בנתוני העסק. אפשר לדלג על כל שלב ולהשלים אותו מאוחר יותר.[0m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex shrink-0 flex-wrap items-center gap-2"[39m
+        [36m>[39m
+          [36m<a[39m
+            [33mclass[39m=[32m"btn-ghost text-ink-muted whitespace-nowrap"[39m
+            [33mdata-discover[39m=[32m"true"[39m
+            [33mhref[39m=[32m"/dashboard"[39m
+          [36m>[39m
+            [0mכניסה למערכת[0m
+            [0m [0m
+            [36m<svg[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"lucide lucide-chevron-left"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"15"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"15"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m15 18-6-6 6-6"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+          [36m</a>[39m
+        [36m</div>[39m
+      [36m</header>[39m
+      [36m<ol[39m
+        [33mclass[39m=[32m"card flex flex-wrap overflow-hidden"[39m
+      [36m>[39m
+        [36m<li[39m
+          [33mclass[39m=[32m"flex-1 min-w-40 border-b sm:border-b-0 sm:border-s border-line-soft first:border-s-0"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33maria-current[39m=[32m"step"[39m
+            [33maria-pressed[39m=[32m"true"[39m
+            [33mclass[39m=[32m"w-full flex items-center gap-2.5 px-4 py-3 text-start transition-colors cursor-pointer
+                bg-action-wash/60"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"flex size-8 shrink-0 items-center justify-center rounded-full
+                bg-action text-on-solid"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-building2 lucide-building-2"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"15"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"15"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M10 12h4"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M10 8h4"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M14 21v-3a2 2 0 0 0-4 0v3"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M6 10H4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-2"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M6 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"min-w-0"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"block text-sm truncate font-semibold text-ink"[39m
+              [36m>[39m
+                [0mפרטי העסק[0m
+              [36m</span>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"block text-xs text-ink-muted"[39m
+              [36m>[39m
+                [0mשלב 1[0m
+              [36m</span>[39m
+            [36m</span>[39m
+          [36m</button>[39m
+        [36m</li>[39m
+        [36m<li[39m
+          [33mclass[39m=[32m"flex-1 min-w-40 border-b sm:border-b-0 sm:border-s border-line-soft first:border-s-0"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33maria-pressed[39m=[32m"false"[39m
+            [33mclass[39m=[32m"w-full flex items-center gap-2.5 px-4 py-3 text-start transition-colors cursor-pointer
+                hover:bg-surface-hover"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"flex size-8 shrink-0 items-center justify-center rounded-full
+                bg-done-soft text-done-fg"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-check"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"15"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"15"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M20 6 9 17l-5-5"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"min-w-0"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"block text-sm truncate text-ink-mid"[39m
+              [36m>[39m
+                [0mקטגוריות[0m
+              [36m</span>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"block text-xs text-ink-muted"[39m
+              [36m>[39m
+                [0mהושלם[0m
+   ...
+ ❯ Object.getElementError ../../../node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/pages/onboardingLiveRecordNotice.spec.tsx:142:27
+    140|     await screen.findByLabelText('שם העסק *');
+    141|
+    142|     const notice = screen.getByTestId('onboarding-live-record-notice');
+       |                           ^
+    143|     expect(notice).toBeTruthy();
+    144|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 passed (2)
+   Start at  15:01:46
+   Duration  3.13s (transform 750ms, setup 410ms, import 1.24s, tests 344ms, environment 937ms)
+

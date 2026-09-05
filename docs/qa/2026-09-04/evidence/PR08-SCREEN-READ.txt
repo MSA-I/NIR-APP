@@ -1,0 +1,112 @@
+PR 08 — /pay read at 1440x900, system Edge through playwright-core, reducedMotion: reduce,
+deviceScaleFactor 2. Five images, all read, RED against GREEN.
+
+HOW THESE WERE RENDERED, and what that does and does not prove.
+The shared local Supabase stack is at migration head 0245 against a 0314 tree and another agent
+holds it, so nothing here was rendered against a database. A Vite dev server was started on port
+5344 (not 5199, which belongs to the project and possibly to another agent) with its own cacheDir
+under .tmp — node_modules in this worktree is a JUNCTION to the shared checkout, so the default
+node_modules/.vite would be shared with every other agent's harness on this machine.
+VITE_SUPABASE_URL points at 127.0.0.1:59998, where nothing listens, and every /rest/v1 call was
+answered by a Playwright route handler from fixtures written by hand; `missedRoutes` came back
+empty on all four runs, so no read reached past the harness. These images prove what the COMPONENT
+draws for a given server answer. They do not prove what the server answers — that is the server
+half of ruling #353 and it is PR 9.
+
+The RED pair was produced by restoring the three product files to their HEAD content, rendering,
+and putting them back. No git state was changed to do it: `git stash` and `git checkout` in a
+campaign where several agents share one object store is how a verified commit gets lost.
+
+------------------------------------------------------------------------------------------------
+PR08-RED-pay-queue-1440x900.png   →   PR08-GREEN-pay-queue-1440x900.png        FIN-03, queue half
+------------------------------------------------------------------------------------------------
+BEFORE, each of the two cards reads:
+
+  נקי וזוהר   300.00 ₪   [מאושרת]  לתשלום עד 10.09.2026   חשבונית אחת
+  חוות השדה   299.00 ₪   [מאושרת]  לתשלום עד 14.09.2026   חשבונית אחת
+
+and that is all of it. Both target invoices whose balance is 0.00 in the fixture — the two the
+sweep measured on the live tenant — and the first carries an open high-severity duplicate_payment
+exception naming the request. Nothing on the card says either thing.
+
+AFTER, a third line arrives on each card:
+
+  יתרה לתשלום בחשבוניות  0.00 ₪   [החשבוניות כבר נפרעו]  [קיים חריג פתוח]
+  יתרה לתשלום בחשבוניות  0.00 ₪   [החשבוניות כבר נפרעו]
+
+TWO WEIGHTS, AND THE FIRST DRAFT GOT THIS WRONG. Both marks were `badge-alert` — two solid maroon
+pills on every card — and the first GREEN screenshot is what made the case against it: a queue
+where every row wears the same filled red pill teaches the reader to stop seeing red, which is a
+worse version of the disease MON-05 describes. `alert` is now reserved for the finding the PRODUCT
+raised and a person still has to close; the settled mark is `await`, the same weight as the
+`מאושרת` status badge beside it. One red pill in the whole list, and it points at the one card that
+actually carries the exception.
+
+------------------------------------------------------------------------------------------------
+PR08-RED-pay-dialog-1440x900.png   →   PR08-GREEN-pay-dialog-1440x900.png     FIN-10, MON-05, FIN-03
+------------------------------------------------------------------------------------------------
+BEFORE — the card for נקי וזוהר, a supplier with no stored bank account:
+
+  [SubPanel]  פרטי חשבון להעברה · לא הוזנו פרטי בנק
+  [note-alert, pink]  לא הוזנו פרטי בנק לספק זה, ולכן לא ניתן לבצע את ההעברה. יש לפנות לבעלים
+                      או למנהל הרכש כדי שיזינו את הפרטים בכרטיס הספק. אין במסך זה דרך לדווח על כך.
+  [prose]     הכפתור בתחתית המסך מתעד העברה שכבר בוצעה בבנק — הוא אינו מבצע אותה.
+  …
+  סכום מאושר 300.00 ₪ / קיזוז זיכויים 0.00 ₪ / סכום להעברה בפועל 300.00 ₪
+  …
+  [btn-primary, ENABLED]  ההעברה בוצעה
+
+Two adjacent sentences saying opposite things, and no balance anywhere between them. Measured off
+the live DOM rather than read from source: saysCannotTransfer true, primaryDisabled false,
+bankNoteTone "note-alert".
+
+AFTER — three blocks in place of one, in descending severity, and the refusal is not among them:
+
+  [note-alert, pink]   המערכת פתחה חריג על הדרישה הזו. כדאי לקרוא אותו לפני רישום ההעברה:
+                       חשד לתשלום כפול · חשד לדרישת תשלום כפולה — #12 · נקי וזוהר
+                       פתיחת החריג            ← links to /exceptions?id=<id>
+  [note-await, amber]  החשבוניות שבדרישה כבר נפרעו. היתרה לתשלום עליהן היא אפס. המסך הזה מתעד
+                       העברה שכבר יצאה מהבנק, ולכן הרישום נשאר אפשרי — אך יש לוודא מול דף
+                       החשבון שההעברה הזו אכן בוצעה ואינה כפילות של תשלום קודם.
+  [note-info, blue]    לא הוזנו פרטי בנק לספק זה. הרישום כאן אינו מושפע מכך — המסך מתעד העברה
+                       שכבר יצאה מהבנק — אך את פרטי החשבון יש להזין לקראת ההעברה הבאה בכרטיס
+                       הספק. ההזנה היא באחריות הבעלים או מנהל הרכש; אין במסך זה דרך להזין אותם.
+
+and in the figures block, directly under the amount about to be transferred:
+
+  סכום להעברה בפועל     300.00 ₪
+  יתרה לתשלום בחשבוניות   0.00 ₪
+
+The primary is still enabled and still says ההעברה בוצעה. saysCannotTransfer false,
+primaryDisabled false, bankNoteTone "note-info".
+
+Where the balance could not be READ, that row prints `—` and neither the badge nor the amber note
+appears. That case is asserted in jsdom (`draws the em dash, not a zero…`) rather than
+photographed, because the picture of an em dash is not more convincing than the assertion.
+
+------------------------------------------------------------------------------------------------
+PR08-GREEN-pay-dialog-dark-1440x900.png                                            dark theme
+------------------------------------------------------------------------------------------------
+The same dialog with data-theme="dark" (--color-canvas resolves to oklch(13% 0.028 209), so the
+theme really applied — a screenshot of a page that failed to switch would be the light one again).
+All three notes keep their tone separation and stay legible: the exception block deep maroon on
+near-black, the settled block amber-on-brown, the bank-details block blue. The `פתיחת החריג` link
+is underlined and inherits the alert foreground rather than a link colour of its own.
+
+Shot because this screen gains three coloured surfaces with this change and the product has had a
+dark-theme contrast defect before (PR 21, RTL-A11Y-06). No new colour PAIR is introduced — every
+class here (`note-alert`/`note-await`/`note-info`, `badge-alert`/`badge-await`, `text-ink-body`,
+`text-ink-muted`, `num`) already exists in the token layer and in the contrast manifest, which is
+why `check:tokens` and `check:appearance-scope` pass untouched.
+
+------------------------------------------------------------------------------------------------
+NOT RENDERED, and why
+------------------------------------------------------------------------------------------------
+390px. Every element added here is text or a pill inside an existing `flex-wrap` row, and none of
+the three findings is a mobile one. The queue card's new line wraps by the same rule as the line
+above it.
+
+A signed-in run against the live tenant. The two cards the sweep read are still in it, and a live
+render would be the stronger evidence — but the transfers in that queue are real approved payment
+requests, this PR does not change what the server accepts, and nothing here needed a session to be
+demonstrated. Recorded as a gap rather than left silent.

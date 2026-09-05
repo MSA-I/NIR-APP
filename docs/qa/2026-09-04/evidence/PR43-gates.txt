@@ -1,0 +1,46 @@
+
+> inplace@0.1.0 check:i18n
+> node scripts/check-i18n.ts
+
+check:i18n passed: 63 file(s) still carry 908 Hebrew line(s), all at their pinned counts (63 documented exception(s)).
+
+> inplace@0.1.0 check:orphan-keys
+> node scripts/check-orphan-keys.mjs
+
+check:orphan-keys passed: 5999 leaf key(s), 106 with no call site, pinned.
+
+> inplace@0.1.0 check:plurals
+> node scripts/check-plurals.mjs
+
+check:plurals passed: 75 counted phrase(s), 27 with a singular sibling, 48 pinned.
+
+> inplace@0.1.0 check:exception-labels
+> node scripts/check-exception-labels.mjs
+
+check:exception-labels passed: 12 exception_type value(s), every one mapped in EXCEPTION_TYPE and named in both dictionaries.
+
+> inplace@0.1.0 check:key-manifest
+> node scripts/check-key-manifest.mjs
+
+check:key-manifest passed: 5527 keys considered, 107 without a production call site — the same names as the baseline, none newly stranded, none spec-only.
+
+> inplace@0.1.0 check:jsx-space
+> node scripts/check-jsx-space.mjs
+
+check:jsx-space passed: 152 .tsx file(s), no glued translated expressions.
+
+> inplace@0.1.0 check:typography
+> node scripts/check-typography.ts
+
+Typography contract passed (525 source files).
+
+> inplace@0.1.0 check:dead-code
+> knip --config knip.json
+
+Configuration hints (5)
+playwright-core     knip.json  Remove from ignoreDependencies                               
+src/main.tsx        knip.json  Remove redundant entry pattern                               
+vite.config.ts      knip.json  Remove redundant entry pattern                               
+vitest.config.ts    knip.json  Remove redundant entry pattern                               
+.css                knip.json  Compiled extension excluded by project (imports not followed)
+tsc --noEmit exit: 0

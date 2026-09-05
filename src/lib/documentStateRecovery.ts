@@ -9,6 +9,9 @@ export const DOCUMENT_STATE_ACTIONS: Readonly<Record<DocumentStatusState, Docume
   processing: 'wait',
   review: 'review',
   supplier_unresolved: 'review',
+  // MERGE, 05.09.2026. `awaiting_scan` arrived with this sweep after this map was written.
+  // 'review' and not 'wait': nothing is running, so nobody is coming -- a person has to look.
+  awaiting_scan: 'review',
   unassigned: 'file',
   assigned: 'none',
   completed: 'none',

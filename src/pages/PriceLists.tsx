@@ -10,7 +10,8 @@ import { useQuery, unwrap } from '../lib/useQuery';
 import { useAuth } from '../auth/AuthContext';
 import { DataTable, Modal, useToast, ErrorNote, PageHeader, StatusBadge, Note, SkeletonTable, EmptyState, Card, ICON, type Column } from '../components/ui';
 import { PriceListUploadModal } from '../components/PriceListUpload';
-import { readSheet, matchColumn, mapRows, cellText, skipRow } from '../lib/importSheet';
+import { readSheet, matchColumn, mapRows, cellText, skipRow, groupSkipped, type SkippedRow } from '../lib/importSheet';
+import { fetchAll } from '../lib/supabasePaging';
 import type { TKey } from '../lib/i18n/t';
 import { PRICE_REASON_KEYS, parsePrice } from '../lib/price';
 import { addCalendarDays, bidiIsolate, fmtDate, fmtMoneyExact, fmtMoneyRounded, formatUnit, productLabel, todayISO, fmtNum } from '../lib/format';
@@ -25,6 +26,8 @@ type Row = SupplierProduct & {
 };
 type ManagerSubmission = SupplierPriceSubmission & { supplier: Pick<Supplier, 'id' | 'name'> };
 type ImportReport = { updated: number; created: number; unchanged: number };
+/** A previewed row keeps the line it came from, so every later message can name the FILE. */
+type ImportPreviewRow = { row: number; supplier: string; product: string; price: number };
 
 const SUBMISSION_STATUS = {
   accepted: { key: 'submission_accepted', tone: 'done' },
@@ -165,10 +168,10 @@ export default function PriceLists() {
       key: 'delta', header: t('priceLists.text_2'), className: 'num',
       render: (r: Row) => {
         const cheapest = comparison?.cheapest;
-        if (!cheapest || !r.available) return <span className="text-ink-faint">—</span>;
+        if (!cheapest || !r.available) return <span className="text-ink-muted">—</span>;
         if (r.id === cheapest.id) return <StatusBadge meta={{ key: 'priceList_cheapest', tone: 'done' }} />;
         const diff = r.current_price - cheapest.current_price;
-        if (diff <= 0) return <span className="text-ink-faint">—</span>;
+        if (diff <= 0) return <span className="text-ink-muted">—</span>;
         const pct = cheapest.current_price > 0 ? (diff / cheapest.current_price) * 100 : null;
         return <span className="text-trend-up-fg">‎+{fmtMoneyExact(diff, r.currency)}{pct != null ? ` (+${pct.toFixed(1)}%)` : ''}</span>;
       },
@@ -178,7 +181,7 @@ export default function PriceLists() {
       key: 'change', header: t('priceLists.text_3'), sortValue: changePct,
       render: (r) => {
         const pct = changePct(r);
-        if (!r.previous_price || pct === 0) return <span className="text-ink-faint">—</span>;
+        if (!r.previous_price || pct === 0) return <span className="text-ink-muted">—</span>;
         return pct > 0
           ? <span className="inline-flex items-center gap-1 text-trend-up-fg font-medium"><TrendingUp size={ICON.xs} aria-hidden="true" />‎+{pct.toFixed(1)}%</span>
           : <span className="inline-flex items-center gap-1 text-trend-down-fg font-medium"><TrendingDown size={ICON.xs} aria-hidden="true" />‎{pct.toFixed(1)}%</span>;
@@ -257,6 +260,7 @@ export default function PriceLists() {
           || r.supplier.name.toLowerCase().includes(q)
         )}
         searchLabel={t('priceLists.searchLabel')}
+        columnPicker="prices"
         rowLabel={(r) => t('priceListsTail.rowLabel', { product: productLabel(r.product), supplier: r.supplier.name })}
         mobileTitle={(r) => <><bdi>{productLabel(r.product)}</bdi> · <bdi>{r.supplier.name}</bdi></>}
         mobileTrailing={(r) => <StatusBadge meta={PRODUCT_AVAILABILITY[r.available ? 'available' : 'unavailable']} />}
@@ -317,7 +321,7 @@ export default function PriceLists() {
                         <StatusBadge meta={SUBMISSION_STATUS[submission.status]} />
                       </div>
                       <div className="mt-1 text-sm text-ink-muted break-words">
-                        <bdi>{submission.file_name ?? t('priceLists.text_14')}</bdi> · {t('priceListsTail.accepted')}{' '}<span className="num">{submission.accepted_count}</span> {t('priceLists.text_15')} <span className="num">{submission.unchanged_count}</span> {t('priceLists.text_16')} <span className="num">{submission.rejected_count}</span>
+                        <bdi dir="ltr">{submission.file_name ?? t('priceLists.text_14')}</bdi> · {t('priceListsTail.accepted')}{' '}<span className="num">{submission.accepted_count}</span> {t('priceLists.text_15')} <span className="num">{submission.unchanged_count}</span> {t('priceLists.text_16')} <span className="num">{submission.rejected_count}</span>
                       </div>
                     </div>
                   ))}
@@ -395,6 +399,9 @@ function PriceHistoryModal({ row, onClose }: { row: Row; onClose: () => void }) 
   );
 }
 
+const PRICE_PROBLEM_ID = 'price-list-price-problem';
+const PRICE_ROUNDED_ID = 'price-list-price-rounded';
+
 function EditPriceModal({ row, onClose, onSaved }: { row: Row; onClose: () => void; onSaved: () => void }) {
   const { errorText, t } = useT();
   const toast = useToast();
@@ -403,14 +410,47 @@ function EditPriceModal({ row, onClose, onSaved }: { row: Row; onClose: () => vo
   const [available, setAvailable] = useState(row.available);
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
+  const priceRef = useRef<HTMLInputElement>(null);
+
+  /* ONE PARSER FOR A PRICE — `parsePrice`, the same reading the importer above performs and the
+     client twin of `private.parse_price` from `0298`. This field used to be an
+     `<input type="number">` whose value went straight to `Number()`, which is not "no parser" but
+     a SECOND one, owned by the browser and keyed to the reader's locale: a Hebrew-locale Chrome
+     reads the comma in `12,50` as a thousands separator and hands over 1250, so the editor stored
+     1,250.00 for a cell the importer refuses outright — and that number then decides the cheapest
+     supplier and the next order's unit price. `maxLength` is the parser's own 64.
+
+     The expected currency is the ROW's own, and no `knownCurrencies` set is passed: with none,
+     `parsePrice` recognises this row's code and the printed symbols and calls every other word
+     UNREADABLE rather than guessing at it — the conservative half of the same contract. */
+  const reading = parsePrice(price, row.currency);
+  const value = reading.ok ? reading.value : null;
+  /** Non-null exactly when there is nothing to write, and it names the cause rather than lumping
+      every refusal into one "invalid price": a comma that does not group in threes, a figure over
+      the cap, a cell priced in another currency. */
+  const refusal = value === null
+    ? t(PRICE_REASON_KEYS[reading.reason ?? 'price_unreadable'] as TKey, {
+      currency: reading.currency ?? row.currency, printed: reading.printedCurrency ?? '',
+    })
+    : null;
+  /* Rounding to the currency's own minor units is a change to the number the user typed, so it is
+     stated BEFORE the save and in the figure that will be stored — never applied in silence. */
+  const roundedNote = value !== null && reading.rounded
+    ? t('priceListsTail.priceRounded', { value: fmtMoneyExact(value, row.currency) })
+    : null;
 
   async function save() {
-    const p = Number(price);
-    if (!p || p <= 0) { toast(t('priceLists.toast'), 'error'); return; }
+    if (value === null) {
+      // The cause is already on screen, bound to this field and announced; the caret goes back to
+      // the cell that has to change rather than a second copy of the same sentence.
+      priceRef.current?.focus();
+      return;
+    }
     setBusy(true);
     const upd = await supabase.rpc('set_supplier_product_price', {
       p_supplier_product_id: row.id,
-      p_price: p,
+      // Exactly the figure the notice promised, to this currency's minor units.
+      p_price: value,
       p_effective_date: date,
       p_available: available,
       p_reason: reasonOr(reason, 'עדכון המחיר'),
@@ -429,7 +469,21 @@ function EditPriceModal({ row, onClose, onSaved }: { row: Row; onClose: () => vo
         {/* The row already carries its currency and every READ on this screen honours it — the
             table, the trend column, the chart axis and the history table all format from
             `r.currency`. This one label was the exception, and it is the field that WRITES. */}
-        <div><label className="label" htmlFor="price-list-price">{t('priceListsTail.newPriceLabel', { currency: row.currency })}</label><input id="price-list-price" type="number" step="0.01" className="input num" value={price} onChange={(e) => setPrice(e.target.value)} /></div>
+        {/* MERGE, 05.09.2026 — both sides kept. The other campaign translated these four labels
+            out of hard-coded Hebrew, which is right and is used here. This campaign gave the price
+            field its parser wiring, and THAT part does not survive their version: they use
+            `type="number" step="0.01"`, which refuses the very input `PROC-02` exists to accept —
+            a price typed the way a supplier prints it. So the labels are theirs and the field is
+            ours, along with the refusal and rounded notes and the aria that points at them. */}
+        <div>
+          <label className="label" htmlFor="price-list-price">{t('priceListsTail.newPriceLabel', { currency: row.currency })}</label>
+          <input id="price-list-price" ref={priceRef} className="input num" inputMode="decimal" maxLength={64}
+            value={price} onChange={(e) => setPrice(e.target.value)}
+            aria-invalid={refusal !== null || undefined}
+            aria-describedby={refusal !== null ? PRICE_PROBLEM_ID : roundedNote !== null ? PRICE_ROUNDED_ID : undefined} />
+          {refusal !== null && <div id={PRICE_PROBLEM_ID} className="mt-2"><Note tone="alert" role="alert">{refusal}</Note></div>}
+          {roundedNote !== null && <div id={PRICE_ROUNDED_ID} className="mt-2"><Note tone="info" role="status">{roundedNote}</Note></div>}
+        </div>
         <div><label className="label" htmlFor="price-list-date">{t('priceListsTail.effectiveDate')}</label><input id="price-list-date" type="date" className="input" value={date} onChange={(e) => setDate(e.target.value)} /></div>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="rounded" checked={available} onChange={(e) => setAvailable(e.target.checked)} /> {t('priceListsTail.supplierAvailable')}</label>
         <div><label className="label" htmlFor="price-list-reason">{t('priceListsTail.updateReason')}</label><input id="price-list-reason" className="input" value={reason} onChange={(e) => setReason(e.target.value)} /></div>
@@ -442,13 +496,46 @@ function EditPriceModal({ row, onClose, onSaved }: { row: Row; onClose: () => vo
   );
 }
 
+/**
+ * Every row that did not become a price, with the line it occupies in the UPLOADED FILE.
+ *
+ * `mapRows` has always returned `{valid, skipped}` and has always carried the source line
+ * (`importSheet.ts`), and the per-supplier door has always rendered it. This door bound only
+ * `valid`, so six of eight rows could vanish with no count, no reason and no panel — one product
+ * answering the same question two different ways (`PL-01`). The markup is the sister door's, on
+ * purpose: two doors that report a refusal differently are the defect, not the fix.
+ */
+function SkippedRowsPanel({ skipped }: { skipped: SkippedRow[] }) {
+  const { t } = useT();
+  if (!skipped.length) return null;
+  return (
+    <div className="space-y-2">
+      <Note tone="await">{t('priceUpload.rowsSkipped', { count: skipped.length })}</Note>
+      <details className="text-sm">
+        <summary className="link flex min-h-11 cursor-pointer items-center">{t('priceUpload.text_8')}</summary>
+        <ul className="mt-2 space-y-1 text-ink-soft">
+          {groupSkipped(skipped).map(({ reason: skipReason, rows: skipRows }) => (
+            <li key={skipReason}>
+              {/* The sister door's key AND the sister door's count. Shared wording that one door
+                  asks with a count and the other does not is the same «one product, two answers»
+                  this panel was built to end. */}
+              {skipReason}{t('priceUpload.rowsWord', { count: skipRows.length })}<span className="num">{skipRows.slice(0, 12).join(', ')}</span>
+              {skipRows.length > 12 ? t('priceUpload.andMore', { more: skipRows.length - 12 }) : ''}
+            </li>
+          ))}
+        </ul>
+      </details>
+    </div>
+  );
+}
+
 /** Import price list: expects columns ספק / מוצר / מחיר (or supplier/product/price). */
 function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
   const { errorText, t } = useT();
   const toast = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
-  const [preview, setPreview] = useState<{ supplier: string; product: string; price: number }[]>([]);
-  const [report, setReport] = useState<ImportReport | null>(null);
+  const [preview, setPreview] = useState<{ rows: ImportPreviewRow[]; skipped: SkippedRow[] } | null>(null);
+  const [report, setReport] = useState<{ summary: ImportReport; skipped: SkippedRow[] } | null>(null);
   const [busy, setBusy] = useState(false);
   const [reason, setReason] = useState('');
 
@@ -467,12 +554,15 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
       // named supplier trades in. This sheet carries many suppliers, so the currency is resolved
       // per row from the supplier the row names; a row naming a supplier this organisation does
       // not have is skipped here rather than at import.
-      const suppliers = unwrap(await supabase.from('suppliers')
-        .select('name, default_currency').is('deleted_at', null)) as
-        { name: string; default_currency: string }[];
+      // PAGED, like every other read of a whole table here (`supabasePaging.ts`). One request
+      // stops at PostgREST's page ceiling, so a catalogue past it resolved NOTHING — silently,
+      // with an HTTP 200 and no error anywhere. `PL-10`.
+      const suppliers = await fetchAll<{ id: string; name: string; default_currency: string }>((from, to) =>
+        supabase.from('suppliers').select('id, name, default_currency').is('deleted_at', null)
+          .order('id').range(from, to));
       const currencyByName = new Map(suppliers.map((row) => [row.name.trim(), row.default_currency]));
       const codes = new Set(suppliers.map((row) => row.default_currency));
-      const { valid } = mapRows(sheet.rows, (r) => {
+      const { valid, skipped } = mapRows(sheet.rows, (r, rowNumber) => {
         const supplier = cellText(r, cols.supplier);
         const product = cellText(r, cols.product);
         const parsed = parsePrice(cellText(r, cols.price, 64), currencyByName.get(supplier), codes);
@@ -482,32 +572,48 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
             currency: parsed.currency ?? '', printed: parsed.printedCurrency ?? '',
           }));
         }
-        return { supplier, product, price: parsed.value };
+        return { row: rowNumber, supplier, product, price: parsed.value };
       }, t('importSheet.invalidRow'));
       if (!valid.length) { toast(t('priceLists.toast_2'), 'error'); return; }
-      setPreview(valid);
+      setPreview({ rows: valid, skipped });
     } catch (e) {
       toast(e instanceof Error ? e.message : t('priceLists.toast_3'), 'error');
     }
   }
 
   async function runImport() {
+    if (!preview) return;
     setBusy(true);
     try {
-      const suppliers = unwrap(await supabase.from('suppliers').select('id, name')) as { id: string; name: string }[];
+      // Both catalogue reads are PAGED, for the reason spelled out at the preview's read above.
+      const suppliers = await fetchAll<{ id: string; name: string }>((from, to) =>
+        supabase.from('suppliers').select('id, name').order('id').range(from, to));
       // MATCHING, not display: the sheet the user is importing carries the supplier's own wording,
       // and the raw `name` is what that wording was ever compared against. `display_name` is a
       // name we composed, so a row would stop resolving the moment somebody approved one.
-      const products = unwrap(await supabase.from('products').select('id, name')) as { id: string; name: string }[];
-      const unresolved: number[] = [];
-      const rows = preview.flatMap((row, index) => {
+      const products = await fetchAll<{ id: string; name: string }>((from, to) =>
+        supabase.from('products').select('id, name').order('id').range(from, to));
+      // ONE RULE FOR THE WHOLE DOOR, the sister door's rule: a row that cannot be used is reported
+      // with the line it occupies in the FILE and the reason it was refused, and every other row
+      // is imported. This counter used to be `index + 2` over the ALREADY FILTERED preview, so it
+      // named line 3 for a problem on line 9 — and one unresolved row discarded the rows that did
+      // resolve along with it. `PL-02`.
+      const unresolved: SkippedRow[] = [];
+      const rows = preview.rows.flatMap((row) => {
         const supplier = suppliers.find((candidate) => candidate.name.trim() === row.supplier);
         const product = products.find((candidate) => candidate.name.trim() === row.product);
-        if (!supplier || !product) { unresolved.push(index + 2); return []; }
+        if (!supplier || !product) {
+          unresolved.push({ row: row.row, reason: t('priceListsTail.unresolvedReason') });
+          return [];
+        }
         return [{ supplier_id: supplier.id, product_id: product.id, price: row.price, available: true }];
       });
-      if (unresolved.length) {
-        toast(t('priceListsTail.unresolvedRows', { rows: unresolved.slice(0, 12).join(', ') }), 'error');
+      // Nothing resolved: there is no partial import to make, so the file is refused — and the
+      // refusal names the source lines rather than positions in a list the reader never saw.
+      if (!rows.length) {
+        toast(t('priceListsTail.unresolvedRows', {
+          rows: unresolved.slice(0, 12).map((entry) => entry.row).join(', '),
+        }), 'error');
         return;
       }
       const imported = unwrap(await supabase.rpc('import_supplier_prices', {
@@ -515,7 +621,7 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
         p_effective_date: todayISO(),
         p_reason: reasonOr(reason, 'ייבוא המחירון'),
       })) as ImportReport;
-      setReport(imported);
+      setReport({ summary: imported, skipped: [...preview.skipped, ...unresolved] });
     } catch (e) {
       toast(errorText(e), 'error');
     } finally {
@@ -523,23 +629,28 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
     }
   }
 
-  const reportText = report ? t('priceListsTail.importReport', report) : null;
+  const reportText = report ? t('priceListsTail.importReport', report.summary) : null;
 
   return (
     <Modal open onClose={onClose} title={t('priceLists.title_4')} wide busy={busy} statusMessage={reportText ?? (busy ? t('priceLists.text_21') : undefined)}>
       {report ? (
         <div className="space-y-4">
           <Note tone="done">{reportText}</Note>
+          {/* The completed import accounts for EVERY row that did not become a price — the ones
+              the parser refused and the ones the catalogue could not match — each by its line in
+              the uploaded file. */}
+          <SkippedRowsPanel skipped={report.skipped} />
           <div className="flex justify-end"><button className="btn-primary" onClick={onDone}>{t('priceLists.text_22')}</button></div>
         </div>
-      ) : preview.length ? (
+      ) : preview ? (
         <div className="space-y-4">
-          <div className="text-sm text-ink-soft">{t('priceListsTail.previewSummary', { count: preview.length })}</div>
+          <div className="text-sm text-ink-soft">{t('priceListsTail.previewSummary', { count: preview.rows.length })}</div>
+          <SkippedRowsPanel skipped={preview.skipped} />
           <div className="table-scroll max-h-64 overflow-auto rounded-lg border border-line-soft" tabIndex={0} role="region" aria-label={t('priceLists.aria_label_3')}>
             <table className="w-full">
               <thead className="table-head sticky top-0"><tr><th scope="col" className="th">{t('priceLists.text_23')}</th><th scope="col" className="th">{t('priceLists.text_24')}</th><th scope="col" className="th">{t('priceLists.text_25')}</th></tr></thead>
               <tbody className="divide-y divide-line-soft">
-                {preview.slice(0, 100).map((r, i) => (
+                {preview.rows.slice(0, 100).map((r, i) => (
                   <tr key={i}><td className="td">{r.supplier}</td><td className="td">{r.product}</td>{/* No currency symbol here on purpose: the sheet has no currency column, the supplier is
                         matched by NAME at import time, and the price is stored in THAT supplier own
                         currency by the server. Printing a symbol this screen guessed would be the
@@ -552,7 +663,7 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
           </div>
           <div><label className="label" htmlFor="price-list-import-reason">{t('priceLists.setReason_2')}</label><input id="price-list-import-reason" className="input" value={reason} onChange={(e) => setReason(e.target.value)} /></div>
           <div className="flex justify-end gap-2">
-            <button className="btn-secondary" disabled={busy} onClick={() => setPreview([])}>{t('priceLists.setPreview')}</button>
+            <button className="btn-secondary" disabled={busy} onClick={() => setPreview(null)}>{t('priceLists.setPreview')}</button>
             <button className="btn-primary" disabled={busy} onClick={() => void runImport()}>{busy ? t('priceLists.runImport') : t('priceLists.runImport_2')}</button>
           </div>
         </div>

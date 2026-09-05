@@ -41,6 +41,9 @@ const state = (over: Partial<ReceiptConflictState> = {}): ReceiptConflictState =
   receiptId: 'receipt-1',
   lines: [line()],
   localObservedAt: Date.UTC(2026, 7, 5, 5, 14),
+  // The case PROC-04 was reported from: typed and submitted from this screen, on a connected
+  // device, seconds earlier. Nothing waited in a queue.
+  queuedReplay: false,
   serverReceiptId: 'receipt-1',
   serverReceiptStatus: 'draft',
   serverReceiptAt: '2026-08-05T11:02:00Z',
@@ -65,6 +68,25 @@ describe('conflictPresentation — one decision per rejection code', () => {
     expect(qty.requiresExplanation).toBe(true);
     expect(qty.options.map((option) => option.kind)).toEqual(['resend-decided', 'keep-local']);
     expect(qty.localOnlyNoteKey).toBeNull();
+  });
+
+  it('blames an offline race only where one could have happened (PROC-04)', () => {
+    const live = conflictPresentation('receipt_qty_exceeds_order', { queuedReplay: false });
+    const queued = conflictPresentation('receipt_qty_exceeds_order', { queuedReplay: true });
+    expect(live.summaryKey).not.toBe(queued.summaryKey);
+
+    // The reported defect: a quantity typed and sent online, on a connected device, was explained
+    // by "somebody else may have received against this order while the device was offline" — a
+    // colleague who never touched the order, and a device that was never away.
+    expect(say(live.summaryKey)).not.toMatch(/לא־מקוון|לא מקוון|המתינה/);
+    // The line above must not be satisfied by silence: the live wording still names what happened.
+    expect(say(live.summaryKey)).toMatch(/יותר מהכמות שנותרה/);
+    // And the wording that was wrong for a live submit is right for a replay, so it is kept there.
+    expect(say(queued.summaryKey)).toMatch(/המתינה/);
+
+    // Neither variant changes what the dialog offers; only what it says caused the refusal.
+    expect(queued.perLineDecision).toBe(live.perLineDecision);
+    expect(queued.options.map((option) => option.kind)).toEqual(live.options.map((option) => option.kind));
   });
 
   it('never offers to overwrite a receipt the server has already closed', () => {
@@ -174,6 +196,14 @@ describe('the dialog', () => {
     expect(screen.queryByRole('button', { name: 'שליחה לפי ההכרעה' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'השרת עבור עגבניות' })).not.toBeInTheDocument();
     expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('states the problem once, not twice (PROC-07)', () => {
+    render(<ReceiptConflictDialog conflict={state()} onClose={() => {}} onResolve={() => {}} />);
+    const summary = say(conflictPresentation('receipt_qty_exceeds_order', { queuedReplay: false }).summaryKey);
+    // It used to appear twice, word for word — once as the dialog's description and again in a
+    // red box beneath it — which pushed the comparison table off a phone screen.
+    expect(screen.getAllByText(summary)).toHaveLength(1);
   });
 
   it('renders nothing without a conflict', () => {

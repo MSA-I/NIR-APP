@@ -1,0 +1,46 @@
+PR 08 — RED — FIN-03
+"Both items in the execution queue target invoices whose balance is already zero, and the dialog
+never shows the invoice balance."
+
+Oracle run against the UNFIXED tree (base b2f91be2, product files restored to HEAD content while
+the two spec files stayed in place; no git state was changed to do it).
+
+  npx vitest run src/pages/payQueueSettledBalance.spec.tsx src/pages/payQueueBalanceArithmetic.spec.ts
+
+Full run: docs/qa/2026-09-04/evidence/PR08-RUN-RED.txt  (2 files failed, 11 failed / 1 passed)
+
+The four assertions this row owns, all failing:
+
+  × marks a queued request whose invoices are already settled
+    TestingLibraryElementError: Unable to find an element with the text: החשבוניות כבר נפרעו
+
+  × shows the invoice live balance beside the approved amount in the dialog
+    TestingLibraryElementError: Unable to find an element with the text: יתרה לתשלום בחשבוניות
+
+  × draws the em dash, not a zero, when the balance could not be read
+    TestingLibraryElementError: Unable to find an element with the text: יתרה לתשלום בחשבוניות
+
+  × surfaces the open duplicate-payment exception the product already holds
+    TestingLibraryElementError: Unable to find an element with the text:
+      /חשד לדרישת תשלום כפולה — #12 · נקי וזוהר/
+
+plus the six arithmetic cases, which fail as `TypeError: paymentRequestBalance is not a function`
+— the helper does not exist on the unfixed tree.
+
+MEASURED IN A BROWSER TOO, not only in jsdom. `.tmp/pay-visual-check.cjs` renders /pay at
+1440x900 through system Edge with every Supabase read answered from a fixture, and read the
+unfixed screen back as:
+
+  queue card text : "נקי וזוהר · 300.00 ₪ · מאושרת · לתשלום עד 10.09.2026 · חשבונית אחת"
+                    — no balance, no mark, on either of the two cards
+  showsBalanceLabel : false
+  showsException    : false
+
+Both fixture cards target invoices whose balance the fixture reports as 0.00, and one of them
+carries an open high-severity duplicate_payment exception naming the request. Neither fact
+reached the screen. Screenshots: PR08-RED-pay-queue-1440x900.png, PR08-RED-pay-dialog-1440x900.png.
+
+WHAT THE ONE PASSING ASSERTION MEANS. "keeps the primary enabled — ruling #353 accepts the
+recording" passes in BOTH trees, deliberately. Ruling #353 (04.09.2026) says /pay records a
+transfer that has already left the bank, so the recording is always accepted; an oracle that also
+demanded the button be disabled would be demanding the draft the ruling overturned.

@@ -1,0 +1,188 @@
+resource=local-supabase-stack + SQL suites + npm run quality
+SINGLE OCCUPANCY. Read this file before ANY command that touches the local stack.
+
+FREE — released 05.09.2026 at the end of the cross-verification wave. Nobody holds it.
+
+  THE LAST HOLDER WAS THE G13 "SQL" VERIFIER, and it handed the stack back at full head
+  (0310-0315, 0319, 0320, 0322, 0323, 0324) with `npm run demo:restore` proved: three real
+  password sign-ins, three profiles in the right roles. Every fixture it made died with its final
+  reset. It read the head before **every one of its eight resets** and found, on arrival, that the
+  other campaign had again replaced our set with theirs and taken 0315 with it -- which is exactly
+  why that rule exists. All six suites went red then green with every control green in the red
+  run, and it re-ran p115's race as a separate probe rather than accepting the shape as proof.
+
+  ANYONE TAKING IT NEXT: the other campaign on this machine rebuilds this database without
+  reading this file. Reset from your own worktree and READ THE HEAD before each measurement.
+
+  PR 17 RELEASED IT, and its four rows closed the last open finding. Note what it did NOT do and
+  why: no screenshot, because the other campaign rebuilt the shared database FOUR TIMES under it,
+  twice caught mid-rebuild with the migration ledger gone. It considered a component-level oracle
+  as a substitute and REJECTED it — the panel renders the price unconditionally, so that test would
+  have been green on the unfixed tree: proof-shaped and worthless. The gap is written into all four
+  rows rather than filled with something cheaper.
+  It also caught this campaign's own number lock being STALE: 0318 was reserved here for PR 17
+  hours earlier while `next-number` was already naming it as claimed elsewhere. It drew 0324 before
+  writing anything. Draw late, from the tool.
+  THE STACK WAS MID-REBUILD BY THE OTHER CAMPAIGN AT HANDOFF. Reset from your own worktree and read
+  the head; do not inherit it.
+
+  PR 13 RELEASED IT, done and proved: RED 22/25 with 17 of 17 controls green in the SAME run and
+  the leak reproduced in a SECOND tenant; GREEN 25/25 with the same 17, same file hash read back
+  inside the container both times. It also re-ran `PERM-03`'s EXPLAIN on its own green stack rather
+  than reasoning that the plan "should not" change: same index scan, same index condition, the new
+  conjunct landing in the Filter -- and it stated the limit, that 17 local rows do not reproduce
+  production's 27,533. Landed at 5145ecac. `DEBT §121` written.
+  IT ALSO TESTED A HYPOTHESIS INSTEAD OF FILING IT. A `demo:restore` GoTrue 500 looked like p116's
+  own auth fixtures, which would have been a real residual since the gate runs p116 then restore.
+  It reproduced the sequence deliberately, restore succeeded, and the 500 turned out to be the
+  OTHER CAMPAIGN rebuilding the shared database mid-run. p116 does not break GoTrue.
+
+  THE OTHER CAMPAIGN CLOBBERED THE STACK A SECOND TIME, at 09:03 UTC, again leaving 0315 gone.
+  It did not corrupt PR 13's measurements only because PR 13 read the head out of
+  `schema_migrations` immediately before each side. THAT IS WHY THE RULE IS READ, NEVER ASSUME.
+
+  PR 17 WAS STOPPED AND IS BEING RE-DISPATCHED. It held this lock from the start of the wave and
+  produced, in EIGHT HOURS: no commit, no migration, no suite, and no file written in its worktree
+  after 04:54. It was not cancelled for being slow -- it was cancelled because it had stopped.
+
+  PR 11 RELEASED IT, done and proved. The red printed exactly the five lines its author predicted
+  and nothing else, with five controls green in the SAME run, and it read the money the aborted
+  run left behind: 5,900.00 confirmed on a 2,950.00 line, reached through the real command as an
+  authenticated owner. Green exit 0 on a file whose hash was read back inside the container both
+  times.
+  THE RACE ACTUALLY SERIALISED, and proving it took an extra step worth copying: p115 drops its own
+  schema on success, so its per-session messages are unreadable afterwards. Rather than assert the
+  shape and call it proved, the agent re-ran the identical race as a supplementary probe and
+  printed the two outcomes -- `session_a | ok`, `session_b | bank_allocation_exceeds_statement_line`
+  -- with session B blocked on the guard's row lock, not deadlocked and not timed out.
+  0322's pre-install assertion passed on every reset and was not weakened; the demo seed then
+  loaded THROUGH the live bound with zero lines over it. Landed at 0418a9aa.
+
+  PR 5+6 RELEASED IT, done and proved, and it did something worth copying: it found the SUITE
+  ITSELF could not satisfy the brief. As committed, p112 raised inside its first assertion under
+  ON_ERROR_STOP, which makes "a control passing beside the failure" STRUCTURALLY IMPOSSIBLE. So it
+  restructured the harness to record every case as an expected/observed pair and raise once at the
+  end -- and re-ran BOTH sides against the corrected file, hash read back inside the container both
+  times. RED 15/47 with 11 of 11 controls green; GREEN 47/47 with the same 11. It also corrected
+  two expectations that were factually wrong (every organisation is born with default flag and
+  autonomy rows) by MEASURING them into the literal rather than filtering them out.
+  Seven regression suites: six pass. `p22_trial_read_only` fails on a guard installed 185
+  migrations before ours, is in no gate, and its own header says it is retired and must not be
+  re-wired -- recorded, not made to pass. Landed at ccc72b0e. Stack left at head 0319, healthy,
+  crash count 0, demo tenant restored and signed into.
+  NOTE FOR THE COORDINATOR: `p22_trial_read_only` is a suite in the tree that NOTHING RUNS.
+
+  PR 14 RELEASED IT, done and proved: it asserted the head before and after every one of its
+  three resets (0315 was indeed missing and came back), got 4 of 16 red with all three deliberate
+  controls green in the same run, 16 of 16 green on a suite file whose SHA-256 it recorded, read
+  four screenshots, and finished with `npm run demo:restore` proved by three real sign-ins. Its
+  fixture was SOFT-deleted -- a hard delete was refused by the audit immutability guard and by a
+  foreign key, which is the project's own rule enforced by the database rather than by a habit.
+  Landed on the campaign branch at 48499e85.
+
+  PR 17 HELD THIS AND LOST IT, and the reason is written down rather than left as a judgement
+  call. Measured at 06:41: no file written in its worktree since 04:54, and NO APPLICATION
+  BACKEND HAS QUERIED THE LOCAL DATABASE SINCE 01:59 UTC — one hour forty-seven minutes on both
+  clocks. Beyond that, the stack it had prepared was rebuilt at 04:58 by the other campaign and
+  its 0315 is gone, so whatever fixtures it laid down no longer exist. It cannot be mid-
+  measurement on a database that was destroyed under it.
+
+  PR 17 IS NOT CANCELLED. Its production diagnosis needs no lock and can continue. If it reaches
+  a local-stack command it will read this file, see it is not the holder, and re-queue — which is
+  the protocol working, not a failure. Its slot is at the FRONT of the queue when PR 14 releases.
+
+QUEUE (coordinator grants in this order, one at a time, by SendMessage):
+  1. PR 5+6   PERM-01                 migration 0319, suite p112
+     *** READY FOR THE STACK, 05.09.2026. Branch worktree-agent-a3bfa1394780d727a. TWO commits,
+     and they must stay two and stay in order: 521d34e5 (PR 5, the client stops asking -- closes
+     NOTHING, PERM-01 stays DIAGNOSED after it) then 926e7b55 (PR 6, the database stops answering).
+     FIXED arrives by amending 926e7b55 after the stack run, not before.
+     Neither 0319 nor p112 has ever been EXECUTED -- their syntax is unverified until the first
+     reset. That is stated rather than assumed.
+     Its own sequence: baseline the postgres crash count -> RED with 0319 moved aside (head 0315)
+     -> GREEN with it back (head 0319) -> SEVEN regression suites one at a time, because a REVOKE
+     is the one change here that can break every open tab (p0_client_dml_acl, p1_financial_commands,
+     p17_financial_supplier_view, p3_org_scope, p22_trial_read_only, p43_active_persona_surface,
+     p44_trial_retirement_document_control) -> `npm run demo:restore` -> re-check the crash count.
+     WHAT IT FOUND BEYOND THE FINDING: `select('*')` was also handing every office clerk and
+     accountant `profiles.backup_email` -- the address a person nominates to RECOVER THEIR ACCOUNT.
+     Its live count is 0 only because nobody has nominated one yet; the column is fully readable,
+     so the first person to nominate one publishes it to every colleague.
+  2. PR 14    MON-03/FIN-04/FIN-07    migration 0320, suite p113
+     *** READY FOR THE STACK, 05.09.2026. Branch worktree-agent-a4ddfa2e0c205b10b, commits
+     f5d05a8b and a04b7e0f. Off-stack work done: production measurement (the supplier the sweep
+     photographed really does owe $300 -- `FIN-04`'s own diagnosis is INVERTED and `MON-03` is
+     right), ancestry checked by `pg_get_functiondef` (byte-for-byte 0218, md5 recorded), two
+     anchored replacements each count-asserted at 1 and dry-run against the captured live body,
+     migration 0320, suite p113 registered and baselined, and the `FIN-07` label change with its
+     own red (2 failed / 1 passing control) and green. GATES rows deliberately left DIAGNOSED --
+     the DB proof and the screenshots do not exist yet, so `FIXED` would be a claim not measured.
+     Its five steps, in order: reset through 0320 -> p113 RED with 0320 held back -> p113 GREEN
+     with it applied -> headed Edge at 1440x900 on the supplier card and the dashboard as the
+     accountant, before and after, both read -> `npm run demo:restore`, verified.
+  3. PR 15    MON-06                  migration 0321, suite p114
+  4. PR 11    MON-04                  migration 0322, suite p115
+     *** READY FOR THE STACK, 05.09.2026. Branch worktree-agent-aa933e5ca166007ba, commits
+     83ce038d and 02af0673. `0322` and `p115` have NEVER TOUCHED A DATABASE -- every SQL claim
+     in them is a claim about text until the first reset. Said plainly by its author.
+     WHAT IT FOUND: the finding's "two CONFIRMED allocations" is false. Confirmed allocations
+     exceed no line anywhere in production; exactly one line exceeds once SUGGESTIONS are counted,
+     and that suggestion is the demo seed's. But the defect the oracle names is real and LARGER --
+     `bank_allocations` has had NO BOUND AT ALL since `0001`. The residual is recorded as §122.
+     ITS RED IS SURGICAL and better than a migration-set red: reset everything, then drop the ONE
+     trigger, run p115, reset again for green. The suite commits its fixtures and the red aborts
+     before its own cleanup, so the second reset is required, not tidiness.
+     CAUTION FOR THE HOLDER: `0322` ASSERTS that no line is already over the bound before it
+     installs the trigger. Safe on production and on the demo seed. If a LOCAL stack has been left
+     with a genuinely over-allocated line the migration will refuse and name it -- that is the
+     assertion working, not a bug. Do not "fix" it by weakening the assertion.
+  5. PR 13    PERM-02                 migration 0323, suite p116
+     *** READY FOR THE STACK, 05.09.2026. Branch worktree-agent-a74b31599b1611772, commit
+     4e3c1008. Everything off-stack is done and committed: the production measurement (the
+     accountant reads 2 rows and is the subject of 0), migration 0323 as an ANCHORED
+     `alter policy` that wraps the qual read live from pg_policy and refuses a drifted one,
+     and suite p116. The agent that wrote it has exited; a continuation agent runs its script.
+     Three steps, in order:
+       1. RED on the genuinely unfixed tree -- move 0323 OUT of supabase/migrations,
+          `supabase db reset`, docker cp the suite, run it. Expect the accountant reading a
+          row it must not.
+       2. GREEN -- move 0323 back, `supabase db reset`, run the SAME suite unchanged.
+       3. `npm run demo:restore` -- the stack is reset twice, so it is restored and PROVED
+          before handoff. Project rule, not a courtesy.
+     Then write PR13-PERM-02-RED.txt / -GREEN.txt, set the GATES row, amend 4e3c1008.
+     LAND IT LAST of this campaign's migrations: 0323 is our highest number.
+
+THE SHARED STACK WAS CLOBBERED BY THE OTHER CAMPAIGN. Measured 05.09.2026 06:35 local:
+
+    select version from supabase_migrations.schema_migrations where version >= '0310'
+    -> 0310 0311 0312 0313 0314 0316
+
+  OUR 0315 IS NOT THERE and 0316 is. `pg_postmaster_start_time()` = 01:58 UTC (04:58 local), so
+  the stack was rebuilt at 04:58 from the OTHER campaign's migration set -- their branch predates
+  PR 7, so the rebuild simply dropped 0315. No application backend has issued a query since 01:59
+  UTC; only PostgREST, pg_cron and pg_net sit idle.
+
+  THIS LOCK FILE BINDS ONLY THIS CAMPAIGN'S AGENTS. `docs/ux-remediation-documents-assistant` does
+  not read it and reset the stack out from under a holder. That is the same contention this machine
+  has seen before, and it is why the rule is READ THE HEAD, NEVER ASSUME IT.
+
+  EVERY HOLDER FROM NOW ON, FIRST TWO STEPS, NO EXCEPTIONS:
+    1. `supabase db reset` FROM YOUR OWN WORKTREE -- never trust the head you inherit.
+    2. Assert the head afterwards. `0315` must be present, or PR 7's guard is not in the database
+       and every money proof above it is measuring the wrong thing.
+  A red or green measured on a stack whose head you did not read is not evidence.
+
+WHAT COUNTS AS TOUCHING THE STACK:
+  docker exec ... psql on supabase_db_supplyflow-p0
+  supabase db reset / db push / start / stop
+  scripts/ci-sql-suites.mjs WITHOUT --list   (it RESETS the database)
+  npm run quality
+  npm run demo:restore
+
+READ-ONLY queries against the REMOTE production project through
+scripts/db-query.ps1 -ProjectRef rkftlbctohswhbbiaqin are NOT covered by this
+lock and need no grant.
+
+If you are not the holder: do every other part of your work, then STOP and report
+"ready for the stack", naming exactly what you will run. Do not poll, do not wait,
+do not take the lock yourself.

@@ -1,0 +1,29 @@
+RTL-A11Y-02 — /payments at 390px drops the invoice-allocation column, the notes and the
+executed-by column, and there is no way to get them back.
+
+ORACLE (GATES.md): at 390px /payments shows the invoice-allocation column after the viewer turns
+it on.
+
+WHAT IS RUN: the mechanism, at the DataTable level where it lives. A priority-3 column, a phone
+viewport, and the picker's own checklist. Six claims: the priority default still holds for a
+column nobody chose; the checklist on a phone reports the CARD rather than the desktop table;
+ticking puts the column on every card; a second tick returns it to the default WITHOUT hiding the
+column from the desktop table; the choice survives a remount; and a priority-1/2 column still
+hides on both bodies. A seventh, in its own block, pins that desktop behaviour is unchanged.
+
+RUN AGAINST THE FIXED TREE. Same command, same file, no edit to the spec between the two runs.
+
+COMMAND: npx vitest run src/components/mobileColumnParity.spec.tsx
+  (run from another worktree in this session, so the actual invocation carried the tree
+   explicitly: npx vitest run --root <worktree> --config <worktree>/vitest.config.ts <spec>)
+
+------------------------------------------------------------------------------
+
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/pr20-mobile-columns
+
+
+ Test Files  1 passed (1)
+      Tests  7 passed (7)
+   Start at  13:55:57
+   Duration  2.91s (transform 553ms, setup 466ms, import 749ms, tests 447ms, environment 1.03s)

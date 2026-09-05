@@ -221,7 +221,16 @@ export function SpendBarChart({
             {/* Reference bar language (T7.2): faint SOLID horizontal guides only, no on-bar
                 numbers — the dark tooltip and the ARIA text carry the values. */}
             <CartesianGrid vertical={false} stroke={theme.grid} />
-            <XAxis dataKey="key" tick={{ fontSize: 12, fill: theme.tick }} axisLine={false} tickLine={false} />
+            {/* `interval={0}` — every bucket keeps its label, and the reason is that this axis is
+                CATEGORICAL. recharts defaults to `preserveEnd`, which drops ticks that will not
+                fit; on a continuous axis that is ordinary thinning and the reader loses nothing,
+                because the ticks that remain still say where the missing ones were. Here the
+                ticks ARE the categories. Measured in Edge, four consecutive months: at 430, 412,
+                390, 375 and 360px the axis drew four labels; at 344px it drew three — יוני, יולי,
+                ספטמבר — and the August bar was left with no name at all. A reader counting labels
+                is then a month out. Measured after: four at every one of those widths, and at the
+                narrowest the two longest labels abut without a gap rather than one vanishing. */}
+            <XAxis dataKey="key" interval={0} tick={{ fontSize: 12, fill: theme.tick }} axisLine={false} tickLine={false} />
             <YAxis hide />
             {/* The tooltip swatch is looked up by the bucket's KEY, not by its value: two months
                 can hold the same amount, and matching on the number would have painted the swatch

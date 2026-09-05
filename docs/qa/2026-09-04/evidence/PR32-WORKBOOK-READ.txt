@@ -1,0 +1,203 @@
+PR32 - WORKBOOK READ (post-fix)
+The generated .xlsx bytes reopened with SheetJS and read cell by cell.
+command: npx vitest run src/lib/zzPr32WorkbookRead.spec.ts --disable-console-intercept
+         (temporary dump spec, run for this evidence and then deleted)
+cell notation: ADDRESS=value[type numfmt]   type s=text n=number d=date e=error
+
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-ab033ae7e071c8f4a
+
+
+================ A. LIVE MONTHLY REPORT — mixed currency, August 2026 (EXP-01) ================
+sheets (8): פרטי הדוח | חשבוניות ILS | חשבוניות USD | תשלומים ILS | תשלומים USD | זיכויים ILS | זיכויים USD | חריגים פתוחים כרגע
+
+---- sheet: פרטי הדוח
+  row1 title  : דוח חודשי לרו״ח — עסק לדוגמה
+  row2 window : אוגוסט 2026 · 01.08.2026–31.08.2026 · הופק 04.09.2026, 02:42
+  r4: A4="שם ארגון"[s General]  B4="עסק לדוגמה"[s General]
+  r5: A5="חודש"[s General]  B5="אוגוסט 2026 · 01.08.2026–31.08.2026"[s General]
+  r6: A6="נוצר בתאריך"[s General]  B6="2026-09-04T02:42:00.000Z"[n dd/mm/yyyy]
+  r7: A7="הערה"[s General]  B7="הקובץ משקף את הנתונים שהושלמו בזמן המצוין; הוא אינו snapshot טרנזקציוני."[s General]
+  r9: A9="מדד"[s General]  B9="מספר רשומות"[s General]  C9="סכום"[s General]  D9="מטבע"[s General]
+  r10: A10="חשבוניות"[s General]  B10=1[n General]  C10=12400[n #,##0.00]  D10="ILS"[s General]
+  r11: A11="לפני מע״מ"[s General]  B11=1[n General]  C11=12400[n #,##0.00]  D11="ILS"[s General]
+  r12: A12="מע״מ"[s General]  B12=1[n General]  C12=0[n #,##0.00]  D12="ILS"[s General]
+  r13: A13="תשלומים כנגד חשבוניות"[s General]  B13=0[n General]  C13="—"[s #,##0.00]  D13="ILS"[s General]
+  r14: A14="זיכויים"[s General]  B14=0[n General]  C14="—"[s #,##0.00]  D14="ILS"[s General]
+  r15: A15="חשבוניות"[s General]  B15=1[n General]  C15=3100[n #,##0.00]  D15="USD"[s General]
+  r16: A16="לפני מע״מ"[s General]  B16=1[n General]  C16=3100[n #,##0.00]  D16="USD"[s General]
+  r17: A17="מע״מ"[s General]  B17=1[n General]  C17=0[n #,##0.00]  D17="USD"[s General]
+  r18: A18="תשלומים כנגד חשבוניות"[s General]  B18=0[n General]  C18="—"[s #,##0.00]  D18="USD"[s General]
+  r19: A19="זיכויים"[s General]  B19=0[n General]  C19="—"[s #,##0.00]  D19="USD"[s General]
+  r20: A20="חריגים פתוחים כרגע"[s General]  B20=0[n General]  C20="—"[s #,##0.00]  D20="—"[s General]
+  r21: A21="שורת החריגים מונה את החריגים הפתוחים במועד ההפקה ואינה מוגבלת לתקופת הדוח."[s General]
+
+---- sheet: חשבוניות ILS
+  row1 title  : דוח חודשי לרו״ח — עסק לדוגמה
+  row2 window : אוגוסט 2026 · 01.08.2026–31.08.2026 · הופק 04.09.2026, 02:42
+  r4: A4="ספק"[s General]  B4="מספר חשבונית"[s General]  C4="תאריך"[s General]  D4="לפני מע\"מ"[s General]  E4="מע\"מ"[s General]  F4="סה\"כ"[s General]  G4="מטבע"[s General]  H4="סטטוס בדיקה"[s General]  I4="סטטוס תשלום"[s General]
+  r5: A5="ספק שקלי"[s General]  B5="I-1"[s General]  C5="2026-07-31T21:00:00.000Z"[n dd/mm/yyyy]  D5=12400[n #,##0.00]  E5=0[n #,##0.00]  F5=12400[n #,##0.00]  G5="ILS"[s General]  H5="מאושרת"[s General]  I5="לא שולמה"[s General]
+
+---- sheet: חשבוניות USD
+  row1 title  : דוח חודשי לרו״ח — עסק לדוגמה
+  row2 window : אוגוסט 2026 · 01.08.2026–31.08.2026 · הופק 04.09.2026, 02:42
+  r4: A4="ספק"[s General]  B4="מספר חשבונית"[s General]  C4="תאריך"[s General]  D4="לפני מע\"מ"[s General]  E4="מע\"מ"[s General]  F4="סה\"כ"[s General]  G4="מטבע"[s General]  H4="סטטוס בדיקה"[s General]  I4="סטטוס תשלום"[s General]
+  r5: A5="ספק דולרי"[s General]  B5="U-1"[s General]  C5="2026-08-01T21:00:00.000Z"[n dd/mm/yyyy]  D5=3100[n #,##0.00]  E5=0[n #,##0.00]  F5=3100[n #,##0.00]  G5="USD"[s General]  H5="מאושרת"[s General]  I5="לא שולמה"[s General]
+
+---- sheet: תשלומים ILS
+  row1 title  : דוח חודשי לרו״ח — עסק לדוגמה
+  row2 window : אוגוסט 2026 · 01.08.2026–31.08.2026 · הופק 04.09.2026, 02:42
+  r4: A4="ספק"[s General]  B4="תאריך"[s General]  C4="סכום כנגד חשבוניות"[s General]  D4="מטבע"[s General]  E4="אמצעי"[s General]  F4="אסמכתא"[s General]
+  r5: A5="אין תשלומים בחודש זה — ILS"[s General]
+
+---- sheet: תשלומים USD
+  row1 title  : דוח חודשי לרו״ח — עסק לדוגמה
+  row2 window : אוגוסט 2026 · 01.08.2026–31.08.2026 · הופק 04.09.2026, 02:42
+  r4: A4="ספק"[s General]  B4="תאריך"[s General]  C4="סכום כנגד חשבוניות"[s General]  D4="מטבע"[s General]  E4="אמצעי"[s General]  F4="אסמכתא"[s General]
+  r5: A5="אין תשלומים בחודש זה — USD"[s General]
+
+---- sheet: זיכויים ILS
+  row1 title  : דוח חודשי לרו״ח — עסק לדוגמה
+  row2 window : אוגוסט 2026 · 01.08.2026–31.08.2026 · הופק 04.09.2026, 02:42
+  r4: A4="ספק"[s General]  B4="סיבה"[s General]  C4="סכום"[s General]  D4="מטבע"[s General]  E4="סטטוס"[s General]
+  r5: A5="אין זיכויים בחודש זה — ILS"[s General]
+
+---- sheet: זיכויים USD
+  row1 title  : דוח חודשי לרו״ח — עסק לדוגמה
+  row2 window : אוגוסט 2026 · 01.08.2026–31.08.2026 · הופק 04.09.2026, 02:42
+  r4: A4="ספק"[s General]  B4="סיבה"[s General]  C4="סכום"[s General]  D4="מטבע"[s General]  E4="סטטוס"[s General]
+  r5: A5="אין זיכויים בחודש זה — USD"[s General]
+
+---- sheet: חריגים פתוחים כרגע
+  row1 title  : דוח חודשי לרו״ח — עסק לדוגמה
+  row2 window : חריגים פתוחים במועד ההפקה — אינם מוגבלים לתקופת הדוח · הופק 04.09.2026, 02:42
+  r4: A4="סוג"[s General]  B4="תיאור"[s General]  C4="ספק"[s General]
+  r5: A5="אין חריגים פתוחים במועד ההפקה"[s General]
+
+  SCAN: formulas=0  formula errors (#REF!/#DIV/0!/#VALUE!/#NAME?/#N/A/#NULL!/#NUM!)=0
+
+================ B. LIVE MONTHLY REPORT — empty month, January 2020 (EXP-03/05/06) ================
+sheets (5): פרטי הדוח | חשבוניות | תשלומים | זיכויים | חריגים פתוחים כרגע
+
+---- sheet: פרטי הדוח
+  row1 title  : דוח חודשי לרו״ח — עסק לדוגמה
+  row2 window : ינואר 2020 · 01.01.2020–31.01.2020 · הופק 04.09.2026, 02:39
+  r4: A4="נתון"[s General]  B4="ערך"[s General]  C4="מטבע"[s General]
+  r5: A5="מספר חשבוניות"[s General]  B5=0[n General]
+  r6: A6="סה״כ לפני מע״מ"[s General]  B6="—"[s #,##0.00]  C6="ILS"[s General]
+  r7: A7="סה״כ מע״מ"[s General]  B7="—"[s #,##0.00]  C7="ILS"[s General]
+  r8: A8="סה״כ כולל מע״מ"[s General]  B8="—"[s #,##0.00]  C8="ILS"[s General]
+  r9: A9="זיכויים שקוזזו"[s General]  B9="—"[s #,##0.00]  C9="ILS"[s General]
+  r10: A10="הוצאה נטו"[s General]  B10="—"[s #,##0.00]  C10="ILS"[s General]
+  r11: A11="מספר ספקים"[s General]  B11=0[n General]
+  r13: A13="מדד"[s General]  B13="מספר רשומות"[s General]
+  r14: A14="חשבוניות"[s General]  B14=0[n General]
+  r15: A15="תשלומים כנגד חשבוניות"[s General]  B15=0[n General]
+  r16: A16="זיכויים"[s General]  B16=0[n General]
+  r17: A17="חריגים פתוחים כרגע"[s General]  B17=2[n General]
+  r18: A18="שורת החריגים מונה את החריגים הפתוחים במועד ההפקה ואינה מוגבלת לתקופת הדוח."[s General]
+  r20: A20="הערה"[s General]  B20="הקובץ משקף את הנתונים שהושלמו בזמן המצוין; הוא אינו snapshot טרנזקציוני."[s General]
+
+---- sheet: חשבוניות
+  row1 title  : דוח חודשי לרו״ח — עסק לדוגמה
+  row2 window : ינואר 2020 · 01.01.2020–31.01.2020 · הופק 04.09.2026, 02:39
+  r4: A4="ספק"[s General]  B4="מספר חשבונית"[s General]  C4="תאריך"[s General]  D4="לפני מע\"מ"[s General]  E4="מע\"מ"[s General]  F4="סה\"כ"[s General]  G4="מטבע"[s General]  H4="סטטוס בדיקה"[s General]  I4="סטטוס תשלום"[s General]
+  r5: A5="אין חשבוניות בחודש זה"[s General]
+
+---- sheet: תשלומים
+  row1 title  : דוח חודשי לרו״ח — עסק לדוגמה
+  row2 window : ינואר 2020 · 01.01.2020–31.01.2020 · הופק 04.09.2026, 02:39
+  r4: A4="ספק"[s General]  B4="תאריך"[s General]  C4="סכום כנגד חשבוניות"[s General]  D4="מטבע"[s General]  E4="אמצעי"[s General]  F4="אסמכתא"[s General]
+  r5: A5="אין תשלומים בחודש זה"[s General]
+
+---- sheet: זיכויים
+  row1 title  : דוח חודשי לרו״ח — עסק לדוגמה
+  row2 window : ינואר 2020 · 01.01.2020–31.01.2020 · הופק 04.09.2026, 02:39
+  r4: A4="ספק"[s General]  B4="סיבה"[s General]  C4="סכום"[s General]  D4="מטבע"[s General]  E4="סטטוס"[s General]
+  r5: A5="אין זיכויים בחודש זה"[s General]
+
+---- sheet: חריגים פתוחים כרגע
+  row1 title  : דוח חודשי לרו״ח — עסק לדוגמה
+  row2 window : חריגים פתוחים במועד ההפקה — אינם מוגבלים לתקופת הדוח · הופק 04.09.2026, 02:39
+  r4: A4="סוג"[s General]  B4="תיאור"[s General]  C4="ספק"[s General]
+  r5: A5="פער מחיר"[s General]  B5="חשבונית תבליני הגליל ממאי"[s General]  C5="תבליני הגליל"[s General]
+  r6: A6="פער מחיר"[s General]  B6="בשר והבן #7702"[s General]  C6="בשר והבן"[s General]
+
+  SCAN: formulas=0  formula errors (#REF!/#DIV/0!/#VALUE!/#NAME?/#N/A/#NULL!/#NUM!)=0
+
+================ C. PRODUCT PURCHASE SUMMARY shape — absent cells (EXP-03) ================
+sheets (1): מוצרים
+
+---- sheet: מוצרים
+  row1 title  : סיכום רכישות מוצרים — עסק לדוגמה
+  row2 window : 01.01.2026 – 31.12.2026
+  r4: A4="מוצר"[s General]  B4="התקבל"[s General]  C4="הוצאה ברוטו"[s General]  D4="מחיר יחידה ממוצע"[s General]
+  r5: A5="עגבניות"[s General]  B5="—"[s General]  C5="—"[s General]  D5="—"[s General]
+  r6: A6="מלפפונים"[s General]  B6=12[n General]  C6="‏240.00 ‏₪ · ‏30.00 ‏$"[s General]  D6="בכמה מטבעות"[s General]
+
+  SCAN: formulas=0  formula errors (#REF!/#DIV/0!/#VALUE!/#NAME?/#N/A/#NULL!/#NUM!)=0
+
+================ D. LOCKED SNAPSHOT — empty August 2026 ================
+sheets (6): פרטי הדוח | חשבוניות | תשלומים | זיכויים | חריגים פתוחים כרגע | תנועות בנק
+
+---- sheet: פרטי הדוח
+  row1 title  : דוח סופי נעול — עסק לדוגמה · לדוגמה בע״מ
+  row2 window : 2026-08 · גרסה 3 · נוצר 01.09.2026, 11:00
+  r4: A4="סוג הדוח"[s General]  B4="דוח סופי נעול"[s General]
+  r5: A5="שם ארגון"[s General]  B5="עסק לדוגמה"[s General]
+  r6: A6="ישות משפטית"[s General]  B6="לדוגמה בע״מ"[s General]
+  r7: A7="חודש"[s General]  B7="2026-08"[s General]
+  r8: A8="גרסת snapshot"[s General]  B8=3[n General]
+  r9: A9="גרסת מבנה הדוח"[s General]  B9="v2"[s General]
+  r10: A10="נוצר בתאריך"[s General]  B10="2026-09-01T08:00:00.000Z"[n dd/mm/yyyy]
+  r11: A11="נוצר על ידי"[s General]  B11="בעל העסק"[s General]
+  r12: A12="Snapshot ID"[s General]  B12="a2f0f6c4-0000-4000-8000-000000000001"[s General]
+  r13: A13="Checksum"[s General]  B13="deadbeef"[s General]
+  r14: A14="הערה"[s General]  B14="דוח סופי זה נוצר רק מנתוני snapshot נעולים במסד הנתונים ומשקף את גבול הדוח החי במועד היצירה."[s General]
+  r16: A16="מדד"[s General]  B16="מספר רשומות"[s General]  C16="סכום"[s General]  D16="מטבע"[s General]
+  r17: A17="חשבוניות"[s General]  B17=0[n General]  C17="—"[s #,##0.00]  D17="ILS"[s General]
+  r18: A18="לפני מע״מ"[s General]  B18=0[n General]  C18="—"[s #,##0.00]  D18="ILS"[s General]
+  r19: A19="מע״מ"[s General]  B19=0[n General]  C19="—"[s #,##0.00]  D19="ILS"[s General]
+  r20: A20="תשלומים"[s General]  B20=0[n General]  C20="—"[s #,##0.00]  D20="ILS"[s General]
+  r21: A21="זיכויים"[s General]  B21=0[n General]  C21="—"[s #,##0.00]  D21="ILS"[s General]
+  r22: A22="תנועות בנק"[s General]  B22=0[n General]  C22="—"[s #,##0.00]  D22="ILS"[s General]
+  r23: A23="חריגים פתוחים בעת היצירה"[s General]  B23=0[n General]  C23="—"[s #,##0.00]  D23="—"[s General]
+  r24: A24="שורת החריגים מונה את החריגים הפתוחים במועד ההפקה ואינה מוגבלת לתקופת הדוח."[s General]
+
+---- sheet: חשבוניות
+  row1 title  : דוח סופי נעול — עסק לדוגמה · לדוגמה בע״מ
+  row2 window : 2026-08 · גרסה 3 · נוצר 01.09.2026, 11:00
+  r4: A4="ספק"[s General]  B4="מספר חשבונית"[s General]  C4="תאריך"[s General]  D4="לפני מע\"מ"[s General]  E4="מע\"מ"[s General]  F4="סה\"כ"[s General]  G4="מטבע"[s General]  H4="סטטוס בדיקה"[s General]  I4="סטטוס תשלום"[s General]
+  r5: A5="אין חשבוניות בחודש זה"[s General]
+
+---- sheet: תשלומים
+  row1 title  : דוח סופי נעול — עסק לדוגמה · לדוגמה בע״מ
+  row2 window : 2026-08 · גרסה 3 · נוצר 01.09.2026, 11:00
+  r4: A4="ספק"[s General]  B4="תאריך"[s General]  C4="סכום"[s General]  D4="מטבע"[s General]  E4="אמצעי"[s General]  F4="אסמכתא"[s General]
+  r5: A5="אין תשלומים בחודש זה"[s General]
+
+---- sheet: זיכויים
+  row1 title  : דוח סופי נעול — עסק לדוגמה · לדוגמה בע״מ
+  row2 window : 2026-08 · גרסה 3 · נוצר 01.09.2026, 11:00
+  r4: A4="ספק"[s General]  B4="סיבה"[s General]  C4="סכום"[s General]  D4="מטבע"[s General]  E4="סטטוס"[s General]
+  r5: A5="אין זיכויים בחודש זה"[s General]
+
+---- sheet: חריגים פתוחים כרגע
+  row1 title  : דוח סופי נעול — עסק לדוגמה · לדוגמה בע״מ
+  row2 window : חריגים פתוחים במועד ההפקה — אינם מוגבלים לתקופת הדוח · הופק 01.09.2026, 11:00
+  r4: A4="סוג"[s General]  B4="תיאור"[s General]  C4="ספק"[s General]
+  r5: A5="אין חריגים פתוחים במועד ההפקה"[s General]
+
+---- sheet: תנועות בנק
+  row1 title  : דוח סופי נעול — עסק לדוגמה · לדוגמה בע״מ
+  row2 window : 2026-08 · גרסה 3 · נוצר 01.09.2026, 11:00
+  r4: A4="תאריך"[s General]  B4="תיאור"[s General]  C4="סכום"[s General]  D4="מטבע"[s General]  E4="סוג"[s General]  F4="אסמכתא"[s General]  G4="סטטוס"[s General]
+  r5: A5="אין תנועות בנק בחודש זה"[s General]
+
+  SCAN: formulas=0  formula errors (#REF!/#DIV/0!/#VALUE!/#NAME?/#N/A/#NULL!/#NUM!)=0
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  16:06:13
+   Duration  4.03s (transform 745ms, setup 622ms, import 1.02s, tests 858ms, environment 1.28s)
+
