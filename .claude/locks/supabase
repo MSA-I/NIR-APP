@@ -1,8 +1,18 @@
 resource=local-supabase-stack + SQL suites + npm run quality
 SINGLE OCCUPANCY. Read this file before ANY command that touches the local stack.
 
-HELD BY: G13 verifier "SQL" — granted 05.09.2026, the cross-verification wave.
-  Every other verifier in that wave runs client oracles only and must NOT touch the stack.
+FREE — released 05.09.2026 at the end of the cross-verification wave. Nobody holds it.
+
+  THE LAST HOLDER WAS THE G13 "SQL" VERIFIER, and it handed the stack back at full head
+  (0310-0315, 0319, 0320, 0322, 0323, 0324) with `npm run demo:restore` proved: three real
+  password sign-ins, three profiles in the right roles. Every fixture it made died with its final
+  reset. It read the head before **every one of its eight resets** and found, on arrival, that the
+  other campaign had again replaced our set with theirs and taken 0315 with it -- which is exactly
+  why that rule exists. All six suites went red then green with every control green in the red
+  run, and it re-ran p115's race as a separate probe rather than accepting the shape as proof.
+
+  ANYONE TAKING IT NEXT: the other campaign on this machine rebuilds this database without
+  reading this file. Reset from your own worktree and READ THE HEAD before each measurement.
 
   PR 17 RELEASED IT, and its four rows closed the last open finding. Note what it did NOT do and
   why: no screenshot, because the other campaign rebuilt the shared database FOUR TIMES under it,
