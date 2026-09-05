@@ -1841,6 +1841,8 @@ async function paymentRequestNamesAndModalStack(browser) {
     assert(await draft.isDisabled(), 'over-balance draft save remained enabled');
     assert(await submit.isDisabled(), 'over-balance approval submit remained enabled');
     await capturePaymentRequestViewport(create, 'payment-request-overbalance-1440.png', 1440, 900);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await submit.scrollIntoViewIfNeeded();
     await capturePaymentRequestViewport(create, 'payment-request-overbalance-390.png', 390, 844);
     await page.keyboard.press('Escape');
     await create.waitFor({ state: 'hidden' });
