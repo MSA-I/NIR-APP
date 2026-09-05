@@ -3161,7 +3161,7 @@ export const en: Dictionary = {
     text_20: 'What is happening now',
     fmtDuration: 'Average processing time:',
     title_2: 'Needs attention',
-    sub: 'Waiting for your decision',
+    sub: 'Documents waiting for your decision',
     title_3: 'Processing',
     sub_2: 'Queued or being worked on now',
     title_4: 'Failures',
@@ -3213,6 +3213,12 @@ export const en: Dictionary = {
     documentRowLabel: 'Document {file}',
     openReview: 'Open the review',
     priceReviewRowLabel: 'Price-list review {file}',
+    priceNoPrevious: 'No previous price to compare with',
+    priceNoProposal: 'The document stated no new price',
+    priceNotRead: 'No price was read for this line',
+    priceNoLines: 'No price lines',
+    priceQueueUnit: 'Every row here is one price-list line — {count} documents are waiting for a price review.',
+    priceQueueUnit_one: 'Every row here is one price-list line — one document is waiting for a price review.',
   },
 
   payQueue: {

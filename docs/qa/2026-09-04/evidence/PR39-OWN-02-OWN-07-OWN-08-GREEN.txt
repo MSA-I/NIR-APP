@@ -1,0 +1,60 @@
+﻿# PR39 GREEN — the same oracle, unchanged, with the fix applied.
+# command: npx vitest run src/pages/documentOperationsDecisionQueue.spec.tsx src/pages/documentOperationsContract.spec.ts --reporter=verbose
+# The neighbouring contract suite runs with it: attemptUiStatus is shared and its six state
+# mappings must not have moved.
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a1c9e560c72009a1f
+
+ ✓ src/pages/documentOperationsDecisionQueue.spec.tsx > OWN-02 · the price column states what the row actually has > CONTROL — a row with both prices still shows the comparison it was built for 570ms
+ ✓ src/pages/documentOperationsDecisionQueue.spec.tsx > OWN-02 · the price column states what the row actually has > renders one true statement per row, not one arrow for all of them 223ms
+ ✓ src/pages/documentOperationsDecisionQueue.spec.tsx > OWN-02 · the price column states what the row actually has > reads a figure with no currency as no price at all, never as a bare number 52ms
+ ✓ src/pages/documentOperationsDecisionQueue.spec.tsx > OWN-02 · the price column states what the row actually has > draws each sentence from the dictionary, not from a literal in the screen 1ms
+ ✓ src/pages/documentOperationsDecisionQueue.spec.tsx > OWN-07 · both counts carry their unit > names documents on the tile and price-list lines on the queue 148ms
+ ✓ src/pages/documentOperationsDecisionQueue.spec.tsx > OWN-08 · the console names every state the ladder names > keeps the canonical answer instead of overwriting it with the residual 1ms
+ ✓ src/pages/documentOperationsDecisionQueue.spec.tsx > OWN-08 · the console names every state the ladder names > CONTROL — still answers with the residual for a status nothing can name 0ms
+ ✓ src/pages/documentOperationsDecisionQueue.spec.tsx > OWN-08 · the console names every state the ladder names > shows the scan-approval state on the row instead of an unknown one 119ms
+ ✓ src/pages/documentOperationsDecisionQueue.spec.tsx > OWN-08 · the console names every state the ladder names > CONTROL — an unnameable status still reads „מצב לא ידוע" on its row 125ms
+ ✓ src/pages/documentOperationsContract.spec.ts > document control capability and UX contract > keeps the stable owner-only route while naming it בקרת מסמכים everywhere 7ms
+ ✓ src/pages/documentOperationsContract.spec.ts > document control capability and UX contract > uses only the customer-safe read models and excludes laboratory telemetry 2ms
+ ✓ src/pages/documentOperationsContract.spec.ts > document control capability and UX contract > presents the quiet summary-to-tasks-to-details hierarchy with 44px actions 2ms
+ ✓ src/pages/documentOperationsContract.spec.ts > document control capability and UX contract > maps processing states to clear Hebrew meanings 2ms
+ ✓ src/pages/documentOperationsContract.spec.ts > document control capability and UX contract > renders the recovery task at mobile width and announces its result 490ms
+ ✓ src/pages/documentOperationsContract.spec.ts > document control capability and UX contract > reprocesses after a confirmation with no reason box, and still sends a non-blank reason 241ms
+ ✓ src/pages/documentOperationsContract.spec.ts > document control capability and UX contract > chooses current recoverable work and reads stable Edge error messages 9ms
+
+ Test Files  2 passed (2)
+      Tests  16 passed (16)
+   Start at  05:12:47
+   Duration  6.65s (transform 2.72s, setup 1.64s, import 4.47s, tests 2.01s, environment 3.36s)
+
+
+== Guards run beside the oracle (05.09.2026, all exit 0) ==========================================
+
+  check:money        3 rules over src, src/lib/format.ts exempt
+  check:currency     84 numeric columns classified; carrier check enforced
+  check:i18n         65 file(s), 923 Hebrew line(s), all at their pinned counts
+  check:orphan-keys  6122 leaf key(s), 106 with no call site, pinned
+  check:plurals      78 counted phrase(s), 33 with a singular sibling, 45 pinned
+  check:jsx-space    153 .tsx file(s), no glued translated expressions
+  check:key-manifest 107 without a production call site, the same names as the baseline
+  check:dead-code    knip, hints only
+  npx tsc --noEmit   exit 0
+  check:decision-numbers, check:debt-numbers, check:gate-controls, check:plan-labels,
+  check:baseline-drift, check:migration-numbers, check:suite-manifest, check:exception-labels
+
+  npm run verify was NOT run whole and npm run quality was not run at all: another agent holds
+  the local Supabase stack this wave, and ci-sql-suites.mjs without --list resets it.
+
+== The whole unit suite, and why its failures are not this PR ======================================
+
+  npx vitest run over all 285 files failed 3 tests in 2 files on one run and 6 tests in 4 files
+  on the next, a DIFFERENT set each time, every one of them "Test timed out in 5000ms", and every
+  one in a spec that walks the whole src tree with fs reads (noteProse, productDisplayName,
+  quickActions, reason). All four pass together in isolation in 3.7s:
+
+      npx vitest run src/components/noteProse.spec.ts src/lib/productDisplayName.spec.ts
+                     src/lib/quickActions.spec.ts src/lib/reason.spec.ts
+      Test Files  4 passed (4) - Tests  59 passed (59) - Duration 3.72s
+
+  This is the machine's known fork-timeout under load with other agents running, not a regression
+  from this change. Nothing in this PR is imported by any of those four specs.

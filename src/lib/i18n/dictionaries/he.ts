@@ -3190,7 +3190,7 @@ export const he = {
     text_20: 'מה קורה עכשיו',
     fmtDuration: 'משך עיבוד ממוצע:',
     title_2: 'דורש טיפול',
-    sub: 'ממתין להחלטה שלך',
+    sub: 'מסמכים שממתינים להחלטה שלך',
     title_3: 'בעיבוד',
     sub_2: 'בתור או בעבודה עכשיו',
     title_4: 'תקלות',
@@ -3242,6 +3242,12 @@ export const he = {
     documentRowLabel: 'מסמך {file}',
     openReview: 'פתיחת בדיקה',
     priceReviewRowLabel: 'בדיקת מחירון {file}',
+    priceNoPrevious: 'אין מחיר קודם להשוואה',
+    priceNoProposal: 'המסמך לא ציין מחיר חדש',
+    priceNotRead: 'לא נקרא מחיר לשורה',
+    priceNoLines: 'אין שורות מחיר',
+    priceQueueUnit: 'כל שורה כאן היא שורת מחירון — {count} מסמכים ממתינים לבדיקת מחירים.',
+    priceQueueUnit_one: 'כל שורה כאן היא שורת מחירון — מסמך אחד ממתין לבדיקת מחירים.',
   },
 
   payQueue: {

@@ -1,0 +1,96 @@
+# PR39 — the measurement the plan demanded BEFORE the fix (§3 B5)
+#
+# "The queue's rows are read from production before the fix, because 'every row is an empty run'
+#  and 'the price columns are never populated' need different fixes and only the data
+#  distinguishes them."
+#
+# Read 05.09.2026 against the PRODUCTION project (rkftlbctohswhbbiaqin) through
+# scripts/db-query.ps1 (Management API, SELECT only, no write of any kind).
+#
+# The RPC itself could not be called: get_document_control_price_review_queue is SECURITY DEFINER
+# behind `auth.uid()` and `auth_role() = 'owner'` (0225:109), and the Management API connects as
+# `postgres` with no JWT. So the QUERY was reproduced from 0225's own body — the same CTEs, the
+# same `having`, the same `limit p_document_limit` (the client sends 50), the same document
+# predicate — over the underlying tables, per org. That is a measurement of the DATA, not a proof
+# of the guard; the guard is not what this row is about.
+#
+# The queue row count it produces for the sweep's tenant is 737 — the exact figure on screenshot
+# 44-doc-operations-bottom.png ("737 רשומות", pager 1/74) — so the reproduction is the right query.
+
+== 1. Row shape, per organisation ==================================================================
+
+org_id                                queue empty line both_null only_prop only_curr both_prices
+                                       rows   run  rows
+11111111-1111-4111-8111-111111111111    737     1   736        61       675         0           0
+74cf7496-c616-477c-a9a4-cf212251d820    592     0   592       296       296         0           0
+3f468349-33c4-415d-9ccf-1b2f908f26fc    296     0   296       296         0         0           0
+
+predicted_action, org 1111…:  create_product 675 · review 46 · rejected_by_policy 16 ·
+                              apply_existing_price 0
+
+== 2. The answer to the question the plan asked ====================================================
+
+NEITHER of the two hypotheses, as stated, is what the data says.
+
+  * NOT "every row is an empty run". Exactly ONE of 737 is. It cannot have been otherwise and the
+    code says so: `run_progress` is capped at `p_document_limit` = 50 runs and an empty run
+    contributes exactly one row, so at most 50 of 737 rows could ever have been empty runs.
+  * NOT "the price columns are never populated" either. `proposed_unit_price` is populated on 675
+    of the 736 line rows.
+
+  What IS true, and it is a third thing:
+
+  * `current_unit_price` is populated on ZERO rows of the entire queue, in all three tenants — and
+    for 675 of them that is CORRECT, not a defect: they are `create_product`, the product is not in
+    the catalogue yet, and a product that does not exist has no previous price. The pair was a
+    shape the data never takes.
+  * 61 rows carry no price at all — `predicted_action = 'review'`, both columns null. They are the
+    oldest run, which is why they are the rows the sweep photographed on page 1.
+  * The screen rendered `current ← proposed` unconditionally, so all three populations arrived as
+    the same `— ← —` and the operator could not tell which of them a row was.
+
+== 3. Page 1, verbatim — the twelve rows in the RPC's own order ====================================
+
+  is_empty_run=false · predicted_action='review' · current=null · proposed=null · currency=ILS
+  file_name = 8b618ed3-9a14-446f-b1dd-604f1fc63574.jpe…   (line_index 0 … 11)
+
+  All twelve. The file name is the raw UUID the finding records. Not one is an empty run, and the
+  em dashes on both sides are real nulls — so the empty-run label alone would have closed nothing.
+
+== 4. OWN-07 — what the two numbers count =========================================================
+
+  Tile „דורש טיפול / ממתין להחלטה שלך" = `documents_review_required`, which 0135 computes as
+  `count(*) filter (where job.status = 'review')` over the LATEST job per visible document.
+  Measured on production: 34 + 3 + 1 + 1 + 1 = 40 documents. Exactly the 40 on screenshot 43.
+
+  Table footer „737 רשומות" = DataTable's own filtered row count over the price queue, i.e.
+  price-list LINES. Two populations, two units, and neither figure said which.
+
+== 5. OWN-08 — the cause, which the ledger did not have ============================================
+
+  Console rows whose latest job is `awaiting_scan`, attempt_count 0: NINE documents in production
+  today (example `consolidated-page-1.png`, newest 2026-09-02 21:43). The sweep saw the three
+  newest at the top of „מסמכים אחרונים".
+
+  Cause: `documentOperationsModel.ts:43-46` returned the canonical status for four states only —
+  failed, stuck, processing, historical — and then re-derived everything else from
+  `price_list_outcome` / `status`. `awaiting_scan` matches none of those branches, so it fell to
+  the residual at :60 and was labelled `documentOperations.unknownState` („מצב לא ידוע"). The
+  ladder had a branch for it (`documentStatus.ts:338`, added by DOC-01); the console threw that
+  answer away. Before DOC-01 the same rows fell through as `unassigned`, which is also not in the
+  four, so the console said „מצב לא ידוע" either way — the pass-list is the cause, not the ladder.
+
+  NOT closed by this PR, and it is a server change: no summary tile counts `awaiting_scan`.
+  `get_document_operations_metrics` (0135) counts queued / leased+extracted+interpreting / stuck /
+  review / failed / completed and nothing else, so those nine documents are in no tile. Adding one
+  is a migration, and the plan forbids an agent drawing a migration number or widening a read on
+  its own. Reported, not done.
+
+== 6. Commands ====================================================================================
+
+  $env:SUPABASE_ACCESS_TOKEN = (Get-Content -LiteralPath "<external secrets path>" -Raw).Trim()
+  scripts\db-query.ps1 -SqlFile <query>.sql -ProjectRef rkftlbctohswhbbiaqin -AllowProduction
+
+  Three read-only queries were run: the per-org row-shape roll-up (§1), the currency/supplier
+  roll-up behind it, and the first twelve rows in RPC order (§3). No password, token or key is
+  reproduced here or anywhere in the repository.

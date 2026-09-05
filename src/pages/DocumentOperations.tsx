@@ -26,6 +26,7 @@ import { DOCUMENT_PROCESSING_CHANGED_EVENT, useDocumentProcessing } from '../lib
 import { useQuery, unwrap } from '../lib/useQuery';
 import {
   attemptUiStatus,
+  priceReviewPriceKind,
   recoveryInvokeErrorMessage,
   selectPrimaryOperationalIssue,
   type OperationalAttemptState,
@@ -172,6 +173,18 @@ export default function DocumentOperations() {
       stuck_reason: snapshot.job.stuck_reason ?? null,
     }] : []), [attemptNames, currentProcessing.snapshots]);
   const currentIssue = useMemo(() => selectPrimaryOperationalIssue(currentIssues), [currentIssues]);
+  /**
+   * How many DOCUMENTS the price rows come from — the unit the tile above counts in.
+   *
+   * OWN-07: the screen answered "how much is waiting for your decision" twice, with 40 and 737,
+   * and neither figure said what it was counting. They measure different things — the tile counts
+   * documents whose latest job is `review`, the table counts price-list lines — so the fix is that
+   * each says which, never that one query is widened until they agree.
+   */
+  const priceReviewDocuments = useMemo(
+    () => new Set((priceReviews.data ?? []).map((row) => row.document_id)).size,
+    [priceReviews.data],
+  );
   const filteredAttempts = useMemo(() => (attempts.data ?? []).filter((attempt) =>
     filter === 'all' || attemptFilterKey(attempt) === filter), [attempts.data, filter]);
 
@@ -292,7 +305,33 @@ export default function DocumentOperations() {
     },
     {
       key: 'price', header: t('documentOps.text_16'), priority: 2, className: 'num',
-      render: (row) => <span className="num">{fmtMoneyRounded(row.current_unit_price, row.currency)} ← {fmtMoneyRounded(row.proposed_unit_price, row.currency)}</span>,
+      // The arrow is drawn only where BOTH sides exist. Everywhere else the cell shows the one
+      // figure it has — or the em dash the constitution requires — and says in words which half is
+      // missing and why. Production had 737 rows in this queue and not one with both prices: the
+      // pair was a shape the data never took, and rendering it unconditionally turned four
+      // different facts into one uninformative `— ← —` (OWN-02).
+      render: (row) => {
+        const kind = priceReviewPriceKind(row);
+        if (kind === 'pair') {
+          return <span className="num">{fmtMoneyRounded(row.current_unit_price, row.currency)} ← {fmtMoneyRounded(row.proposed_unit_price, row.currency)}</span>;
+        }
+        const noteKey: TKey = kind === 'empty_run'
+          ? 'documentOps.priceNoLines'
+          : kind === 'proposed_only'
+            ? 'documentOps.priceNoPrevious'
+            : kind === 'current_only'
+              ? 'documentOps.priceNoProposal'
+              : 'documentOps.priceNotRead';
+        const figure = kind === 'proposed_only'
+          ? row.proposed_unit_price
+          : kind === 'current_only' ? row.current_unit_price : null;
+        return (
+          <span className="num">
+            {fmtMoneyRounded(figure, row.currency)}
+            <span className="block text-xs text-ink-muted">{t(noteKey)}</span>
+          </span>
+        );
+      },
     },
   ];
 
@@ -433,7 +472,15 @@ export default function DocumentOperations() {
       </section>
 
       <section aria-labelledby="document-control-price-title" className="space-y-3">
-        <h2 id="document-control-price-title" className="section-title">{t('documentOps.text_31')}</h2>
+        <div>
+          <h2 id="document-control-price-title" className="section-title">{t('documentOps.text_31')}</h2>
+          {/* Rendered only when there is something to describe: with an empty queue the table's own
+              empty state already says there is nothing here, and „0 מסמכים" would be a sentence
+              about a table that is not on screen. */}
+          {priceReviewDocuments > 0 && (
+            <p className="mt-1 text-sm text-ink-soft">{t('documentOps.priceQueueUnit', { count: priceReviewDocuments })}</p>
+          )}
+        </div>
         {priceReviews.loading && !priceReviews.data ? <SkeletonTable title={false} cols={4} /> : (
           <DataTable rows={priceReviews.data ?? []} columns={priceReviewColumns} pageSize={10}
             tableLabel={t('documentOps.tableLabel_2')}

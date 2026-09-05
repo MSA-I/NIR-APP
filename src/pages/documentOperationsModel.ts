@@ -56,8 +56,50 @@ export function attemptUiStatus(attempt: OperationalAttemptState): DocumentUiSta
     // The supervisory fact, not the pipeline's: prices moved without anyone approving them.
     return { ...canonical, state: 'completed', labelKey: 'documentOperations.autoApplied', tone: 'done', descriptionKey: 'documentOperations.autoAppliedDescription', priority: 4 };
   }
-  if (attempt.status === 'completed') return canonical;
+  // The ladder's answer is KEPT whenever it has one, and this line is the fix for OWN-08. The four
+  // states returned early above are returned early so the price-list overrides cannot stomp on
+  // them; everything the ladder names and this function has no opinion about used to fall past all
+  // of the branches to the residual below. `awaiting_scan` is exactly that — a real
+  // `document_processing_jobs.status`, named by `documentStatus.ts` since DOC-01 — and on
+  // 05.09.2026 nine of this tenant's documents reached the owner's console as „מצב לא ידוע" with
+  // zero attempts, three of them on the first page. The residual now answers only where the ladder
+  // is itself out of answers, which is the one case the words are true of.
+  if (canonical.state !== 'unavailable') return canonical;
   return { ...canonical, state: 'unavailable', labelKey: 'documentOperations.unknownState', tone: 'idle', descriptionKey: null, priority: 6 };
+}
+
+/**
+ * What the price column of the review queue can honestly say about ONE row.
+ *
+ * Measured on production before this was written (`docs/qa/2026-09-04/evidence/
+ * PR39-OWN-02-MEASUREMENT.txt`): of the tenant's 737 queue rows exactly ONE is an empty run, 675
+ * carry a proposed price and no current one — they are `create_product`, so the product is not in
+ * the catalogue and there is no previous price and never was — 61 carry no price at all, and NOT
+ * ONE row carries both. The shipped column drew `current ← proposed` for all four shapes, so four
+ * different facts reached the owner as the same `— ← —` and 737 decisions had nothing to decide
+ * between.
+ *
+ * The currency is part of the question, not decoration: an amount without its unit is not money
+ * (`src/lib/format.ts`), so a figure whose currency is missing is not a price this column may
+ * print. It joins the unpriced shape rather than appearing as a bare number.
+ */
+export type PriceReviewPriceKind = 'empty_run' | 'pair' | 'proposed_only' | 'current_only' | 'unpriced';
+
+export interface PriceReviewPriceRow {
+  is_empty_run: boolean;
+  current_unit_price: number | null;
+  proposed_unit_price: number | null;
+  currency: string | null;
+}
+
+export function priceReviewPriceKind(row: PriceReviewPriceRow): PriceReviewPriceKind {
+  if (row.is_empty_run) return 'empty_run';
+  const hasCurrent = row.currency !== null && row.current_unit_price !== null;
+  const hasProposed = row.currency !== null && row.proposed_unit_price !== null;
+  if (hasCurrent && hasProposed) return 'pair';
+  if (hasProposed) return 'proposed_only';
+  if (hasCurrent) return 'current_only';
+  return 'unpriced';
 }
 
 /**
