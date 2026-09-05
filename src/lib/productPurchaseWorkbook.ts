@@ -60,6 +60,34 @@ export function canonicalQuantityIsUnmeasured(row: Pick<ProductPurchaseRow, 'rec
   return row.received_qty == null && row.invoiced_qty == null;
 }
 
+/**
+ * True when the BILLED half of this report has nothing at all to report in the window: not one
+ * product stands on an approved payable invoice line, and no unmatched line is waiting either
+ * (`DASH-07`).
+ *
+ * MEASURED BEFORE IT WAS WRITTEN. Against live production on 05.09.2026, over
+ * 2026-01-01..2026-09-04: 115 products, `invoice_count` 0 on every one — and `invoice_lines` and
+ * `invoice_line_matches` hold ZERO ROWS across all five organisations. No join, predicate, window,
+ * currency or org filter is at fault; the rows the money is computed from do not exist. The three
+ * em dashes are the right answer and the silence around them was not.
+ *
+ * BOTH HALVES OF THE CONDITION EARN THEIR PLACE. One product with a billed figure makes the
+ * sentence false. And when unmatched lines DO exist, the report's own unmapped-lines note is the
+ * one to show — two notes answering the same question at once is how a screen stops being read.
+ *
+ * The screen and the export share this predicate for the same reason they share
+ * `canonicalQuantityIsUnmeasured`: two readings of "nothing was billed" is how a caveat becomes
+ * screen-only, and the file is what gets mailed onward.
+ */
+export function billedNothingInWindow(
+  products: readonly Pick<ProductPurchaseRow, 'invoice_count'>[],
+  unmappedInvoiceLines: number,
+): boolean {
+  return products.length > 0
+    && unmappedInvoiceLines === 0
+    && products.every((row) => row.invoice_count === 0);
+}
+
 /** The screen's own chips are separated by a middle dot; a spreadsheet cell states them plainly. */
 const plainCaveat = (value: string) => value.replace(/^[\s·•]+/, '');
 
@@ -89,15 +117,27 @@ export function buildProductPurchaseWorkbook(input: {
   to: string;
   generatedAt: string;
   products: readonly ProductPurchaseRow[];
+  /** From the same response the rows came from — the second half of the `DASH-07` predicate. */
+  unmappedInvoiceLines: number;
 }): WorkbookSpec {
   const { t, locale, products } = input;
+  const subtitle = t('productPurchase.pdfSubtitle', {
+    from: fmtDate(input.from), to: fmtDate(input.to), generated: fmtDate(input.generatedAt),
+  });
   return {
     title: t('productPurchase.pdfTitle', { org: input.orgName }),
-    subtitle: t('productPurchase.pdfSubtitle', {
-      from: fmtDate(input.from), to: fmtDate(input.to), generated: fmtDate(input.generatedAt),
-    }),
+    subtitle,
     sheets: [{
       name: t('productPurchase.book_append_sheet'),
+      /**
+       * `DASH-07` — row 2 is where every sheet in this product asserts what it holds (`EXP-06`),
+       * so a file whose three billed columns are empty on every row says so THERE, beside the
+       * window, in the screen's own sentence. Appended rather than substituted: the window
+       * assertion is the reason row 2 exists and must survive.
+       */
+      subtitle: billedNothingInWindow(products, input.unmappedInvoiceLines)
+        ? `${subtitle} · ${t('productPurchase.billedAbsenceLead')}`
+        : undefined,
       emptyNote: t('productPurchase.emptyTitle'),
       columns: [
         { header: t('productPurchase.text_11'), key: 'product', width: 32 },

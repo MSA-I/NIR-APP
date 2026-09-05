@@ -4941,6 +4941,12 @@ export const en: Dictionary = {
     countedOnceDetail: 'A completed receipt takes precedence over the invoice, and the invoice is used only when there is no receipt evidence. “Ordered” is not counted as a purchase.',
     provenanceColumn: 'Source of the quantity',
     provenanceFullyEvidenced: 'All from completed receipts',
+    // DASH-07. Shown only when it is measurably true for the whole window: not one product here
+    // stands on an approved supplier invoice line, and none is waiting to be allocated either.
+    billedAbsenceLead: 'No approved supplier invoice line reached a product in this window — none allocated to an order line, and none waiting to be allocated.',
+    billedAbsenceColumns: 'So “Invoiced”, “Spend” and “Average unit price” are empty on every row here. That is not zero — it is a figure nobody has stated yet.',
+    billedAbsenceCommitted: '“Cost as ordered” is what the report does know: the price saved on the order multiplied by the quantity ordered.',
+    billedAbsenceAction: 'These columns fill in once the supplier invoice is approved and its lines are allocated to order lines, on the invoice line review screen inside the invoice.',
   },
 
   invoiceLineReview: {

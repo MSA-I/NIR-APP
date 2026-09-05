@@ -4980,6 +4980,14 @@ export const he = {
     countedOnceDetail: 'קבלה שהושלמה גוברת על החשבונית, והחשבונית משמשת רק כשאין ראיית קבלה. „הוזמן” אינו נספר כרכישה.',
     provenanceColumn: 'מקור הכמות',
     provenanceFullyEvidenced: 'הכל לפי קבלות שהושלמו',
+    // DASH-07. Said only when it is measurably true for the whole window: not one product here
+    // stands on an approved supplier invoice line, and none is waiting to be allocated either.
+    // The four sentences are one note on purpose — the reader needs the cause, the columns it
+    // covers, the column that DOES carry a figure, and the step that fills the rest.
+    billedAbsenceLead: 'בטווח הזה לא נמצאה אף שורת חשבונית ספק מאושרת שהגיעה למוצר — לא כזו שהוקצתה לשורת הזמנה, ולא כזו שממתינה להקצאה.',
+    billedAbsenceColumns: 'לכן „חויב”, „הוצאה” ו„מחיר יחידה ממוצע” ריקים בכל השורות כאן. זה אינו אפס — זה מספר שטרם ידוע.',
+    billedAbsenceCommitted: '„עלות לפי ההזמנה” הוא מה שהדוח כן יודע: המחיר שנשמר בהזמנה כפול הכמות שהוזמנה.',
+    billedAbsenceAction: 'העמודות האלה יתמלאו אחרי שחשבונית הספק תאושר ושורותיה יוקצו לשורות ההזמנה, במסך „בדיקת שורות החשבונית” שבתוך החשבונית.',
   },
 
   invoiceLineReview: {

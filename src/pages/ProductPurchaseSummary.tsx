@@ -16,7 +16,11 @@ import {
   renderConfiguredReportTemplate,
 } from '../lib/reportTemplateExport';
 import { downloadWorkbook } from '../lib/workbook';
-import { buildProductPurchaseWorkbook, canonicalQuantityIsUnmeasured } from '../lib/productPurchaseWorkbook';
+import {
+  billedNothingInWindow,
+  buildProductPurchaseWorkbook,
+  canonicalQuantityIsUnmeasured,
+} from '../lib/productPurchaseWorkbook';
 
 /**
  * Per-product purchase rollup — the screen for `get_product_purchase_summary` (0114).
@@ -126,6 +130,33 @@ export default function ProductPurchaseSummary() {
     () => (data?.products ?? []).map((row) => ({ ...row, id: row.product_id })),
     [data]);
 
+  /**
+   * `DASH-07` — the whole billed half of this report is empty and the screen used to say nothing.
+   *
+   * MEASURED, not supposed. Against live production on 05.09.2026, over 2026-01-01..2026-09-04:
+   * 115 products, `invoice_count` 0 on every one, `gross_amount_by_currency` and
+   * `average_unit_price` null on every one — and `public.invoice_lines` and
+   * `public.invoice_line_matches` hold ZERO ROWS across all five organisations. The rows the money
+   * is computed from do not exist, so no join, predicate, window or org filter is at fault and the
+   * em dashes are the correct answer. What was wrong was the silence around them.
+   *
+   * AND THE ONE IDIOM THIS SCREEN HAD COULD NOT COVER IT. The unmapped-lines note below is guarded
+   * by `unmapped_invoice_lines > 0`, and that count reads the SAME empty table the empty columns
+   * read: no invoice lines means no unmapped invoice lines. It can only speak when some lines
+   * exist and are unmatched — never in the state that empties the column completely. So the two
+   * notes are mutually exclusive by construction, which is why this one stands down whenever that
+   * one has something to say.
+   *
+   * The claim is deliberately narrow: EVERY product in the window, and no unmatched line either.
+   * One product with a billed figure makes the sentence false, and the per-row em dash beside a
+   * populated neighbour is self-explanatory anyway.
+   *
+   * The predicate lives beside the workbook builder because the FILE states this too, on the row
+   * every sheet asserts its window on. One owner, for the reason `EXP-04` had to be fixed at all.
+   */
+  const nothingBilledInWindow = !!data
+    && billedNothingInWindow(data.products, data.unmapped_invoice_lines);
+
   const columns: Column<SummaryRow & { id: string }>[] = [
     {
       key: 'product', header: t('productPurchase.text'), sortValue: (r) => r.product_name,
@@ -231,6 +262,7 @@ export default function ProductPurchaseSummary() {
           to,
           generatedAt: todayISO(),
           products: data.products,
+          unmappedInvoiceLines: data.unmapped_invoice_lines,
         }), fileName);
       }
       toast(t('productPurchase.toast'));
@@ -279,6 +311,23 @@ export default function ProductPurchaseSummary() {
           </span>
         </p>
       </Note>
+
+      {/* The billed half of the report has nothing to report, and now says so rather than leaving
+          115 em dashes to be read as a fault in the screen. `role="status"` for the same reason
+          the unmapped note has one: this changes what the table below means. */}
+      {nothingBilledInWindow && (
+        <Note tone="await" role="status">
+          <p className="flex items-start gap-2 text-sm">
+            <Info size={ICON.sm} aria-hidden="true" className="mt-0.5 shrink-0" />
+            <span>
+              <strong>{t('productPurchase.billedAbsenceLead')}</strong>{' '}
+              {t('productPurchase.billedAbsenceColumns')}
+              <span className="mt-1 block">{t('productPurchase.billedAbsenceCommitted')}</span>
+              <span className="mt-1 block">{t('productPurchase.billedAbsenceAction')}</span>
+            </span>
+          </p>
+        </Note>
+      )}
 
       {/* Money nobody could place. A work list, not a rounding error — and never folded into a
           product's total, because the product it belongs to is not established. */}

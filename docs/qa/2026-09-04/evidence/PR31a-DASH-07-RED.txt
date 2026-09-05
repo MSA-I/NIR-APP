@@ -1,0 +1,1512 @@
+PR 31a — DASH-07 — RED. src/pages/productPurchaseBilledAbsence.spec.tsx on the unfixed tree.
+=======================================================================================
+HOW THIS RED WAS TAKEN. The oracle grew a second surface (the exported file) after the first fix
+landed, so the first red had been recorded against a different set of assertions and was
+DISCARDED. This is the red of the FINAL oracle, and both sides were re-run against it.
+
+EXACTLY TWO BEHAVIOURAL LINES WERE REVERTED, and nothing else:
+  1. src/lib/productPurchaseWorkbook.ts — the sheet subtitle was forced back to `undefined`,
+     i.e. the pre-fix behaviour in which the sheet inherits the workbook subtitle unchanged.
+  2. src/pages/ProductPurchaseSummary.tsx — the `nothingBilledInWindow` flag was forced false,
+     i.e. the pre-fix behaviour in which no such note exists.
+Both were restored verbatim before the green. The shared predicate, the dictionary strings and the
+spec were NOT reverted — they are inert without those two lines.
+
+THREE FAILURES, SIX CONTROLS GREEN. The controls are what make the red mean anything: the em
+dashes, the committed cost, the two "stays away when it would be false" cases and the empty window
+all pass on the unfixed tree and must keep passing after. A red that was really a broken harness
+would have taken them with it — and the "unmapped note is the right one" control proves
+role="status" IS findable in this harness when a note renders, so "Unable to find role=status" is a
+real absence rather than a query that never worked.
+
+THE TWO CLAIM FAILURES, in the words the runner used:
+  * Unable to find role="status"                                        (the screen, twice)
+  * רכישות מוצרים · the absence: expected '01.01.2026 – 04.09.2026 · הופק 05.09.…'
+    to match /לא נמצאה אף שורת חשבונית/                                 (the exported file)
+The second is the defect itself read out of the workbook's own bytes: row 2 states the window and
+says nothing about 115 rows of empty money.
+
+---------------------------------------------------------------------------------------
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a1d1bde669e320b5b
+
+ × src/pages/productPurchaseBilledAbsence.spec.tsx > DASH-07 — every billed column is empty and the screen says why > states, once, that no approved invoice line reached any product in this window 3491ms
+   → Unable to find role="status"
+
+Ignored nodes: comments, script, style
+<body>
+  <div>
+    <div
+      class="space-y-4"
+    >
+      <header
+        class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between "
+      >
+        <div
+          class="min-w-0 space-y-1"
+        >
+          <h1
+            class="page-title break-words"
+          >
+            סיכום רכישות מוצרים
+          </h1>
+          <span
+            aria-hidden="true"
+            class="section-mark"
+          />
+          <div
+            class="text-sm text-ink-muted"
+          >
+            בדיקת הכמות והעלות שנרכשו בכל מוצר, לצד שלושת מקורות הנתונים שמאחורי המספר.
+          </div>
+          <div
+            class="text-sm text-ink-soft"
+          >
+            5 מוצרים · 2026-01-01 עד 2026-09-04
+          </div>
+        </div>
+        <div
+          class="flex shrink-0 flex-wrap items-center gap-2"
+        >
+          <button
+            class="btn-secondary"
+            type="button"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-file-spreadsheet"
+              fill="none"
+              height="15"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="15"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+              />
+              <path
+                d="M14 2v5a1 1 0 0 0 1 1h5"
+              />
+              <path
+                d="M8 13h2"
+              />
+              <path
+                d="M14 13h2"
+              />
+              <path
+                d="M8 17h2"
+              />
+              <path
+                d="M14 17h2"
+              />
+            </svg>
+            ייצוא Excel
+          </button>
+        </div>
+      </header>
+      <div
+        class="card   flex flex-wrap items-end gap-3 p-3"
+      >
+        <div>
+          <label
+            class="label"
+            for="summary-from"
+          >
+            מתאריך
+          </label>
+          <input
+            class="input num"
+            id="summary-from"
+            type="date"
+            value="2026-01-01"
+          />
+        </div>
+        <div>
+          <label
+            class="label"
+            for="summary-to"
+          >
+            עד תאריך
+          </label>
+          <input
+            class="input num"
+            id="summary-to"
+            type="date"
+            value="2026-09-04"
+          />
+        </div>
+      </div>
+      <div
+        class="note-info "
+      >
+        <p
+          class="flex items-start gap-2 text-sm"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-info mt-0.5 shrink-0"
+            fill="none"
+            height="15"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="15"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <circle
+              cx="12"
+              cy="12"
+              r="10"
+            />
+            <path
+              d="M12 16v-4"
+            />
+            <path
+              d="M12 8h.01"
+            />
+          </svg>
+          <span>
+            <strong>
+              „נרכש בפועל” נספר פעם אחת לכל משלוח.
+            </strong>
+             
+            קבלה שהושלמה גוברת על החשבונית, והחשבונית משמשת רק כשאין ראיית קבלה. „הוזמן” אינו נספר כרכישה.
+            <span
+              class="mt-1 block"
+            >
+              „עלות לפי ההזמנה” היא המחיר שנשמר בהזמנה כפול הכמות שהוזמנה, במטבע ההזמנה. „הוצאה” היא מה שנרשם בחשבוניות שאושרו. אלה שני מספרים שונים ואין לחבר ביניהם.
+            </span>
+          </span>
+        </p>
+      </div>
+      <div
+        class="card overflow-hidden"
+      >
+        <div
+          class="flex flex-wrap items-center gap-2 p-3 border-b border-line-soft"
+        >
+          <div
+            class="relative flex-1 min-w-44 max-w-xs"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-search absolute top-1/2 -translate-y-1/2 start-3 text-ink-faint"
+              fill="none"
+              height="15"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="15"
+              xmln...
+
+Ignored nodes: comments, script, style
+<body>
+  <div>
+    <div
+      class="space-y-4"
+    >
+      <header
+        class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between "
+      >
+        <div
+          class="min-w-0 space-y-1"
+        >
+          <h1
+            class="page-title break-words"
+          >
+            סיכום רכישות מוצרים
+          </h1>
+          <span
+            aria-hidden="true"
+            class="section-mark"
+          />
+          <div
+            class="text-sm text-ink-muted"
+          >
+            בדיקת הכמות והעלות שנרכשו בכל מוצר, לצד שלושת מקורות הנתונים שמאחורי המספר.
+          </div>
+          <div
+            class="text-sm text-ink-soft"
+          >
+            5 מוצרים · 2026-01-01 עד 2026-09-04
+          </div>
+        </div>
+        <div
+          class="flex shrink-0 flex-wrap items-center gap-2"
+        >
+          <button
+            class="btn-secondary"
+            type="button"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-file-spreadsheet"
+              fill="none"
+              height="15"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="15"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+              />
+              <path
+                d="M14 2v5a1 1 0 0 0 1 1h5"
+              />
+              <path
+                d="M8 13h2"
+              />
+              <path
+                d="M14 13h2"
+              />
+              <path
+                d="M8 17h2"
+              />
+              <path
+                d="M14 17h2"
+              />
+            </svg>
+            ייצוא Excel
+          </button>
+        </div>
+      </header>
+      <div
+        class="card   flex flex-wrap items-end gap-3 p-3"
+      >
+        <div>
+          <label
+            class="label"
+            for="summary-from"
+          >
+            מתאריך
+          </label>
+          <input
+            class="input num"
+            id="summary-from"
+            type="date"
+            value="2026-01-01"
+          />
+        </div>
+        <div>
+          <label
+            class="label"
+            for="summary-to"
+          >
+            עד תאריך
+          </label>
+          <input
+            class="input num"
+            id="summary-to"
+            type="date"
+            value="2026-09-04"
+          />
+        </div>
+      </div>
+      <div
+        class="note-info "
+      >
+        <p
+          class="flex items-start gap-2 text-sm"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-info mt-0.5 shrink-0"
+            fill="none"
+            height="15"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="15"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <circle
+              cx="12"
+              cy="12"
+              r="10"
+            />
+            <path
+              d="M12 16v-4"
+            />
+            <path
+              d="M12 8h.01"
+            />
+          </svg>
+          <span>
+            <strong>
+              „נרכש בפועל” נספר פעם אחת לכל משלוח.
+            </strong>
+             
+            קבלה שהושלמה גוברת על החשבונית, והחשבונית משמשת רק כשאין ראיית קבלה. „הוזמן” אינו נספר כרכישה.
+            <span
+              class="mt-1 block"
+            >
+              „עלות לפי ההזמנה” היא המחיר שנשמר בהזמנה כפול הכמות שהוזמנה, במטבע ההזמנה. „הוצאה” היא מה שנרשם בחשבוניות שאושרו. אלה שני מספרים שונים ואין לחבר ביניהם.
+            </span>
+          </span>
+        </p>
+      </div>
+      <div
+        class="card overflow-hidden"
+      >
+        <div
+          class="flex flex-wrap items-center gap-2 p-3 border-b border-line-soft"
+        >
+          <div
+            class="relative flex-1 min-w-44 max-w-xs"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-search absolute top-1/2 -translate-y-1/2 start-3 text-ink-faint"
+              fill="none"
+              height="15"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="15"
+              xmln...
+ ✓ src/pages/productPurchaseBilledAbsence.spec.tsx > DASH-07 — every billed column is empty and the screen says why > CONTROL — the empty cells are em dashes, per row, and never a zero 147ms
+ ✓ src/pages/productPurchaseBilledAbsence.spec.tsx > DASH-07 — every billed column is empty and the screen says why > CONTROL — the committed cost is stated on every one of those same rows 137ms
+ ✓ src/pages/productPurchaseBilledAbsence.spec.tsx > DASH-07 — the sentence stays away when it would be false > CONTROL — a window in which one product HAS been billed shows no such note 137ms
+ ✓ src/pages/productPurchaseBilledAbsence.spec.tsx > DASH-07 — the sentence stays away when it would be false > CONTROL — unmatched lines exist, so the report's own unmapped note is the right one 112ms
+ ✓ src/pages/productPurchaseBilledAbsence.spec.tsx > DASH-07 — the sentence stays away when it would be false > CONTROL — an empty window says it is empty and claims nothing about billing 50ms
+node.exe : Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+At line:4 char:8
++ $out = & node "$r\node_modules\vitest\vitest.mjs" run src/pages/produ ...
++        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Not implemented...vas npm package:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+ × src/pages/productPurchaseBilledAbsence.spec.tsx > DASH-07 — the file says it too > states the absence on row 2, beside the window, and keeps the window 1037ms
+   → רכישות מוצרים · the absence: expected '01.01.2026 – 04.09.2026 · הופק 05.09.…' to match /לא נמצאה אף שורת חשבונית/
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+ ✓ src/pages/productPurchaseBilledAbsence.spec.tsx > DASH-07 — the file says it too > CONTROL — a file with a billed product carries no such banner 277ms
+ × src/pages/productPurchaseBilledAbsence.spec.tsx > DASH-07 — the note is reachable by a screen reader > is announced, not merely painted 3121ms
+   → Unable to find role="status"
+
+Ignored nodes: comments, script, style
+<body>
+  <div>
+    <div
+      class="space-y-4"
+    >
+      <header
+        class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between "
+      >
+        <div
+          class="min-w-0 space-y-1"
+        >
+          <h1
+            class="page-title break-words"
+          >
+            סיכום רכישות מוצרים
+          </h1>
+          <span
+            aria-hidden="true"
+            class="section-mark"
+          />
+          <div
+            class="text-sm text-ink-muted"
+          >
+            בדיקת הכמות והעלות שנרכשו בכל מוצר, לצד שלושת מקורות הנתונים שמאחורי המספר.
+          </div>
+          <div
+            class="text-sm text-ink-soft"
+          >
+            5 מוצרים · 2026-01-01 עד 2026-09-04
+          </div>
+        </div>
+        <div
+          class="flex shrink-0 flex-wrap items-center gap-2"
+        >
+          <button
+            class="btn-secondary"
+            type="button"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-file-spreadsheet"
+              fill="none"
+              height="15"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="15"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+              />
+              <path
+                d="M14 2v5a1 1 0 0 0 1 1h5"
+              />
+              <path
+                d="M8 13h2"
+              />
+              <path
+                d="M14 13h2"
+              />
+              <path
+                d="M8 17h2"
+              />
+              <path
+                d="M14 17h2"
+              />
+            </svg>
+            ייצוא Excel
+          </button>
+        </div>
+      </header>
+      <div
+        class="card   flex flex-wrap items-end gap-3 p-3"
+      >
+        <div>
+          <label
+            class="label"
+            for="summary-from"
+          >
+            מתאריך
+          </label>
+          <input
+            class="input num"
+            id="summary-from"
+            type="date"
+            value="2026-01-01"
+          />
+        </div>
+        <div>
+          <label
+            class="label"
+            for="summary-to"
+          >
+            עד תאריך
+          </label>
+          <input
+            class="input num"
+            id="summary-to"
+            type="date"
+            value="2026-09-04"
+          />
+        </div>
+      </div>
+      <div
+        class="note-info "
+      >
+        <p
+          class="flex items-start gap-2 text-sm"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-info mt-0.5 shrink-0"
+            fill="none"
+            height="15"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="15"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <circle
+              cx="12"
+              cy="12"
+              r="10"
+            />
+            <path
+              d="M12 16v-4"
+            />
+            <path
+              d="M12 8h.01"
+            />
+          </svg>
+          <span>
+            <strong>
+              „נרכש בפועל” נספר פעם אחת לכל משלוח.
+            </strong>
+             
+            קבלה שהושלמה גוברת על החשבונית, והחשבונית משמשת רק כשאין ראיית קבלה. „הוזמן” אינו נספר כרכישה.
+            <span
+              class="mt-1 block"
+            >
+              „עלות לפי ההזמנה” היא המחיר שנשמר בהזמנה כפול הכמות שהוזמנה, במטבע ההזמנה. „הוצאה” היא מה שנרשם בחשבוניות שאושרו. אלה שני מספרים שונים ואין לחבר ביניהם.
+            </span>
+          </span>
+        </p>
+      </div>
+      <div
+        class="card overflow-hidden"
+      >
+        <div
+          class="flex flex-wrap items-center gap-2 p-3 border-b border-line-soft"
+        >
+          <div
+            class="relative flex-1 min-w-44 max-w-xs"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-search absolute top-1/2 -translate-y-1/2 start-3 text-ink-faint"
+              fill="none"
+              height="15"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="15"
+              xmln...
+
+Ignored nodes: comments, script, style
+<body>
+  <div>
+    <div
+      class="space-y-4"
+    >
+      <header
+        class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between "
+      >
+        <div
+          class="min-w-0 space-y-1"
+        >
+          <h1
+            class="page-title break-words"
+          >
+            סיכום רכישות מוצרים
+          </h1>
+          <span
+            aria-hidden="true"
+            class="section-mark"
+          />
+          <div
+            class="text-sm text-ink-muted"
+          >
+            בדיקת הכמות והעלות שנרכשו בכל מוצר, לצד שלושת מקורות הנתונים שמאחורי המספר.
+          </div>
+          <div
+            class="text-sm text-ink-soft"
+          >
+            5 מוצרים · 2026-01-01 עד 2026-09-04
+          </div>
+        </div>
+        <div
+          class="flex shrink-0 flex-wrap items-center gap-2"
+        >
+          <button
+            class="btn-secondary"
+            type="button"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-file-spreadsheet"
+              fill="none"
+              height="15"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="15"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+              />
+              <path
+                d="M14 2v5a1 1 0 0 0 1 1h5"
+              />
+              <path
+                d="M8 13h2"
+              />
+              <path
+                d="M14 13h2"
+              />
+              <path
+                d="M8 17h2"
+              />
+              <path
+                d="M14 17h2"
+              />
+            </svg>
+            ייצוא Excel
+          </button>
+        </div>
+      </header>
+      <div
+        class="card   flex flex-wrap items-end gap-3 p-3"
+      >
+        <div>
+          <label
+            class="label"
+            for="summary-from"
+          >
+            מתאריך
+          </label>
+          <input
+            class="input num"
+            id="summary-from"
+            type="date"
+            value="2026-01-01"
+          />
+        </div>
+        <div>
+          <label
+            class="label"
+            for="summary-to"
+          >
+            עד תאריך
+          </label>
+          <input
+            class="input num"
+            id="summary-to"
+            type="date"
+            value="2026-09-04"
+          />
+        </div>
+      </div>
+      <div
+        class="note-info "
+      >
+        <p
+          class="flex items-start gap-2 text-sm"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-info mt-0.5 shrink-0"
+            fill="none"
+            height="15"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="15"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <circle
+              cx="12"
+              cy="12"
+              r="10"
+            />
+            <path
+              d="M12 16v-4"
+            />
+            <path
+              d="M12 8h.01"
+            />
+          </svg>
+          <span>
+            <strong>
+              „נרכש בפועל” נספר פעם אחת לכל משלוח.
+            </strong>
+             
+            קבלה שהושלמה גוברת על החשבונית, והחשבונית משמשת רק כשאין ראיית קבלה. „הוזמן” אינו נספר כרכישה.
+            <span
+              class="mt-1 block"
+            >
+              „עלות לפי ההזמנה” היא המחיר שנשמר בהזמנה כפול הכמות שהוזמנה, במטבע ההזמנה. „הוצאה” היא מה שנרשם בחשבוניות שאושרו. אלה שני מספרים שונים ואין לחבר ביניהם.
+            </span>
+          </span>
+        </p>
+      </div>
+      <div
+        class="card overflow-hidden"
+      >
+        <div
+          class="flex flex-wrap items-center gap-2 p-3 border-b border-line-soft"
+        >
+          <div
+            class="relative flex-1 min-w-44 max-w-xs"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-search absolute top-1/2 -translate-y-1/2 start-3 text-ink-faint"
+              fill="none"
+              height="15"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="15"
+              xmln...
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/productPurchaseBilledAbsence.spec.tsx > DASH-07 — every billed column is empty and the screen says 
+why > states, once, that no approved invoice line reached any product in this window
+TestingLibraryElementError: Unable to find role="status"
+
+Ignored nodes: comments, script, style
+<body>
+  <div>
+    <div
+      class="space-y-4"
+    >
+      <header
+        class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between "
+      >
+        <div
+          class="min-w-0 space-y-1"
+        >
+          <h1
+            class="page-title break-words"
+          >
+            סיכום רכישות מוצרים
+          </h1>
+          <span
+            aria-hidden="true"
+            class="section-mark"
+          />
+          <div
+            class="text-sm text-ink-muted"
+          >
+            בדיקת הכמות והעלות שנרכשו בכל מוצר, לצד שלושת מקורות הנתונים שמאחורי המספר.
+          </div>
+          <div
+            class="text-sm text-ink-soft"
+          >
+            5 מוצרים · 2026-01-01 עד 2026-09-04
+          </div>
+        </div>
+        <div
+          class="flex shrink-0 flex-wrap items-center gap-2"
+        >
+          <button
+            class="btn-secondary"
+            type="button"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-file-spreadsheet"
+              fill="none"
+              height="15"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="15"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 
+0 1 20 8v12a2 2 0 0 1-2 2z"
+              />
+              <path
+                d="M14 2v5a1 1 0 0 0 1 1h5"
+              />
+              <path
+                d="M8 13h2"
+              />
+              <path
+                d="M14 13h2"
+              />
+              <path
+                d="M8 17h2"
+              />
+              <path
+                d="M14 17h2"
+              />
+            </svg>
+            ייצוא Excel
+          </button>
+        </div>
+      </header>
+      <div
+        class="card   flex flex-wrap items-end gap-3 p-3"
+      >
+        <div>
+          <label
+            class="label"
+            for="summary-from"
+          >
+            מתאריך
+          </label>
+          <input
+            class="input num"
+            id="summary-from"
+            type="date"
+            value="2026-01-01"
+          />
+        </div>
+        <div>
+          <label
+            class="label"
+            for="summary-to"
+          >
+            עד תאריך
+          </label>
+          <input
+            class="input num"
+            id="summary-to"
+            type="date"
+            value="2026-09-04"
+          />
+        </div>
+      </div>
+      <div
+        class="note-info "
+      >
+        <p
+          class="flex items-start gap-2 text-sm"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-info mt-0.5 shrink-0"
+            fill="none"
+            height="15"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="15"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <circle
+              cx="12"
+              cy="12"
+              r="10"
+            />
+            <path
+              d="M12 16v-4"
+            />
+            <path
+              d="M12 8h.01"
+            />
+          </svg>
+          <span>
+            <strong>
+              „נרכש בפועל” נספר פעם אחת לכל משלוח.
+            </strong>
+             
+            קבלה שהושלמה גוברת על החשבונית, והחשבונית משמשת רק כשאין ראיית קבלה. „הוזמן” אינו נספר כרכישה.
+            <span
+              class="mt-1 block"
+            >
+              „עלות לפי ההזמנה” היא המחיר שנשמר בהזמנה כפול הכמות שהוזמנה, במטבע ההזמנה. „הוצאה” היא מה שנרשם 
+בחשבוניות שאושרו. אלה שני מספרים שונים ואין לחבר ביניהם.
+            </span>
+          </span>
+        </p>
+      </div>
+      <div
+        class="card overflow-hidden"
+      >
+        <div
+          class="flex flex-wrap items-center gap-2 p-3 border-b border-line-soft"
+        >
+          <div
+            class="relative flex-1 min-w-44 max-w-xs"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-search absolute top-1/2 -translate-y-1/2 start-3 text-ink-faint"
+              fill="none"
+              height="15"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="15"
+              xmln...
+
+Ignored nodes: comments, script, style
+<body>
+  <div>
+    <div
+      class="space-y-4"
+    >
+      <header
+        class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between "
+      >
+        <div
+          class="min-w-0 space-y-1"
+        >
+          <h1
+            class="page-title break-words"
+          >
+            סיכום רכישות מוצרים
+          </h1>
+          <span
+            aria-hidden="true"
+            class="section-mark"
+          />
+          <div
+            class="text-sm text-ink-muted"
+          >
+            בדיקת הכמות והעלות שנרכשו בכל מוצר, לצד שלושת מקורות הנתונים שמאחורי המספר.
+          </div>
+          <div
+            class="text-sm text-ink-soft"
+          >
+            5 מוצרים · 2026-01-01 עד 2026-09-04
+          </div>
+        </div>
+        <div
+          class="flex shrink-0 flex-wrap items-center gap-2"
+        >
+          <button
+            class="btn-secondary"
+            type="button"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-file-spreadsheet"
+              fill="none"
+              height="15"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="15"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 
+0 1 20 8v12a2 2 0 0 1-2 2z"
+              />
+              <path
+                d="M14 2v5a1 1 0 0 0 1 1h5"
+              />
+              <path
+                d="M8 13h2"
+              />
+              <path
+                d="M14 13h2"
+              />
+              <path
+                d="M8 17h2"
+              />
+              <path
+                d="M14 17h2"
+              />
+            </svg>
+            ייצוא Excel
+          </button>
+        </div>
+      </header>
+      <div
+        class="card   flex flex-wrap items-end gap-3 p-3"
+      >
+        <div>
+          <label
+            class="label"
+            for="summary-from"
+          >
+            מתאריך
+          </label>
+          <input
+            class="input num"
+            id="summary-from"
+            type="date"
+            value="2026-01-01"
+          />
+        </div>
+        <div>
+          <label
+            class="label"
+            for="summary-to"
+          >
+            עד תאריך
+          </label>
+          <input
+            class="input num"
+            id="summary-to"
+            type="date"
+            value="2026-09-04"
+          />
+        </div>
+      </div>
+      <div
+        class="note-info "
+      >
+        <p
+          class="flex items-start gap-2 text-sm"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-info mt-0.5 shrink-0"
+            fill="none"
+            height="15"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="15"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <circle
+              cx="12"
+              cy="12"
+              r="10"
+            />
+            <path
+              d="M12 16v-4"
+            />
+            <path
+              d="M12 8h.01"
+            />
+          </svg>
+          <span>
+            <strong>
+              „נרכש בפועל” נספר פעם אחת לכל משלוח.
+            </strong>
+             
+            קבלה שהושלמה גוברת על החשבונית, והחשבונית משמשת רק כשאין ראיית קבלה. „הוזמן” אינו נספר כרכישה.
+            <span
+              class="mt-1 block"
+            >
+              „עלות לפי ההזמנה” היא המחיר שנשמר בהזמנה כפול הכמות שהוזמנה, במטבע ההזמנה. „הוצאה” היא מה שנרשם 
+בחשבוניות שאושרו. אלה שני מספרים שונים ואין לחבר ביניהם.
+            </span>
+          </span>
+        </p>
+      </div>
+      <div
+        class="card overflow-hidden"
+      >
+        <div
+          class="flex flex-wrap items-center gap-2 p-3 border-b border-line-soft"
+        >
+          <div
+            class="relative flex-1 min-w-44 max-w-xs"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-search absolute top-1/2 -translate-y-1/2 start-3 text-ink-faint"
+              fill="none"
+              height="15"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="15"
+              xmln...
+ ❯ waitForWrapper ../../../node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ src/pages/productPurchaseBilledAbsence.spec.tsx:228:32
+    226|     // the report can produce is guarded by `unmapped_invoice_lines > …
+    227|     // same reason the columns are empty.
+    228|     const notes = await screen.findAllByRole('status');
+       |                                ^
+    229|     const explaining = notes.filter((note) => SENTENCE.test(note.textC…
+    230|     expect(explaining, 'exactly one note explains the empty billed col…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  src/pages/productPurchaseBilledAbsence.spec.tsx > DASH-07 — the file says it too > states the absence on row 2, 
+beside the window, and keeps the window
+AssertionError: רכישות מוצרים · the absence: expected '01.01.2026 – 04.09.2026 · הופק 05.09.…' to match /לא נמצאה אף 
+שורת חשבונית/
+
+- Expected:
+/לא נמצאה אף שורת חשבונית/
+
++ Received:
+"01.01.2026 – 04.09.2026 · הופק 05.09.2026"
+
+ ❯ src/pages/productPurchaseBilledAbsence.spec.tsx:320:47
+    318|       expect(banner, `${name} · window`).toContain('01.01.2026');
+    319|       expect(banner, `${name} · window`).toContain('04.09.2026');
+    320|       expect(banner, `${name} · the absence`).toMatch(SENTENCE);
+       |                                               ^
+    321|     }
+    322|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  src/pages/productPurchaseBilledAbsence.spec.tsx > DASH-07 — the note is reachable by a screen reader > is 
+announced, not merely painted
+TestingLibraryElementError: Unable to find role="status"
+
+Ignored nodes: comments, script, style
+<body>
+  <div>
+    <div
+      class="space-y-4"
+    >
+      <header
+        class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between "
+      >
+        <div
+          class="min-w-0 space-y-1"
+        >
+          <h1
+            class="page-title break-words"
+          >
+            סיכום רכישות מוצרים
+          </h1>
+          <span
+            aria-hidden="true"
+            class="section-mark"
+          />
+          <div
+            class="text-sm text-ink-muted"
+          >
+            בדיקת הכמות והעלות שנרכשו בכל מוצר, לצד שלושת מקורות הנתונים שמאחורי המספר.
+          </div>
+          <div
+            class="text-sm text-ink-soft"
+          >
+            5 מוצרים · 2026-01-01 עד 2026-09-04
+          </div>
+        </div>
+        <div
+          class="flex shrink-0 flex-wrap items-center gap-2"
+        >
+          <button
+            class="btn-secondary"
+            type="button"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-file-spreadsheet"
+              fill="none"
+              height="15"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="15"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 
+0 1 20 8v12a2 2 0 0 1-2 2z"
+              />
+              <path
+                d="M14 2v5a1 1 0 0 0 1 1h5"
+              />
+              <path
+                d="M8 13h2"
+              />
+              <path
+                d="M14 13h2"
+              />
+              <path
+                d="M8 17h2"
+              />
+              <path
+                d="M14 17h2"
+              />
+            </svg>
+            ייצוא Excel
+          </button>
+        </div>
+      </header>
+      <div
+        class="card   flex flex-wrap items-end gap-3 p-3"
+      >
+        <div>
+          <label
+            class="label"
+            for="summary-from"
+          >
+            מתאריך
+          </label>
+          <input
+            class="input num"
+            id="summary-from"
+            type="date"
+            value="2026-01-01"
+          />
+        </div>
+        <div>
+          <label
+            class="label"
+            for="summary-to"
+          >
+            עד תאריך
+          </label>
+          <input
+            class="input num"
+            id="summary-to"
+            type="date"
+            value="2026-09-04"
+          />
+        </div>
+      </div>
+      <div
+        class="note-info "
+      >
+        <p
+          class="flex items-start gap-2 text-sm"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-info mt-0.5 shrink-0"
+            fill="none"
+            height="15"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="15"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <circle
+              cx="12"
+              cy="12"
+              r="10"
+            />
+            <path
+              d="M12 16v-4"
+            />
+            <path
+              d="M12 8h.01"
+            />
+          </svg>
+          <span>
+            <strong>
+              „נרכש בפועל” נספר פעם אחת לכל משלוח.
+            </strong>
+             
+            קבלה שהושלמה גוברת על החשבונית, והחשבונית משמשת רק כשאין ראיית קבלה. „הוזמן” אינו נספר כרכישה.
+            <span
+              class="mt-1 block"
+            >
+              „עלות לפי ההזמנה” היא המחיר שנשמר בהזמנה כפול הכמות שהוזמנה, במטבע ההזמנה. „הוצאה” היא מה שנרשם 
+בחשבוניות שאושרו. אלה שני מספרים שונים ואין לחבר ביניהם.
+            </span>
+          </span>
+        </p>
+      </div>
+      <div
+        class="card overflow-hidden"
+      >
+        <div
+          class="flex flex-wrap items-center gap-2 p-3 border-b border-line-soft"
+        >
+          <div
+            class="relative flex-1 min-w-44 max-w-xs"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-search absolute top-1/2 -translate-y-1/2 start-3 text-ink-faint"
+              fill="none"
+              height="15"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="15"
+              xmln...
+
+Ignored nodes: comments, script, style
+<body>
+  <div>
+    <div
+      class="space-y-4"
+    >
+      <header
+        class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between "
+      >
+        <div
+          class="min-w-0 space-y-1"
+        >
+          <h1
+            class="page-title break-words"
+          >
+            סיכום רכישות מוצרים
+          </h1>
+          <span
+            aria-hidden="true"
+            class="section-mark"
+          />
+          <div
+            class="text-sm text-ink-muted"
+          >
+            בדיקת הכמות והעלות שנרכשו בכל מוצר, לצד שלושת מקורות הנתונים שמאחורי המספר.
+          </div>
+          <div
+            class="text-sm text-ink-soft"
+          >
+            5 מוצרים · 2026-01-01 עד 2026-09-04
+          </div>
+        </div>
+        <div
+          class="flex shrink-0 flex-wrap items-center gap-2"
+        >
+          <button
+            class="btn-secondary"
+            type="button"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-file-spreadsheet"
+              fill="none"
+              height="15"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="15"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 
+0 1 20 8v12a2 2 0 0 1-2 2z"
+              />
+              <path
+                d="M14 2v5a1 1 0 0 0 1 1h5"
+              />
+              <path
+                d="M8 13h2"
+              />
+              <path
+                d="M14 13h2"
+              />
+              <path
+                d="M8 17h2"
+              />
+              <path
+                d="M14 17h2"
+              />
+            </svg>
+            ייצוא Excel
+          </button>
+        </div>
+      </header>
+      <div
+        class="card   flex flex-wrap items-end gap-3 p-3"
+      >
+        <div>
+          <label
+            class="label"
+            for="summary-from"
+          >
+            מתאריך
+          </label>
+          <input
+            class="input num"
+            id="summary-from"
+            type="date"
+            value="2026-01-01"
+          />
+        </div>
+        <div>
+          <label
+            class="label"
+            for="summary-to"
+          >
+            עד תאריך
+          </label>
+          <input
+            class="input num"
+            id="summary-to"
+            type="date"
+            value="2026-09-04"
+          />
+        </div>
+      </div>
+      <div
+        class="note-info "
+      >
+        <p
+          class="flex items-start gap-2 text-sm"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-info mt-0.5 shrink-0"
+            fill="none"
+            height="15"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="15"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <circle
+              cx="12"
+              cy="12"
+              r="10"
+            />
+            <path
+              d="M12 16v-4"
+            />
+            <path
+              d="M12 8h.01"
+            />
+          </svg>
+          <span>
+            <strong>
+              „נרכש בפועל” נספר פעם אחת לכל משלוח.
+            </strong>
+             
+            קבלה שהושלמה גוברת על החשבונית, והחשבונית משמשת רק כשאין ראיית קבלה. „הוזמן” אינו נספר כרכישה.
+            <span
+              class="mt-1 block"
+            >
+              „עלות לפי ההזמנה” היא המחיר שנשמר בהזמנה כפול הכמות שהוזמנה, במטבע ההזמנה. „הוצאה” היא מה שנרשם 
+בחשבוניות שאושרו. אלה שני מספרים שונים ואין לחבר ביניהם.
+            </span>
+          </span>
+        </p>
+      </div>
+      <div
+        class="card overflow-hidden"
+      >
+        <div
+          class="flex flex-wrap items-center gap-2 p-3 border-b border-line-soft"
+        >
+          <div
+            class="relative flex-1 min-w-44 max-w-xs"
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 6 passed (9)
+   Start at  06:27:06
+   Duration  13.11s (transform 1.06s, setup 805ms, import 1.62s, tests 8.52s, environment 1.76s)
+
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-search absolute top-1/2 -translate-y-1/2 start-3 text-ink-faint"
+              fill="none"
+              height="15"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="15"
+              xmln...
+ ❯ waitForWrapper ../../../node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ src/pages/productPurchaseBilledAbsence.spec.tsx:346:32
+    344|     await waitFor(() => expect(cellsUnder('מוצר')).toHaveLength(NOTHIN…
+    345|
+    346|     const notes = await screen.findAllByRole('status');
+       |                                ^
+    347|     const explaining = notes.find((note) => SENTENCE.test(note.textCon…
+    348|     expect(explaining).toBeDefined();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
