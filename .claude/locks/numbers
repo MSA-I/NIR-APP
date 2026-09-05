@@ -19,9 +19,22 @@ RESERVED for the qa-sweep-20260904 campaign. No agent may draw a number. Ask the
                          suggestion beneath it, which is EXACTLY the "two rows of the same
                          amount" the sweep photographed. Correcting it deletes financial rows
                          and decides which is real -- owner's call. WRITTEN 05.09.2026.
-  debt section  §123  -- next free; unassigned
+  debt section  §123  -- PR 17's two residuals: the client's own number reader has the identical
+                         blind spot, so the review screen's arithmetic counter is silently inert
+                         on exactly the documents it was written for; and the server still refuses
+                         a two-digit year, which is an owner ruling because teaching it would let
+                         a document AUTO-FILE. WRITTEN 05.09.2026.
+  debt section  §124  -- next free; unassigned
   migration     0315  -- PR 7, one balance one approval. LANDED.
-  migration     0318  -- PR 17: document assessment carries coverage (DOC-02/03/04/08).
+  migration     0318  -- *** WRONG, AND CORRECTED 05.09.2026. 0318 IS THE OTHER CAMPAIGN'S.
+                         This line assigned it to PR 17 on 05.09 while `npm run next-number` was
+                         already naming 0318 as claimed on `docs/ux-remediation-documents-assistant`
+                         and saying "do not reuse". The coordinator read the number from a stale
+                         line in this very file instead of from the tool. PR 17's agent caught it
+                         before writing and took **0324** instead. Nothing was lost -- but the
+                         lesson is the campaign's own: DRAW LATE, from the tool, and never from a
+                         reservation written hours earlier. A reservation is a note, not a fact.
+  migration     0324  -- PR 17: document assessment carries coverage (DOC-02/03/04/08). LANDED.
                          ANCHORED PATCH against the live body of
                          private.document_reconciliation_assessment -- ancestor is NOT 0108;
                          it has been patched since by 0227, 0244, 0260 and 0284.
