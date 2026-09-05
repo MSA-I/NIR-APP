@@ -33,7 +33,7 @@
  */
 
 import { useT } from '../lib/i18n/LocaleProvider';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthContext';
 import { ok } from '../lib/errors';
@@ -50,24 +50,10 @@ import type { Supplier } from '../lib/types';
  */
 export type QuickCreatedSupplier = Pick<Supplier, 'id' | 'name'>;
 
-/**
- * The complete set of columns this surface writes — closed on purpose. No index signature and no
- * optional members, so a caller-supplied `defaults`/`prefill` object cannot be widened into the
- * payload without editing this type and the call site below, which is what the spec watches.
- */
-export interface QuickSupplierColumns {
-  org_id: string;
-  name: string;
-  tax_id: string | null;
-}
-
-/**
- * The only row this component may insert, as a pure function so the spec can drive it with
- * arbitrary input instead of inferring the payload from whichever scenario a UI test happens to
- * exercise — the hole that let a `{...defaults}` spread pass four green assertions in review.
- */
-export function quickSupplierRow(orgId: string, name: string, taxId: string): QuickSupplierColumns {
-  return { org_id: orgId, name: name.trim(), tax_id: taxId.trim() || null };
+export interface QuickSupplierCreationContext {
+  documentId?: string;
+  suggestedName?: string | null;
+  reason?: string;
 }
 
 /** Enough of the existing row to tell the user WHICH supplier it already has. */
@@ -102,15 +88,21 @@ function describeExisting(
  * what resets the fields. It nests safely inside another dialog — `useDialogLayer` keeps a stack,
  * so Escape and Tab belong to this layer until it closes.
  */
-export function QuickCreateSupplier({ onClose, onCreated }: {
+export function QuickCreateSupplier({ onClose, onCreated, context }: {
   onClose: () => void;
   onCreated: (supplier: QuickCreatedSupplier) => void;
+  context?: QuickSupplierCreationContext;
 }) {
   const { profile } = useAuth();
   const { errorText, statusLabel, t } = useT();
   const toast = useToast();
-  const [name, setName] = useState('');
+  const suggestedName = context?.suggestedName?.trim() || null;
+  const [name, setName] = useState(suggestedName ?? '');
   const [taxId, setTaxId] = useState('');
+  const [suggestionConfirmed, setSuggestionConfirmed] = useState(false);
+  // Stable across a dropped response and a retry. The server returns the first supplier instead
+  // of creating a second row when the same attempt reaches it twice.
+  const idempotencyKey = useRef(crypto.randomUUID());
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   /**
@@ -133,6 +125,8 @@ export function QuickCreateSupplier({ onClose, onCreated }: {
    */
   const [duplicate, setDuplicate] = useState<ExistingSupplier | null>(null);
   const spent = busy || created;
+  const usesMachineSuggestion = suggestedName !== null && name.trim() === suggestedName;
+  const confirmationMissing = usesMachineSuggestion && !suggestionConfirmed;
 
   async function save() {
     // Validated here, before any request: a name of spaces is not the server's problem to explain,
@@ -158,11 +152,21 @@ export function QuickCreateSupplier({ onClose, onCreated }: {
         const match = existing.find((row) => nameKey(row.name) === key);
         if (match) { setDuplicate(match); return; }
       }
-      const inserted = ok(await supabase.from('suppliers')
-        .insert(quickSupplierRow(profile.org_id, name, taxId))
-        .select('id, name')
-        .single());
-      const row = inserted.data as QuickCreatedSupplier | null;
+      const inserted = ok(await supabase.rpc('create_supplier_from_document', {
+        p_document_id: context?.documentId ?? null,
+        p_name: name.trim(),
+        p_tax_id: taxId.trim() || null,
+        p_idempotency_key: idempotencyKey.current,
+        p_reason: context?.reason?.trim() || t('quickCreateSupplier.defaultReason'),
+      }));
+      const answer = inserted.data as {
+        supplier_id?: string;
+        id?: string;
+        name?: string;
+      } | null;
+      const row = answer?.supplier_id || answer?.id
+        ? { id: answer.supplier_id ?? answer.id!, name: answer.name ?? name.trim() }
+        : null;
       // The one place the "never tell the caller a supplier exists when it does not" promise was a
       // claim rather than a check: an insert that answers with no row is a failure, not a success.
       if (!row?.id) throw new Error('supplier_insert_no_row');
@@ -198,6 +202,14 @@ export function QuickCreateSupplier({ onClose, onCreated }: {
                instead of waving through a collision the user never saw. */
             onChange={(event) => { setName(event.target.value); setDuplicate(null); }} />
         </div>
+        {usesMachineSuggestion && (
+          <label className="flex items-start gap-2 text-sm text-ink-body">
+            <input type="checkbox" className="mt-0.5 size-4 shrink-0"
+              checked={suggestionConfirmed} disabled={spent}
+              onChange={(event) => setSuggestionConfirmed(event.target.checked)} />
+            <span>{t('quickCreateSupplier.confirmMachineName', { name: suggestedName })}</span>
+          </label>
+        )}
         <div>
           <label className="label" htmlFor="quick-supplier-tax-id">{t('quickCreateSupplier.taxIdLabel')}</label>
           <input id="quick-supplier-tax-id" className="input" dir="ltr" value={taxId} disabled={spent}
@@ -207,7 +219,7 @@ export function QuickCreateSupplier({ onClose, onCreated }: {
       <div className="flex justify-end gap-2 mt-5">
         {/* Cancel stays live after a create: the exit is never taken away. */}
         <button type="button" className="btn-secondary" disabled={busy} onClick={onClose}>{t('quickCreateSupplier.cancel')}</button>
-        <button type="button" className="btn-primary" disabled={spent} onClick={() => void save()}>
+        <button type="button" className="btn-primary" disabled={spent || confirmationMissing} onClick={() => void save()}>
           {created ? t('quickCreateSupplier.created') : busy ? t('quickCreateSupplier.saving') : duplicate ? t('quickCreateSupplier.createAnyway') : t('quickCreateSupplier.save')}
         </button>
       </div>

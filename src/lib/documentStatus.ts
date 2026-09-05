@@ -7,6 +7,7 @@ export type DocumentStatusState =
   | 'failed'
   | 'processing'
   | 'review'
+  | 'supplier_unresolved'
   | 'unassigned'
   | 'assigned'
   | 'completed'
@@ -101,6 +102,8 @@ export interface DocumentStatusInput {
   /** Optional canonical answer from a future server contract. When present, it wins. */
   isStuck?: boolean | null;
   stuckReason?: string | null;
+  /** Batched server assessment for folder rows; never fetched once per row. */
+  reviewState?: 'supplier_unresolved' | 'blocked' | 'ready_for_approval' | null;
 }
 
 export const DOCUMENT_STUCK_JOB_AGE_SECONDS = 2 * 60 * 60;
@@ -177,6 +180,7 @@ function result(
     failed: 0,
     processing: 1,
     review: 2,
+    supplier_unresolved: 2,
     unassigned: 3,
     assigned: 4,
     completed: 4,
@@ -312,6 +316,10 @@ export function documentUiStatus(input: DocumentStatusInput): DocumentUiStatus {
       elapsed,
       pageProgress(input.job, status),
     );
+  }
+  if (input.reviewState === 'supplier_unresolved') {
+    return result('supplier_unresolved', 'documentStatus.supplierUnresolved', 'alert',
+      'documentStatus.supplierUnresolvedDescription');
   }
   if (status === 'review') {
     return result('review', 'documentStatus.needsReview', 'await', 'documentStatus.needsReviewDescription');

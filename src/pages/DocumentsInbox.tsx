@@ -44,6 +44,11 @@ import {
 type RefileTarget = 'invoice' | 'goods_receipt';
 type SupplierOption = { id: string; name: string };
 type GalleryDocument = DocumentRow & { supplier: SupplierOption | null };
+type FolderReviewState = {
+  document_id: string;
+  state: 'supplier_unresolved' | 'blocked' | 'ready_for_approval';
+  suggested_supplier_name: string | null;
+};
 
 /** One row of `document_auto_actions` (0077): a financial record a machine wrote with no human.
  *
@@ -500,7 +505,17 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
     return { docs, suppliers };
   }, [archive]);
   const documentIds = useMemo(() => data?.docs.map((doc) => doc.id) ?? [], [data]);
+  const documentIdsKey = documentIds.join(',');
   const processing = useDocumentProcessing(documentIds);
+
+  /** One server read for the visible folder, never one assessment RPC per row. */
+  const { data: folderReviewStates } = useQuery<Record<string, FolderReviewState>>(async () => {
+    if (!documentIds.length) return {};
+    const rows = unwrap(await supabase.rpc('get_document_folder_review_states', {
+      p_document_ids: documentIds,
+    })) as FolderReviewState[];
+    return Object.fromEntries(rows.map((row) => [row.document_id, row]));
+  }, [documentIdsKey]);
 
   /** The autonomy ledger, read in its OWN query rather than joined into the list above, and the
    *  separation is a product decision: a document register that refuses to render because the
@@ -509,7 +524,6 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
    *  honest degradation, because offering an undo we cannot describe would be worse than none.
    *  Keyed on a joined string, the `useDocumentProcessing` idiom, so a re-render with an
    *  identical id list does not re-fetch. */
-  const documentIdsKey = documentIds.join(',');
   const { data: autoActions, refetch: refetchAutoActions } = useQuery<Record<string, AutoActionRow>>(
     async () => {
       if (!documentIds.length) return {};
@@ -528,6 +542,7 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
       status: processing.data === null ? null : processing.snapshots[doc.id]?.stage ?? 'unprocessed',
       job: processing.snapshots[doc.id]?.job,
       document: doc,
+      reviewState: folderReviewStates?.[doc.id]?.state ?? null,
       autoAssigned: autoAction !== null,
       autoAssignmentDescriptionKey: autoAction ? 'documentStatus.autoAssignedByMachine' : null,
       autoAssignmentDescriptionVars: autoAction

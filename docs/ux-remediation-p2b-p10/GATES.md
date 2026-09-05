@@ -1,6 +1,6 @@
 # Gates: UX remediation P2b-P10
 
-OWNS: docs/UX-REMEDIATION-DOCUMENTS-20260904.md, docs/UX-REMEDIATION-REVIEW-LOG-20260904.md, docs/ux-remediation-p2b-p10/**, DESIGN.md, src/App.tsx, src/index.css, src/components/assistant/**, src/components/document-review/**, src/components/DocumentStatusBadge.tsx, src/components/FileUpload.tsx, src/components/UploadCenter.tsx, src/pages/DocumentsInbox.tsx, src/pages/DocumentReview.tsx, src/pages/PriceLists.tsx, src/lib/assistant/**, src/lib/documentStatus.ts, src/lib/i18n/dictionaries/he.ts, src/lib/i18n/dictionaries/en.ts, src/**/*.spec.ts, src/**/*.spec.tsx, scripts/check-ux-remediation-p2b-p10-browser.cjs, scripts/i18n-baseline.json, supabase/migrations/**, supabase/tests/**, supabase/functions/assistant/**, check-quality-gates.ps1, artifacts/ux-remediation-p2b-p10/**
+OWNS: docs/UX-REMEDIATION-DOCUMENTS-20260904.md, docs/UX-REMEDIATION-REVIEW-LOG-20260904.md, docs/ux-remediation-p2b-p10/**, DESIGN.md, src/App.tsx, src/index.css, src/components/assistant/**, src/components/document-review/**, src/components/QuickCreateSupplier.tsx, src/components/QuickSupplierPicker.tsx, src/components/DocumentStatusBadge.tsx, src/components/FileUpload.tsx, src/components/UploadCenter.tsx, src/pages/DocumentsInbox.tsx, src/pages/DocumentReview.tsx, src/pages/PriceLists.tsx, src/lib/assistant/**, src/lib/documentStatus.ts, src/lib/i18n/dictionaries/he.ts, src/lib/i18n/dictionaries/en.ts, src/**/*.spec.ts, src/**/*.spec.tsx, scripts/check-ux-remediation-p2b-p10-browser.cjs, scripts/check-ux-remediation-p3-browser.cjs, scripts/i18n-baseline.json, supabase/migrations/**, supabase/tests/**, supabase/functions/assistant/**, scripts/check-quality-gates.ps1, artifacts/ux-remediation-p2b-p10/**
 
 Scope: complete every authorized package from P2b through P10, excluding cancelled P7 and P4b, then prove local integration, CI, rollout and live behavior required by each changed surface.
 
@@ -15,16 +15,16 @@ Scope: complete every authorized package from P2b through P10, excluding cancell
 - [x] P2B2: legacy /inbox filing link reaches the equivalent processing filter result
   EVIDENCE: desktop and mobile browser runs reached /documents?processing=unassigned, selected the visible unassigned filter and rendered no filing filter; direct legacy unfiled token maps to unassigned in documentStatus tests.
 
-- [ ] P3A: a document without a supplier can select or create one and then approve through protected commands
+- [x] P3A: a document without a supplier can select or create one and then approve through protected commands
   CHECK: npm.cmd run test -- src/components/document-review/supplierResolutionUx.spec.tsx
   EXPECT: passed
-  EVIDENCE: pending
+  EVIDENCE: supplierResolutionUx passed 6/6; the wider affected set passed 109/109. Desktop and mobile browser selected an existing supplier, required confirmation of the machine-read name, created through create_supplier_from_document with reason and idempotency key, then sent the created supplier through apply_reviewed_document.
 
-- [ ] P3B: supplier creation and resolution DB contracts pass tenant, role, replay, audit-reason and zero-write denial cases
-  EVIDENCE: pending
+- [x] P3B: supplier creation and resolution DB contracts pass tenant, role, replay, audit-reason and zero-write denial cases
+  EVIDENCE: p109 passed five cases against Postgres before and after a clean 0001-0316 reset: owner create, same-result replay, changed-payload conflict, role/reason/cross-tenant zero-write refusals, non-null supplier audit reason, grants and one bounded read. Supabase advisors added no 0316-specific finding. Demo restore then proved owner, office and accountant sign-in plus profiles.
 
-- [ ] P3C: supplier_unresolved is read in the folder UI; order warnings name cancelled, closed and fully received states; credit still requires its source invoice
-  EVIDENCE: pending
+- [x] P3C: supplier_unresolved is read in the folder UI; order warnings name cancelled, closed and fully received states; credit still requires its source invoice
+  EVIDENCE: unit/browser evidence shows one get_document_folder_review_states call for all visible ids, a visible supplier-not-identified badge, every scoped supplier/currency order without a status filter, named cancelled/closed/fully-received warnings, and a disabled credit approval after manual supplier selection when source invoice remains unresolved. Desktop/mobile screenshots and p3-metrics.json are under artifacts/ux-remediation-p2b-p10/.
 
 - [ ] P4A: training controls are absent and one document-level feedback action persists and rereads its note
   CHECK: npm.cmd run test -- src/components/document-review/documentFeedbackUx.spec.tsx
@@ -85,7 +85,7 @@ Scope: complete every authorized package from P2b through P10, excluding cancell
 - [ ] I2: full local verification passes on the final tree
   CHECK: npm.cmd run verify
   EXPECT: passed
-  EVIDENCE: pending
+  EVIDENCE: pending; current interim check:migration-numbers correctly reports the reserved 0315 gap from another live branch. Do not reuse that number. Full final-tree verification waits for 0315 to enter the integration base.
 
 - [ ] I3: TypeScript and production bundle pass on the final tree
   CHECK: npm.cmd run build

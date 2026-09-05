@@ -73,6 +73,7 @@ import InvoiceNew from './InvoiceNew';
 import PaymentRequests from './PaymentRequests';
 
 const SUPPLIERS_ENDPOINT = `${SUPABASE_URL}/rest/v1/suppliers`;
+const CREATE_SUPPLIER_ENDPOINT = `${SUPABASE_URL}/rest/v1/rpc/create_supplier_from_document`;
 const FINANCIAL_SUPPLIERS_ENDPOINT = `${SUPABASE_URL}/rest/v1/financial_supplier_directory`;
 const CURRENCIES_ENDPOINT = `${SUPABASE_URL}/rest/v1/currencies`;
 const EXISTING = {
@@ -115,10 +116,10 @@ function useSupplierTable(rows: Array<Record<string, unknown>> = [EXISTING]) {
 /** The insert, recorded, so a test can assert both what was written and that nothing was. */
 function useSupplierInsert(row: Record<string, unknown> = NEW_ROW) {
   const bodies: Record<string, unknown>[] = [];
-  server.use(http.post(SUPPLIERS_ENDPOINT, async ({ request }) => {
+  server.use(http.post(CREATE_SUPPLIER_ENDPOINT, async ({ request }) => {
     const parsed = (await request.json()) as Record<string, unknown> | Record<string, unknown>[];
     bodies.push(Array.isArray(parsed) ? parsed[0] : parsed);
-    return HttpResponse.json(row);
+    return HttpResponse.json({ supplier_id: row.id, name: row.name, idempotent: false });
   }));
   return bodies;
 }
@@ -342,7 +343,8 @@ describe('PriceListUploadModal — the dialog that already creates products on t
 
     await waitFor(() => expect(screen.getByLabelText('ספק *')).toHaveValue('sup-new'));
     expect(screen.getByRole('option', { name: NEW_ROW.name })).toBeInTheDocument();
-    expect(bodies).toEqual([{ org_id: 'org-test', name: NEW_ROW.name, tax_id: null }]);
+    expect(bodies).toHaveLength(1);
+    expect(bodies[0]).toMatchObject({ p_document_id: null, p_name: NEW_ROW.name, p_tax_id: null });
     // The nested dialog is the caller's to close, and the caller closed it — leaving the upload
     // dialog open behind it.
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'ספק חדש' })).toBeNull());

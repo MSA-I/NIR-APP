@@ -81,6 +81,19 @@ describe('documentUiStatus precedence', () => {
     expect(screen.getByText('בעיבוד')).toBeInTheDocument();
   });
 
+  it('surfaces a batched supplier-unresolved review state in the folder badge', () => {
+    const status = documentUiStatus({
+      status: 'review',
+      reviewState: 'supplier_unresolved',
+      document: inbox,
+      evaluatedAt: NOW,
+    });
+
+    expect(status.state).toBe('supplier_unresolved');
+    expect(say(status.labelKey)).toBe('ספק לא מזוהה');
+    expect(status.loading).toBe(false);
+  });
+
   it('keeps never-enqueued and actively queued documents distinct', () => {
     const unprocessed = documentUiStatus({ status: 'unprocessed', document: inbox, evaluatedAt: NOW });
     const queued = documentUiStatus({ status: 'queued', document: inbox, evaluatedAt: NOW });

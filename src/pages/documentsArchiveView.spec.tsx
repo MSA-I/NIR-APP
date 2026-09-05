@@ -95,6 +95,7 @@ const documents = http.get(`${SUPABASE_URL}/rest/v1/documents`, ({ request }) =>
 const quietTraffic = [
   http.get(`${SUPABASE_URL}/rest/v1/suppliers`, () => HttpResponse.json([])),
   http.post(`${SUPABASE_URL}/rest/v1/rpc/get_document_processing_statuses`, () => HttpResponse.json([])),
+  http.post(`${SUPABASE_URL}/rest/v1/rpc/get_document_folder_review_states`, () => HttpResponse.json([])),
   http.get(`${SUPABASE_URL}/rest/v1/document_auto_actions`, () => HttpResponse.json([])),
 ];
 
@@ -206,6 +207,28 @@ describe('כפתור ההעלאה', () => {
 
     expect(screen.getByText('איתור כל מסמך שנקלט למערכת ושיוכו לרשומה העסקית שלו.')).toBeInTheDocument();
     expect(screen.queryByText('כל החשבוניות, תעודות המשלוח, הזיכויים והמסמכים הנוספים במקום אחד.')).toBeNull();
+  });
+});
+
+describe('מצב בדיקת הספק בתיקייה', () => {
+  it('קורא את כל המצבים בבקשה מרוכזת ומציג ספק לא מזוהה', async () => {
+    const requests: string[][] = [];
+    server.use(
+      http.post(`${SUPABASE_URL}/rest/v1/rpc/get_document_folder_review_states`, async ({ request }) => {
+        const body = await request.json() as { p_document_ids: string[] };
+        requests.push(body.p_document_ids);
+        return HttpResponse.json([
+          { document_id: 'd-3', state: 'supplier_unresolved', suggested_supplier_name: 'ספק מהמסמך' },
+        ]);
+      }),
+      documents,
+      ...quietTraffic,
+    );
+    renderGallery({});
+
+    expect(await screen.findAllByText('ספק לא מזוהה')).not.toHaveLength(0);
+    expect(requests).toHaveLength(1);
+    expect(requests[0]).toEqual(['d-2', 'd-3', 'd-4']);
   });
 });
 

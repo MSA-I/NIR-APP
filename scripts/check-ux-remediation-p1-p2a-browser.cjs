@@ -202,7 +202,7 @@ async function installReviewMocks(page, fixture) {
     'price_list_interpretation_lines', 'price_list_shadow_lines', 'document_feedback',
     'document_exports', 'document_export_templates', 'document_packets',
     'document_learning_rules', 'document_export_template_versions',
-    'document_packet_segments', 'products', 'suppliers',
+    'document_packet_segments', 'products',
   ]);
   await page.route('**/rest/v1/**', async (route) => {
     const request = route.request();
@@ -211,10 +211,24 @@ async function installReviewMocks(page, fixture) {
     if (table === 'get_document_processing_statuses') return route.fulfill({ json: [fixture.job] });
     if (table === 'get_document_scan_states') return route.fulfill({ json: [] });
     if (table === 'get_document_review_assessment') return route.fulfill({ json: fixture.assessment });
+    if (table === 'create_supplier_from_document' && fixture.createdSupplier) {
+      fixture.supplierCreateBodies?.push(request.postDataJSON());
+      return route.fulfill({ json: {
+        supplier_id: fixture.createdSupplier.id,
+        name: fixture.createdSupplier.name,
+        idempotent: false,
+      } });
+    }
+    if (table === 'apply_reviewed_document' && fixture.reviewApplyBodies) {
+      fixture.reviewApplyBodies.push(request.postDataJSON());
+      return route.fulfill({ json: { applied: true, idempotent: false, outcome: 'invoice_created' } });
+    }
     if (table === 'documents') return route.fulfill({ json: [fixture.document] });
     if (table === 'document_processing_jobs') return route.fulfill({ json: [fixture.job] });
     if (table === 'document_extractions') return route.fulfill({ json: [fixture.extraction] });
     if (table === 'document_interpretations') return route.fulfill({ json: [fixture.interpretation] });
+    if (table === 'suppliers') return route.fulfill({ json: fixture.suppliers ?? [] });
+    if (table === 'purchase_orders') return route.fulfill({ json: fixture.purchaseOrders ?? [] });
     if (table === 'supplier_price_submissions') {
       return route.fulfill({ json: {
         id: fixture.interpretation.id, revision: 2, accepted_count: 12,
