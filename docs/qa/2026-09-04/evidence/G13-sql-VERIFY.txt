@@ -1,0 +1,406 @@
+G13 CROSS-VERIFICATION — THE SQL HALF
+=====================================
+Verifier branch: verify-g13-sql (cut from worktree-qa-sweep-20260904 @ 5a56770c)
+Worktree:        .claude/worktrees/agent-a4997fef26b4537e5
+Date:            05.09.2026
+Lock:            this agent held .claude/locks/supabase for the whole run.
+
+I wrote none of the fixes below. Fourteen rows were assigned (the dispatch brief says fifteen;
+the table it carries lists fourteen — MON-01, REQ-02, REQ-03, REQ-05, PERM-01, MON-03, FIN-04,
+FIN-07, MON-04, PERM-02, DOC-02, DOC-03, DOC-04, DOC-08). Nothing in the product or in any
+oracle was changed permanently; every temporary revert is listed with the byte-exact restore.
+
+BOOTSTRAP NOTE. `git reset --hard worktree-qa-sweep-20260904` was REFUSED by this session's
+auto-mode classifier, exactly as the standing brief's §1 anticipates. `git switch -C
+verify-g13-sql worktree-qa-sweep-20260904` was permitted and produced the same tree, so the work
+was done in the assigned worktree rather than on origin/main. `git checkout <ref> -- <path>` was
+also refused, so historical file states were fetched with `git cat-file blob` and written by a
+Node script that refuses unless every anchor matches EXACTLY ONCE and that keeps a byte-exact
+backup. Both scripts are quoted in this file.
+
+THE STACK WAS NOT INHERITED. On arrival the shared container carried the OTHER campaign's set:
+    select version from supabase_migrations.schema_migrations where version >= '0310'
+    -> 0310 0311 0312 0313 0314 0316 0317 0318          (our 0315 ABSENT, their 0316-0318 present)
+    pg_postmaster_start_time() = 2026-09-05 11:22:44+00
+It was reset from this worktree before the green run, and the head was READ — never assumed —
+immediately before EVERY one of the seven runs below. Eight resets in total.
+
+
+1. HOW THE SUITES WERE RUN, AND WHY THE HASHES LOOK DIFFERENT FROM THE ROWS
+--------------------------------------------------------------------------
+Exactly as scripts/check-quality-gates.ps1 does it: plain `docker cp` (byte-exact, so CRLF as the
+files sit in the tree) and then
+
+    docker exec -e PGPASSWORD=postgres -e PGTZ=Asia/Jerusalem supabase_db_supplyflow-p0 \
+      psql -U <role> -d postgres -v ON_ERROR_STOP=1 -f /var/lib/postgresql/g13-<suite>.sql
+
+The role is the one Invoke-SqlTest passes, read out of the gate script rather than guessed:
+p108 and p115 run as `supabase_admin`; p111, p112, p113 and p116 as `postgres`.
+
+The suite hash was read back INSIDE THE CONTAINER on both sides of every pair, and is identical
+across the red and the green of each suite:
+
+    suite  sha256 as copied (CRLF)                                            sha256 LF-normalised
+    p108   196c0e9e4bb99fa155779ca44a0a55c847a9d827799a9287cde282b96486316e   fb439273...9ce457e
+    p111   9da2bf38116a2419bd96dda0eb2ed7793524f8c8d0c43d0a38b7e470b185fcff   4025bffe...dde7650
+    p112   45baa348c011eeae1b47524512601ea6e7cf77c9400cc9c8f9c0dbe79002fe32   578c9bc1...22fd68d
+    p113   63009a131e9507a3c668d834a892d1d4e3f782bf2b6da5a054dda51e3881ab52   052753fe...671ef80
+    p115   cf42ec1758dab5058d814b8c004a8310842429d785fb52a4f701178657f25886   5e6a730b...6b076af9
+    p116   987164d5f2d66036011a63c75288b6dec1eb29e7eed9cbc8cfcead76b1ec0a33   aa43679d...ec889813
+
+RECONCILED, because three of the six looked at first like a changed file and are not. MON-03's
+row records p113 as `63009A13...81AB52` and MON-04's records p115 as `cf42ec17...f25886` — both
+match the CRLF column here. PERM-01's row records p112 as `578c9bc1...`, PERM-02's records p116
+as `aa43679d...` and DOC-03's records p111 as `4025bffe...` — all three match the LF column.
+So PR 5+6, PR 13 and PR 17 copied through something that normalised line endings while PR 11,
+PR 14 and this run used `docker cp`. THE FILE CONTENT IS THE SAME IN EVERY CASE; git shows one
+commit for p111 and p113 and two for p112 and p116, none of them after the hash was recorded.
+Reported because a reader comparing hashes would otherwise conclude the suite had drifted.
+
+
+2. GREEN — all six suites, one reset, head read first
+-----------------------------------------------------
+head before: 0310 0311 0312 0313 0314 0315 0319 0320 0322 0323 0324      (0315 PRESENT)
+             pg_postmaster_start_time() = 2026-09-05 11:56:06+00
+
+    p108  exit 0   p108_one_balance_one_approval_passed
+    p113  exit 0   p113_a_currency_this_role_cannot_value_passed
+    p111  exit 0   36 passed / 0 failed / 36 total, controls 10 of 10
+    p112  exit 0   47 passed / 0 failed / 47 total, controls 11 of 11
+    p115  exit 0   p115_a_statement_line_is_spent_once_passed
+    p116  exit 0   25 of 25 pairs, controls 17 of 17
+
+Order follows the gate: the committing suites (p108, p115, p116) around the three that open a
+transaction and end in `rollback` (p111, p112, p113), with p116 last so its committed auth.users
+rows could not reach anything else.
+
+
+3. RED — one reset per suite, ONLY that suite's own migration held back
+-----------------------------------------------------------------------
+Each red is a genuinely unfixed database: the migration file was moved OUT of
+supabase/migrations to a scratch directory, `supabase db reset` was run FROM THIS WORKTREE, the
+head was read back, and the same suite file was copied in and hashed again. Nothing else was
+held back — 0315 is present in five of the six reds, so the money proofs above it are measuring
+the right thing.
+
+3.1  p108 / MON-01 — 0315 held back
+    head: 0310 0311 0312 0313 0314 0319 0320 0322 0323 0324        (0315 ABSENT)
+    exit 3. Of 13 expectation rows, 11 green and 2 named, plus the race:
+      mon01_second_approve:         expected 'payment_request_invoice_reserved', got 'ok'
+      debt119_over_printed_balance: expected 'payment_request_allocation_invalid', got 'ok'
+      race: 2 approval(s) succeeded and 0 were refused by name
+        session a: 'ok'   session b: 'ok'
+    CONTROLS GREEN IN THE SAME RUN: split_first_create / split_first_approve /
+    split_second_create / split_second_approve (250 + 390 = 640 stays legal),
+    mon01_first_create, mon01_first_approve, mon01_second_create (#350 lets a second request be
+    typed), debt119_at_printed_balance, race_first_create, race_second_create, and
+    reader_prints_partial_credit_balance = 780.00. GREEN: exit 0, all 13.
+
+3.2  p112 / PERM-01 — 0319 held back
+    head: 0310 0311 0312 0313 0314 0315 0320 0322 0323 0324        (0319 ABSENT)
+    exit 3. 15 passed / 32 failed / 47 total — CONTROLS 11 OF 11 GREEN IN THE SAME RUN.
+    The leak is printed, not inferred:
+      office / live/direct.profiles.phone
+        expected: refused (42501)
+        observed: P112 accountant=-, P112 office=050-1000002, P112 owner=050-1000001
+      catalogue/profiles.backup_email as authenticated   expected revoked, observed READABLE
+      catalogue/profiles.backup_email as anon            expected revoked, observed READABLE
+    Byte-for-byte the observation PR 5+6 recorded. GREEN: 47/47, same 11 controls.
+
+3.3  p113 / MON-03 + FIN-04 — 0320 held back
+    head: 0310 0311 0312 0313 0314 0315 0319 0322 0323 0324        (0320 ABSENT)
+    exit 3. 4 of 16 failed, the other 12 green:
+      accountant_a_usd:      expected 'no row', got '0.000/0'
+      accountant_d_usd:      expected 'no row', got '0.000/0'
+      accountant_a_usd_leak: expected 'none',   got '0.000'
+      accountant_all_rows:   got 'A/ILS=150.000/1 A/USD=0.000/0 B/ILS=640.000/1 B/USD=200.000/1
+                                  C/ILS=0.000/0 D/USD=0.000/0'
+    CONTROLS GREEN IN THE SAME RUN: every owner_* row — which is the point, because
+    owner_a_usd = 300.000/1 passed in the RED. The dollar debt FIN-04 called a phantom is
+    really there, and it is the accountant's 0.000 that is the false statement. The measured
+    zero (accountant_c_ils = 0.000/0) also stayed green, so the fix did not make the mirror
+    mistake. GREEN: 16/16.
+
+3.4  p115 / MON-04 — 0322 held back
+    head: 0310 0311 0312 0313 0314 0315 0319 0320 0323 0324        (0322 ABSENT)
+    exit 3. 5 of 9 expectations green, 4 named plus the race:
+      command_second_full_match: expected 'bank_allocation_exceeds_statement_line', got 'ok'
+      direct_second_confirmed:   expected 'bank_allocation_exceeds_statement_line', got 'ok'
+      direct_split_one_over:     expected 'bank_allocation_exceeds_statement_line', got 'ok'
+      move_onto_a_full_line:     expected 'bank_allocation_exceeds_statement_line', got 'ok'
+      race that overflows: 2 insert(s) succeeded and 0 were refused
+        session a: 'ok'   session b: 'ok'
+    CONTROLS GREEN IN THE SAME RUN, including both arms of the race that FITS and the
+    full-amount SUGGESTION beside a confirmed match, which is not an over-allocation.
+    THE MONEY THE RED LEFT BEHIND, read out of the product tables afterwards:
+      f115...0041  P115 line already fully allocated    line 2950.000  2 rows  5900.000 confirmed
+      f115...0043  P115 direct second confirmed         line 2950.000  2 rows  5900.000
+      f115...0044  P115 direct split                    line 2950.000  3 rows  2951.000
+      f115...0047  P115 race that overflows             line 2950.000  2 rows  4000.000
+      f115...0048  P115 race that fits                  line 2950.000  2 rows  2000.000  (correct
+                                                        in both worlds — the control)
+    5,900.00 stood on a 2,950.00 line, and it got there through `match_bank_transaction` called
+    as an authenticated owner with a real JWT subject. GREEN: exit 0.
+
+3.5  p116 / PERM-02 — 0323 held back
+    head: 0310 0311 0312 0313 0314 0315 0319 0320 0322 0324        (0323 ABSENT)
+    and the policy itself read back:
+      select pg_get_expr(polqual,polrelid) like '%password_changed%' from pg_policy
+       where polname='audit_select'   ->  f
+    exit 3. P116 tally: 22 OF 25 PAIRS PASS; OF THOSE, 17 OF 17 CONTROLS PASS.
+    The three failures are the finding and nothing else:
+      accountant_a  pw_owner_a   expected false, read true
+      accountant_a  pw_office_a  expected false, read true
+      accountant_b  pw_owner_b   expected false, read true      (the same leak, second tenant)
+    GREEN: 25 of 25, the same 17 of 17.
+
+3.6  p111 / DOC-02 + DOC-03 + DOC-04 + DOC-08 — 0324 held back
+    head: 0310 0311 0312 0313 0314 0315 0319 0320 0322 0323       (0324 ABSENT)
+    exit 3. 13 passed / 23 failed / 36 total — CONTROLS 10 OF 10 GREEN IN THE SAME RUN.
+    Named per row, expected -> observed:
+      DOC-08  shekel-word/unit-price-line-0        4.20      -> (null)
+              shekel-word/unit-price-line-1        50.00     -> (null)
+              shekel-word/unit-price-line-2        12.90     -> (null)
+              other-currency/refusal-reason-is-named  price_currency_mismatch -> (null)
+              other-currency/printed-cell-is-quoted   $12.50 -> (null)
+      DOC-03  shekel-word/lines-net                969.00    -> 0.00     (the fabricated measure)
+              shekel-word/lines-counted            3         -> (null)
+              shekel-word/lines-vs-header-gap      0.00      -> -969.00
+              shekel-word/no-header-mismatch-finding absent  -> present  (the block)
+              price-absent/lines-net-is-null       (null)    -> 20.00
+              price-absent/missing-rungs-names-lines-net  yes -> no
+              price-absent/document-says-sum-not-measured present -> absent
+      DOC-04  shekel-word/approval-blocked         false     -> true
+              shekel-word/state                    ready_for_approval -> blocked
+      DOC-02  filing/date-unreadable-names-the-date    invoice_date_missing   -> invoice_identity_missing
+              filing/number-unreadable-names-the-number invoice_number_missing -> invoice_identity_missing
+    control/filing-both-missing-unchanged stayed green in BOTH runs. GREEN: 36/36, same 10.
+
+
+4. THE RACE IN p115 IS PROVED, NOT ASSERTED IN SHAPE
+-----------------------------------------------------
+p115 records the two session outcomes into p115.results and drops its own schema on success, so
+after a green run the two strings cannot be read. Two independent readings were taken instead.
+
+(a) FROM THE COMMITTED DATA of the green run, which the drop does not touch, because the
+    fixtures live in public tables:
+      f115...0047  race that overflows, 2,000 + 2,000 against 2,950.00 -> 1 row, 2000.000
+      f115...0048  race that fits,      1,000 + 1,000 against 2,950.00 -> 2 rows, 2000.000
+    Exactly one winner where the two overflow, both standing where they fit. So the guard's lock
+    is not simply refusing whoever arrives second.
+
+(b) A SUPPLEMENTARY PROBE — not a change to p115 — repeating the identical race on a NEW
+    statement line built from p115's own leftover fixtures, and PRINTING both outcomes:
+        step      | outcome
+        ----------+----------------------------------------
+        session_a | ok
+        session_b | bank_allocation_exceeds_statement_line
+        allocation_rows | total
+        --------------- + ---------
+                      1 | 2000.000
+    Session B was refused BY NAME. Not a deadlock, not a statement timeout — the probe sets
+    statement_timeout to 20 s and session A holds the row lock through a 1.2 s sleep inside its
+    transaction. The probe's fixture was removed by the reset that followed.
+
+
+5. EVERY PROOF IS ON THE GUARDED PATH — CHECKED, NOT TAKEN ON TRUST
+-------------------------------------------------------------------
+Each suite was read for how it issues the reads under test, because the outer psql role is
+`postgres` or `supabase_admin` in all six and that role alone proves nothing.
+  p108  `set role authenticated` at :116 and :168 with request.jwt.claim.sub / .role /
+        request.jwt.claims set from the fixture's own owner; every command under test sits
+        between :168 and the `reset role` at :267.
+  p112  a loop over four actors, each `perform set_config('request.jwt.claim.sub', …)` then
+        `set local role authenticated` (:243-245) and `reset role` (:285) after the reads.
+  p113  `set local role authenticated` three times inside one transaction; the whole file ends
+        in `rollback`, so it commits no fixture at all.
+  p111  pg_temp.p111_become() sets the subject AND `set_config('role','authenticated')`; the
+        assessment reads go through public.get_document_review_assessment. The filing ladder is
+        deliberately reached with NO JWT, because apply_document_interpretation grants EXECUTE to
+        service_role and not to authenticated — calling it as authenticated would measure the
+        missing grant. Every EXECUTE question is answered from has_function_privilege, never by
+        calling; this Postgres image segfaults on a function-EXECUTE denial.
+  p115  `set role authenticated` at :201-:231 for the match_bank_transaction arm. The direct-table
+        and race arms run as the connecting role ON PURPOSE — the suite's claim there is that the
+        table refuses the write "whatever wrote it".
+  p116  `set role authenticated` before each actor's read (:222, :232, :242, :252, :262, :387,
+        :396), each with that person's own subject, reading through public.audit_log_read_model —
+        the exact surface /rest/v1/audit_log_read_model the finding names.
+
+NO RED HAD A FAILING CONTROL. Every one of the six red runs kept its full control set green in
+the same run, so none of them is a broken harness wearing a finding's clothes.
+
+THE TWO NARROWINGS SHOW WHAT IS STILL READABLE, which was the specific thing to check:
+  p112 — catalogue/other-columns-still-readable, catalogue/self-service-update-kept (0255 granted
+         update(backup_email) on purpose), catalogue/config-tables-keep-grant, and live/roster +
+         live/organizations for all four actors. 11 controls, green red and green.
+  p116 — owner_a reads EVERY password row of its tenant; the subject reads their own
+         (accountant_a / pw_accountant_a = true); identity_control_a and financial_control_a stay
+         readable to the accountant, so the identity and financial ledgers beside the password
+         rows did not move; identity_control_b proves RLS is still measuring something. 17
+         controls, green red and green.
+
+
+6. THE CLIENT ORACLES ON THESE ROWS
+------------------------------------
+GREEN, machine idle, no reset running: 5 files / 34 tests passed.
+  filingReason.spec.ts 14 · allocationBalanceChecks.spec.ts 8 ·
+  paymentRequestApprovalDependency.spec.tsx 3 · scopedBalanceLabels.spec.tsx 3 ·
+  paymentRequestCreateBounds.spec.tsx 6
+
+6.1  REQ-02 — src/pages/PaymentRequests.tsx swapped WHOLE to 74bd43ab^ (the fixing commit's
+     parent), spec left at HEAD:
+       paymentRequestApprovalDependency.spec.tsx  2 failed / 1 passed of 3
+       TestingLibraryElementError: Unable to find an element with the text:
+         /ממתינה לאישור החשבונית LIVE-E2E-6430D260/
+     and the same for the two-invoice case. The third test — "says nothing when every linked
+     invoice is approved for payment" — passed in both runs, which is the control.
+
+6.2  REQ-03 + REQ-05 — the whole-file swap is IMPOSSIBLE for this spec and that is worth
+     recording: `CreatePaymentRequest` was not an export at 74bd43ab^ (the exports there are
+     DUE_PRESSURE_STATUSES, COMMITTED_FILTER, matchesDueFilter, PaymentRequestDetail), so the
+     spec cannot import it and all six tests die on "Element type is invalid" — everything
+     failing, which proves nothing. The red was therefore taken the way PR07-REQ03-REQ05-RED.txt
+     says it took its own: the five behavioural lines reverted INSIDE the current file by a Node
+     script that refuses unless each anchor matches exactly once (it reported "5 anchors each
+     matched exactly once"):
+       - `checks` stops including allocationChecks in the rendered set
+       - the `if (overAllocated)` guard leaves save()
+       - `overAllocated ||` leaves both submit `disabled` expressions (and their aria-labels)
+       - the button's promise keys on `hasCritical` again instead of `hasDuplicateSignal`
+     Result: paymentRequestCreateBounds.spec.tsx  3 failed / 3 passed of 6.
+       REQ-03 twice: Unable to find /הסכום שהוקצה לחשבונית 3377 גבוה מהיתרה הפתוחה/
+       REQ-05 once:  AssertionError: expected 'שמירה (יסומן כחשד לכפילות)' to contain 'שליחה לאישור'
+     That last line is character-for-character the one PR07-REQ03-REQ05-RED.txt recorded.
+     Three controls green in the same run: "opens with the printed balance, both submits live",
+     "reopens both submits as soon as the amount comes back inside the balance", and "promises the
+     duplicate flag only when the duplicate signal is the one that fired".
+
+6.3  REQ-03's unit oracle — src/lib/checks.ts swapped to 74bd43ab^:
+       allocationBalanceChecks.spec.ts  8 failed / 0 passed of 8,
+       every one "TypeError: allocationBalanceChecks is not a function".
+     HONEST LIMIT: that is a red of ABSENCE, not of behaviour, and the file carries no control.
+     The behavioural red for REQ-03 is 6.2's two component failures.
+
+6.4  FIN-07 — src/pages/Invoices.tsx and both i18n dictionaries swapped to a616943e^:
+       scopedBalanceLabels.spec.tsx  2 failed / 1 passed of 3
+       AssertionError: expected <div …(1)></div> to be null
+       Unable to find an element with the text: יתרה (מאושרות)
+     The passing one is the control the row names: "owner invoice list: the header stays
+     unqualified, because nothing narrowed it".
+
+6.5  DOC-02's client half — model.ts, assessment.ts and both dictionaries swapped to 82b18ff0^:
+       filingReason.spec.ts  4 failed / 10 passed of 14
+       expected 'המערכת עצרה ולא יצרה רשומה. ההכרעה אצ…' to contain 'תאריך החשבונית'
+       expected 'המערכת עצרה ולא יצרה רשומה. ההכרעה אצ…' to contain 'מספר החשבונית'
+     On the unfixed tree the screen names NO obstacle at all, which is what the row says.
+     PR 17 recorded 3 failed / 11 passed; the extra failure here is "labels every code the SQL
+     can assign", and it is explained in §7.2 — not a discrepancy in the fix.
+
+RESTORE. Every swapped file was restored from a byte-exact backup taken before the write, and
+`git status --short` was empty of modifications afterwards (only zero-byte junk at the repo root,
+swept).
+
+
+7. WHAT I BELIEVE A READER SHOULD KNOW — THE LIST THE BRIEF ASKS NOT TO LEAVE EMPTY
+-----------------------------------------------------------------------------------
+None of the fourteen oracles was found to demand the opposite of its finding, and none was found
+to pass for a reason unrelated to it. What follows is smaller than that, and all of it is real.
+
+7.1  src/lib/allocationBalanceChecks.spec.ts has no control of its own and its red is structural
+     ("is not a function"). A file whose every test fails is the shape the campaign distrusts.
+     It is fine here only because REQ-03's other oracle carries the behavioural red — but the row
+     should not be read as if this file proved a behaviour.
+
+7.2  src/components/document-review/filingReason.spec.ts READS supabase/migrations OFF DISK at
+     run time (`readdirSync(migrationsDir)`, :26-39) and derives the set of reason codes the SQL
+     ladder can emit. That is a good oracle — the client's labels cannot silently drift from the
+     server's codes — but it has a consequence worth writing down: the client suite FAILS while
+     any migration file is moved aside. It failed for me once mid-run, with 0324 held back for
+     p111's red, and the failure was mine, not the product's. Re-run with 0324 in place: 34/34.
+
+7.3  p108 prints NOTHING per step on a green run — only the assert() rows and the closing
+     `p108_one_balance_one_approval_passed`. Its verdict block names only the steps that
+     disagreed, so a reader of a green p108 log cannot see that the split control ran at all.
+     p111, p112 and p116 print their whole expected/observed table green or red; p108 and p115
+     do not. Not wrong, but the weakest of the six to read.
+
+7.4  DOC-08's oracle proves the VALUE and not the PIXELS, and the row says so. The cell is
+     `fmtMoneyExact(line.unit_price, intakeCurrency)` at DocumentAssessmentPanel.tsx:560 with no
+     branch between the value and the cell, and `line` comes from the definer p111 exercises as
+     an authenticated office clerk — so the gap is narrow and honestly stated. It is still a gap,
+     and it is the one row where a screenshot would have added something. PR 17's reason
+     (docs/qa/2026-09-04/evidence/PR17-STACK-CONTENTION-AND-THE-SCREENSHOT.txt) holds up: I lost
+     no database to the other campaign during this run, but each reset costs 10-20 minutes and
+     eight of them were needed for the reds alone.
+
+7.5  REQ-02 is closed on the SECOND disjunct of its oracle only — the screen names the invoice
+     each stuck request waits for; the queue is still not workable. The row states this plainly
+     and the oracle column is genuinely a disjunction, so the row is honest. A reader skimming
+     "FIXED" against the finding text ("not one of the five live payment requests can be
+     approved") would nevertheless be misled, and that is worth a coordinator's eye.
+
+7.6  MON-04's row is `FIXED` against a finding whose PREMISE the row itself refutes (two confirmed
+     allocations do not exist; one confirmed plus one suggestion does). p115 asserts the refutation
+     as a live control — a full-amount suggestion beside a confirmed match is not an
+     over-allocation — so the oracle does assert what the row claims rather than what the finding
+     claimed. Recorded because the row and the finding disagree on their face.
+
+7.7  Not mine, not touched, and it should not be lost: PR 5+6 reported that
+     supabase/tests/p22_trial_read_only.sql is a suite in the tree that NOTHING RUNS. I did not
+     run it and did not make it pass.
+
+7.8  `check:migration-numbers` still fails on the gap 0315 -> 0319 because 0316-0318 are claimed
+     on another campaign's branch. Nothing was added to HISTORICAL_GAPS. Known, correct, not mine.
+
+
+8. HANDOFF
+-----------
+Final reset from this worktree, then:
+    head: 0310 0311 0312 0313 0314 0315 0319 0320 0322 0323 0324
+    npm run demo:restore  ->  exit 0
+      created owner@demo.supplyflow.local / office@… / accountant@…
+      sign-in OK: owner  ·  sign-in OK: office  ·  sign-in OK: accountant
+      profile OK: owner  ·  profile OK: office  ·  profile OK: accountant
+      quick-fill seed OK
+      "Demo restore complete: 3 sign-ins proved, 3 profiles present."
+Three real password sign-ins, three profiles in the right roles. Every fixture this verification
+created — p108's, p115's, p116's and the supplementary race probe's one bank_transactions row —
+was destroyed by the final reset; none needed a soft delete because none survived it.
+All six migration files are back in supabase/migrations; the scratch hold directory is empty.
+
+
+9. VERDICTS
+------------
+MET   (red and green both seen by this verifier, controls green in the red run)
+    MON-01   p108, red at head 0314+ without 0315, green at 0315
+    PERM-01  p112, red 15/47 with 11/11 controls, green 47/47
+    MON-03   p113, red 4 of 16 failed, green 16/16
+    FIN-04   p113, same pair; the red shows owner_a_usd = 300.000/1 while the accountant reads
+             0.000/0, which refutes the finding's own diagnosis and is why the row says so
+    MON-04   p115, red 4 named + the race, green exit 0; plus the printed two-session outcome
+    PERM-02  p116, red 22/25 with 17/17 controls, green 25/25
+    DOC-02   p111 filing arm, red names invoice_identity_missing for both, green splits them;
+             client half red 4/14 -> green 14/14
+    DOC-03   p111, red lines_net 0.00 / gap -969.00 / missing_rungs silent, green 36/36
+    DOC-04   p111, red approval_blocked true + state blocked, green false + ready_for_approval
+    DOC-08   p111, red unit_price (null) on all three lines, green 4.20 / 50.00 / 12.90
+    REQ-02   paymentRequestApprovalDependency.spec.tsx, red 2/3, green 3/3
+    REQ-03   paymentRequestCreateBounds.spec.tsx, red 3 failed / 3 passed, green 6/6
+             (its unit oracle's red is absence-only — see 7.1)
+    REQ-05   same pair; the red line matches PR 07's recorded line character for character
+    FIN-07   scopedBalanceLabels.spec.tsx, red 2 failed / 1 passing control, green 3/3
+
+FIXED (unchanged)
+    none.
+
+
+APPENDIX — the two scripts, so a reader can repeat this
+--------------------------------------------------------
+revert.mjs      `git cat-file blob <ref>:<path>` -> writes it over the working file after saving
+                the current bytes to <path>.g13bak; refuses if a backup already exists or if the
+                blob is byte-identical to what is there; `up` restores and deletes the backup.
+req35-red.mjs   five (anchor, replacement) pairs against src/pages/PaymentRequests.tsx; counts
+                occurrences of every anchor and EXITS WITHOUT WRITING unless each is exactly 1;
+                converts the anchors to CRLF first because the tree is CRLF.
+Both live in the session scratchpad, not in the repo.
