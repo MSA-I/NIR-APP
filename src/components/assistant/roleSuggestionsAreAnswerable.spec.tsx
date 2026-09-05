@@ -127,19 +127,43 @@ describe('ASSIST-04 — the accountant\'s panel, rendered', () => {
     vi.spyOn(HTMLElement.prototype, 'getClientRects').mockReturnValue([{}] as unknown as DOMRectList);
   });
 
+  /**
+   * Every opening this project knows a tool for, indexed by the Hebrew sentence a button carries.
+   * Built from `EXAMPLE_ANSWERED_BY` rather than from any one screen's list, so a set the panel
+   * picks — today's, or one added later — is recognised without this file being edited again.
+   */
+  const KEY_BY_SENTENCE = new Map(
+    Object.keys(EXAMPLE_ANSWERED_BY).map((key) => [translate(he, key as never), key]),
+  );
+
   it('offers only openings whose tool the accountant may run', async () => {
     render(<MemoryRouter><AssistantPanel /></MemoryRouter>);
     await userEvent.click(screen.getByRole('button', { name: /העוזר של InPlace/ }));
-    const offered = ROLE_EXAMPLE_KEYS.accountant.map((key) => translate(he, key));
-    // Every one is on screen: the table describes the product rather than sitting beside it.
-    for (const sentence of offered) {
-      expect(screen.getByRole('button', { name: sentence })).toBeTruthy();
-    }
-    // And none of them is answered by a tool that would refuse this role.
-    for (const key of ROLE_EXAMPLE_KEYS.accountant) {
+    /*
+     * MERGE, 05.09.2026 — this assertion now reads WHAT THE PANEL RENDERS instead of a fixed list,
+     * and that is a repair rather than a relaxation.
+     *
+     * It used to take `ROLE_EXAMPLE_KEYS.accountant` and demand each of those sentences be on
+     * screen. The other campaign replaced that module's role in the dialog with two maps chosen by
+     * whether the business has data yet, so the panel legitimately shows a DIFFERENT set — and the
+     * old form failed on a question that simply is not offered in this fixture's state.
+     *
+     * Worse, had it been left as it was it would have kept passing in other states while
+     * protecting a module the screen no longer draws — a guard over dead code. `ASSIST-04`'s claim
+     * is not "these exact sentences appear"; it is "the panel never offers a question this role's
+     * tool would refuse". So the check walks the buttons actually rendered and asserts that of
+     * each. Any set the panel picks is covered, including sets nobody has written yet.
+     */
+    const rendered = screen.getAllByRole('button')
+      .map((button) => button.textContent?.trim() ?? '')
+      .filter((text) => KEY_BY_SENTENCE.has(text));
+    // A panel offering nothing would pass an "every offered one is safe" loop vacuously.
+    expect(rendered.length, 'the panel offered no example question at all').toBeGreaterThan(0);
+    for (const sentence of rendered) {
+      const key = KEY_BY_SENTENCE.get(sentence)!;
       expect(
         ROLES.get(EXAMPLE_ANSWERED_BY[key]!),
-        `on screen: ${translate(he, key)} -> ${EXAMPLE_ANSWERED_BY[key]}`,
+        `on screen: ${sentence} -> ${EXAMPLE_ANSWERED_BY[key]}`,
       ).toContain('accountant');
     }
   });

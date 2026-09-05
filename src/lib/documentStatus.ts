@@ -126,8 +126,23 @@ export const DOCUMENT_STUCK_JOB_AGE_SECONDS = 2 * 60 * 60;
 export const DOCUMENT_STUCK_IDLE_SECONDS = 30 * 60;
 export const DOCUMENT_STUCK_ATTEMPT_COUNT = 8;
 
+/*
+ * MERGE, 05.09.2026 — `awaiting_scan` was added to this set by the other campaign and is REMOVED
+ * again here, deliberately, because the two campaigns fixed the same symptom in opposite
+ * directions and only one of them is true.
+ *
+ * Both saw a scan-approval document fall past the ladder to the residual `unassigned`, which told
+ * the reader to file it against an invoice — an action that neither starts the reading nor is
+ * possible yet. Their fix was to call it ACTIVE, so the badge reads "בעיבוד". But nothing is
+ * processing: no worker holds the job, no queue will pick it up, and no amount of waiting changes
+ * that. "בעיבוד" tells a person to wait for a machine that is not coming, and the sweep found three
+ * documents that had been waiting at this gate since 02.09 on exactly that reading.
+ *
+ * `DOC-01` is the state's own rung a few lines below, and it says the true thing: a PERSON has to
+ * approve the scan. That row was verified red-to-green by a second agent on 05.09.
+ */
 const ACTIVE_RAW_STATUSES: ReadonlySet<string> = new Set([
-  'queued', 'awaiting_scan', 'leased', 'extracted', 'interpreting', 'processing',
+  'queued', 'leased', 'extracted', 'interpreting', 'processing',
 ]);
 
 /**

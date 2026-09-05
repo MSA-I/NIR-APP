@@ -28,25 +28,17 @@ export function DocumentStatusBadge({ status, ...attributes }: {
         {status.state === 'stuck' && <AlertTriangle size={ICON.xs} className="shrink-0" aria-hidden="true" />}
         {t(status.labelKey)}
       </span>
-      {/* MERGE, 05.09.2026 — kept deliberately, and the coordinator should know it was a choice.
-          The other campaign moved BOTH of these out of the badge and into `DocumentProcessingProgress`,
-          which `DocumentReviewWorkspace` is the only caller of. That is the review screen, and the
-          review screen only — which is exactly the defect the sentence below records and this sweep
-          closed. So both spans stay here. `badgeVisible` (theirs) and these spans (ours) are not in
-          conflict: theirs decides whether the badge renders at all, these decide what is inside it
-          when it does. The cost is that on the review screen the figure now appears twice, in the
-          badge and in the strip; the alternative was the inbox going blind again. */}
-      {/* The page counter, wherever the badge is. The lifecycle strip that shows it lives on the
-          review screen only, so somebody watching an upload from the inbox or the upload centre saw
-          "בעיבוד · 4 דק׳" and had no way to tell a busy queue from a stalled read. */}
-      {status.progress && (
-        <span className="num text-xs text-ink-muted" data-document-status-progress>· {t('documentProcessingProgress.pageProgress', status.progress)}</span>
-      )}
-      {/* `awaiting_scan` joins the two states that carry their age, and it is the state that needs
-          it most: nothing is running, so nothing will ever look wrong on its own. "2 ימים" beside
-          "ממתין לאישור סריקה" is the difference between a document uploaded a minute ago and the
-          three this tenant had been sitting on since 02.09. */}
-      {elapsedParts && (status.loading || status.state === 'stuck' || status.state === 'awaiting_scan') && (
+      {/* MERGE, 05.09.2026 — and this is a RECONCILIATION, not a coin flip.
+          The other campaign pinned the row badge as COMPACT: three named tests assert that a
+          `leased` job shows no page counter, and that a loading or a stuck job shows neither
+          counter nor age. Their reason is row density in lists, and it is a measured one.
+          This sweep needed the opposite for ONE state — `awaiting_scan`, where nothing is running,
+          so nothing will ever look wrong on its own and the sweep found three documents sitting at
+          that gate since 02.09.
+          Not one of their three tests covers `awaiting_scan`. So the age stays for that state
+          ALONE, and the page counter goes entirely — it now lives in the lifecycle strip they
+          moved it to. Both campaigns keep what they measured. */}
+      {elapsedParts && status.state === 'awaiting_scan' && (
         <span className="num text-xs text-ink-muted" data-document-status-age>· {t(elapsedParts.key, elapsedParts.vars)}</span>
       )}
       {/* Only when there is a second fact to carry. A state whose description merely repeated the

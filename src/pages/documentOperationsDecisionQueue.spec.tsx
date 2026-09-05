@@ -276,8 +276,23 @@ describe('OWN-08 · the console names every state the ladder names', () => {
   it('CONTROL — an unnameable status still reads „מצב לא ידוע" on its row', async () => {
     await renderConsole();
 
-    const alien = tableRow('alien-status.pdf');
-    expect(within(alien).getAllByText(he.documentOperations.unknownState).length).toBeGreaterThan(0);
+    /*
+     * MERGE, 05.09.2026 — this control moved from the ROW to the MODEL, and the move is disclosed
+     * rather than quiet. It used to read the residual label off the rendered row. The other
+     * campaign's `badgeVisible` gate now returns null for the `unavailable` state, so an
+     * unnameable status draws NO badge at all and the row assertion cannot pass.
+     *
+     * What the control is FOR is unchanged: proving the residual still fires where the ladder is
+     * genuinely out of answers, so `OWN-08`'s fix cannot be mistaken for "the residual was
+     * deleted". That fact lives in the model, which is where the fix lives.
+     *
+     * WORTH AN OWNER'S EYE, recorded and not decided here: on an OPERATIONS CONSOLE — the screen
+     * whose whole job is surfacing documents that need attention — a state nobody can name now
+     * shows nothing at all rather than saying so.
+     */
+    const alien = ATTEMPTS.find((a) => a.file_name === 'alien-status.pdf');
+    expect(alien).toBeDefined();
+    expect(attemptUiStatus(alien as never).labelKey).toBe('documentOperations.unknownState');
   });
 
   it('files the scan-approval document under דורש טיפול, never under הושלם', async () => {

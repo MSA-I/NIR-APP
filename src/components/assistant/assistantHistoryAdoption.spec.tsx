@@ -17,6 +17,22 @@ const listConversations = vi.fn();
 const loadConversation = vi.fn();
 
 const OLD_CONVERSATION_ID = '22222222-2222-4222-8222-222222222222';
+
+/*
+ * MERGE, 05.09.2026. These fixtures carried a FIXED date, and the other campaign has since put a
+ * freshness window in front of the adoption effect: a conversation older than the window is not
+ * adopted at all. The date was already outside it, so the effect returned before ever loading the
+ * conversation and all three assertions here failed for a reason that has nothing to do with what
+ * they test.
+ *
+ * The window is right, and it does not weaken `ASSIST-01`: refusing to adopt a stale conversation
+ * is a stricter version of "an old answer must not overwrite a live question". What these tests
+ * are about is the OTHER half — a question asked or settled DURING the two awaits — and that half
+ * only happens inside the window.
+ *
+ * Relative to now, so the spec cannot rot into a false green the same way a second time.
+ */
+const CONVERSATION_UPDATED_AT = new Date(Date.now() - 60_000).toISOString();
 /** מה שהאדם שאל עכשיו, ומה שהשיחה הישנה שאלה — שתי שאלות שונות, בכוונה. */
 const ASKED_NOW = 'כמה חשבוניות ממתינות לי היום?';
 const ASKED_BEFORE = 'מה מצב הספקים?';
@@ -151,7 +167,7 @@ describe('העוזר של InPlace — אימוץ history מול שאלה שנש�
       pendingList.resolve([{
         id: OLD_CONVERSATION_ID,
         title: ASKED_BEFORE,
-        updated_at: '2026-08-20T08:00:00.000Z',
+        updated_at: CONVERSATION_UPDATED_AT,
       }]);
       await pendingList.promise;
     });
@@ -180,7 +196,7 @@ describe('העוזר של InPlace — אימוץ history מול שאלה שנש�
       pendingList.resolve([{
         id: OLD_CONVERSATION_ID,
         title: ASKED_BEFORE,
-        updated_at: '2026-08-20T08:00:00.000Z',
+        updated_at: CONVERSATION_UPDATED_AT,
       }]);
       await pendingList.promise;
     });
@@ -195,7 +211,7 @@ describe('העוזר של InPlace — אימוץ history מול שאלה שנש�
     listConversations.mockResolvedValue([{
       id: OLD_CONVERSATION_ID,
       title: ASKED_BEFORE,
-      updated_at: '2026-08-20T08:00:00.000Z',
+      updated_at: CONVERSATION_UPDATED_AT,
     }]);
     loadConversation.mockResolvedValue(olderConversation());
 
