@@ -1,7 +1,20 @@
 resource=local-supabase-stack + SQL suites + npm run quality
 SINGLE OCCUPANCY. Read this file before ANY command that touches the local stack.
 
-HELD BY: PR 17 (DOC-02/DOC-03/DOC-04/DOC-08) — granted 05.09.2026 12:50 local. LAST IN THE QUEUE.
+HELD BY: G13 verifier "SQL" — granted 05.09.2026, the cross-verification wave.
+  Every other verifier in that wave runs client oracles only and must NOT touch the stack.
+
+  PR 17 RELEASED IT, and its four rows closed the last open finding. Note what it did NOT do and
+  why: no screenshot, because the other campaign rebuilt the shared database FOUR TIMES under it,
+  twice caught mid-rebuild with the migration ledger gone. It considered a component-level oracle
+  as a substitute and REJECTED it — the panel renders the price unconditionally, so that test would
+  have been green on the unfixed tree: proof-shaped and worthless. The gap is written into all four
+  rows rather than filled with something cheaper.
+  It also caught this campaign's own number lock being STALE: 0318 was reserved here for PR 17
+  hours earlier while `next-number` was already naming it as claimed elsewhere. It drew 0324 before
+  writing anything. Draw late, from the tool.
+  THE STACK WAS MID-REBUILD BY THE OTHER CAMPAIGN AT HANDOFF. Reset from your own worktree and read
+  the head; do not inherit it.
 
   PR 13 RELEASED IT, done and proved: RED 22/25 with 17 of 17 controls green in the SAME run and
   the leak reproduced in a SECOND tenant; GREEN 25/25 with the same 17, same file hash read back
