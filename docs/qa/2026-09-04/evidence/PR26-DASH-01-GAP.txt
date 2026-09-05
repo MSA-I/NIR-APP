@@ -1,0 +1,118 @@
+PR 26 · DASH-01 · THE GAP, MEASURED BEFORE ANYTHING WAS DESIGNED
+================================================================================
+Ruling #359 (owner, 05.09.2026): /alerts EXPANDS to cover everything the control
+centre counts. The narrowing branch is closed. So the first question is not "what
+should the screen say" but "what, exactly, is missing" — and that is a number, not
+an opinion.
+
+WHERE THESE FIGURES COME FROM
+  Project   rkftlbctohswhbbiaqin (production), READ ONLY, no write and no DDL.
+  Tenant    11111111-1111-4111-8111-111111111111 — the only tenant with data
+            (18 invoices, 272 orders, 9 exceptions; the other four organisations
+            hold none).
+  When      05.09.2026, local.
+  How       Two independent readings, and they agree:
+              (a) every predicate re-written by hand against the tables, from the
+                  SQL that defines it (0218 for the snapshot, the live
+                  pg_get_functiondef for each p2_* alert RPC);
+              (b) management_dashboard_snapshot(current_date) called ON THE
+                  GUARDED PATH — `set local role authenticated` with the owner's
+                  own JWT subject, inside a transaction that ended in ROLLBACK.
+                  auth_role() answered `owner`, auth_org() the tenant above,
+                  auth_scopes() four units.
+            A proof run as `postgres` would have skipped RLS and the role gate and
+            proved nothing, which is why (b) exists beside (a).
+
+--------------------------------------------------------------------------------
+WHAT /alerts SCANNED (six conditions; a condition at zero is not a row)
+--------------------------------------------------------------------------------
+  duplicate invoice groups .................................  1   -> a row
+  orders sent and unconfirmed ..............................  4   -> a row
+  price increases in the price list, 30d ...................  1   -> a row
+  offers >15% above the product average ....................  0      no row
+  invoices with no linked purchase order ...................  5   -> a row
+  payment requests due within 7d (2 of them already late) ..  2   -> a row
+
+  FIVE ROWS on 05.09. The sweep photographed FOUR on 04.09; the difference is
+  real movement, not a discrepancy — the price-list scan found nothing that day
+  and finds one increase today.
+
+--------------------------------------------------------------------------------
+WHAT THE CONTROL CENTRE COUNTS AND /alerts DID NOT SCAN AT ALL
+--------------------------------------------------------------------------------
+  KIND                                          FIGURE   SOURCE
+  open exceptions (open + in_progress) .......    9      exceptions table,
+                                                         3 of them high severity
+  open credits (open/requested/received) ......    9      credits.count
+  open commitments (sent/confirmed/partial) ...    9      openOrders.count
+  invoices awaiting review (received,in_review)    5      invoices.toReview
+  invoices approved, not sent to bookkeeper ...    3      invoices.notSent
+  orders past their delivery date .............    2      openOrders.late
+  payment requests awaiting approval ..........    2      paymentRequests.pendingApproval
+  invoices awaiting approval ..................    1      invoices.pendingApproval
+  payment request drafts ......................    1      paymentRequests.drafts
+  ------------------------------------------------------ covered by this change
+  bank transactions unmatched .................    2      bank.unmatched
+  bank matches suggested ......................    0      bank.suggested
+  ------------------------------------------------------ NOT covered; see below
+
+  THE TRUE NUMBER. With the nine kinds above added, /alerts on this tenant today
+  shows FOURTEEN rows rather than five: the five it already had, plus nine. The
+  two bank kinds would have made it fifteen, and one of them is zero anyway.
+
+--------------------------------------------------------------------------------
+WHY BANK RECONCILIATION IS NOT ONE OF THEM
+--------------------------------------------------------------------------------
+  The data exists and the control centre counts it. What is missing is a
+  DESTINATION this screen's readers can reach.
+
+      routePolicy.ts:44   alerts: roles = ['owner', 'office']
+      routePolicy.ts:42   bank:   roles = ['owner', 'accountant']
+
+  A bank row on /alerts is a dead end for the office — the same defect DASH-04
+  named in another form. The two repairs available were: widen /bank to the
+  office, or widen nothing and say so. Widening a role list so that two surfaces
+  agree is a privilege leak wearing the costume of a fix, so the screen names the
+  omission in words instead (alerts.text_3, both dictionaries) and the count stays
+  where its reader can act on it. `alertsControlCentreParity.spec.ts` asserts this
+  as a rule rather than as a habit: every alert must land on a route every reader
+  of /alerts may open, and it asserts that /bank genuinely fails that test.
+
+--------------------------------------------------------------------------------
+TWO THINGS THE MEASUREMENT FOUND THAT THE FINDING DID NOT CLAIM
+--------------------------------------------------------------------------------
+  1. THE TWO SURFACES COUNT PAYMENT REQUESTS OVER DIFFERENT POPULATIONS, and did
+     so before this change.
+         p2_payment_due_counts  — org-wide; status in (draft, pending_approval,
+                                  approved, sent_for_execution).
+         the snapshot           — narrowed by `p.unit_id is null or p.unit_id =
+                                  any(auth_scopes())`; status NOT in (draft,
+                                  executed, matched, cancelled).
+     All 21 payment requests in this tenant carry a unit_id, so the narrowing is
+     live rather than theoretical; the owner's four scopes happen to cover them,
+     which is why both readings answer 2 today. NOTHING WAS WIDENED to reconcile
+     them. The new rows are read from the snapshot — the NARROWER of the two — and
+     the two whose figure is unit-scoped say so in their own detail line
+     ("נספרות היחידות שבתחום האחריות שלך בלבד"). Recorded, not silently repaired.
+
+  2. THE PRICE-INCREASE ROWS ALSO COUNT DIFFERENT THINGS: the control centre counts
+     SUPPLIERS who raised a price, inside the currency the picker is on; the alert
+     counts OFFERS, across every currency. Both are 1 here. Left alone for the same
+     reason — each is honest about its own population, and this finding is about
+     conditions that appear on one surface and not the other, not about two
+     honest labels.
+
+--------------------------------------------------------------------------------
+RAW READINGS
+--------------------------------------------------------------------------------
+snapshot, as the owner, on the guarded path:
+  {"bank":{"suggested":0,"unmatched":2},
+   "invoices":{"notSent":3,"toReview":5,"pendingApproval":1},
+   "credits_count":9,
+   "openOrders_late":2,"openOrders_count":9,"openOrders_noDate":7,
+   "openOrders_awaiting":4,
+   "paymentRequests":{"drafts":1,"overdue":2,"dueToday":0,"activeCount":6,
+                      "dueDateCoverage":3,"dueWithin7Count":0,"pendingApproval":2}}
+  open_exceptions 9 · high_exceptions 3 · role_seen owner · scope_units 4
+
+hand-written predicates (same session, same tenant) agreed with every figure above.

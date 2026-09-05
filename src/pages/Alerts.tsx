@@ -170,9 +170,16 @@ export default function Alerts() {
         )}
       </div>
 
-      {/* Naming what is not covered belongs on the screen, not only in the docs: a manager
-          who reads this page as complete would stop looking elsewhere. */}
+      {/* Naming what is and is not covered belongs on the screen, not only in the docs: a manager
+          who reads this page as complete would stop looking elsewhere.
+
+          `DASH-01` / ruling `#359`: the first sentence is a CLAIM the scan list now earns — every
+          condition the control centre counts is scanned here, out of the control centre's own read
+          model. The second names the three that are not, each with its reason, and the third keeps
+          the due-date limit it always carried. A claim of completeness is only worth printing
+          beside the list of what it excludes. */}
       <p className="text-xs text-ink-muted leading-relaxed">
+        {t('alerts.coverageNote')}{' '}
         {t('alerts.text_3')}{' '}
         {t('alerts.text_4')}
       </p>

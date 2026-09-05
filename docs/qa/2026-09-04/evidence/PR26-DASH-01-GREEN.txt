@@ -1,0 +1,73 @@
+PR 26 · DASH-01 · GREEN — the same oracle, unchanged, against the fix
+================================================================================
+Same file, same command, same fixture. The four product files were restored from
+byte-exact copies taken before the red; their SHA-256 are printed in the RED
+evidence and match what this commit carries.
+
+RESULT: 34 passed (34). Exit 0.
+
+WHAT IS NOW TRUE ON THE PRODUCTION FIXTURE (the tenant measured 05.09.2026):
+  fourteen rows where there were five —
+    critical  1 duplicate invoice group
+    critical  9 open exceptions, 3 of them high severity
+    critical  2 payment requests past their due date
+    critical  2 orders past their delivery date
+    warning   4 orders sent and unconfirmed
+    warning   1 price increase in the price list, last 30 days
+    warning   1 invoice awaiting approval
+    warning   2 payment requests awaiting approval
+    warning   5 invoices awaiting review
+    warning   3 approved invoices not yet sent to the bookkeeper
+    info      5 invoices with no linked purchase order
+    info      1 payment request still a draft
+    info      9 credits not yet offset
+    info      9 orders open with suppliers
+  and no fifteenth row reading 0: offers above the average is 0 in this tenant and
+  is silent, as is every control-centre condition at zero.
+
+Command: NO_COLOR=1 npx vitest run src/lib/alertsControlCentreParity.spec.ts --reporter=verbose
+================================================================================
+
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a8bf526b1af28ecd6
+
+ ✓ src/lib/alertsControlCentreParity.spec.ts > CONTROL — the five conditions /alerts already scanned (green on both sides of DASH-01) > 'duplicate_invoice' is a row, carrying its own figure 9ms
+ ✓ src/lib/alertsControlCentreParity.spec.ts > CONTROL — the five conditions /alerts already scanned (green on both sides of DASH-01) > 'orders_awaiting_confirmation' is a row, carrying its own figure 2ms
+ ✓ src/lib/alertsControlCentreParity.spec.ts > CONTROL — the five conditions /alerts already scanned (green on both sides of DASH-01) > 'price_increase' is a row, carrying its own figure 2ms
+ ✓ src/lib/alertsControlCentreParity.spec.ts > CONTROL — the five conditions /alerts already scanned (green on both sides of DASH-01) > 'invoice_without_order' is a row, carrying its own figure 2ms
+ ✓ src/lib/alertsControlCentreParity.spec.ts > CONTROL — the five conditions /alerts already scanned (green on both sides of DASH-01) > 'payment_due_soon' is a row, carrying its own figure 2ms
+ ✓ src/lib/alertsControlCentreParity.spec.ts > CONTROL — the five conditions /alerts already scanned (green on both sides of DASH-01) > a condition that holds for nobody is no row at all — never a row reading 0 2ms
+ ✓ src/lib/alertsControlCentreParity.spec.ts > DASH-01 — every condition the control centre counts is scanned here too > 'חריגים פתוחים' ('open_exceptions') 2ms
+ ✓ src/lib/alertsControlCentreParity.spec.ts > DASH-01 — every condition the control centre counts is scanned here too > 'הזמנות באיחור באספקה' ('late_deliveries') 1ms
+ ✓ src/lib/alertsControlCentreParity.spec.ts > DASH-01 — every condition the control centre counts is scanned here too > 'חשבוניות לאישור' ('invoices_pending_approval') 1ms
+ ✓ src/lib/alertsControlCentreParity.spec.ts > DASH-01 — every condition the control centre counts is scanned here too > 'דרישות תשלום לאישור' ('payment_requests_pending_approval') 1ms
+ ✓ src/lib/alertsControlCentreParity.spec.ts > DASH-01 — every condition the control centre counts is scanned here too > 'חשבוניות לבדיקה' ('invoices_to_review') 1ms
+ ✓ src/lib/alertsControlCentreParity.spec.ts > DASH-01 — every condition the control centre counts is scanned here too > 'חשבוניות מאושרות שטרם נשלחו להנהלת חש…' ('invoices_not_sent_to_accountant') 1ms
+ ✓ src/lib/alertsControlCentreParity.spec.ts > DASH-01 — every condition the control centre counts is scanned here too > 'טיוטות דרישות תשלום' ('payment_request_drafts') 1ms
+ ✓ src/lib/alertsControlCentreParity.spec.ts > DASH-01 — every condition the control centre counts is scanned here too > 'זיכויים שטרם קוזזו' ('open_credits') 1ms
+ ✓ src/lib/alertsControlCentreParity.spec.ts > DASH-01 — every condition the control centre counts is scanned here too > 'התחייבויות פתוחות' ('open_commitments') 1ms
+ ✓ src/lib/alertsControlCentreParity.spec.ts > DASH-01 — every condition the control centre counts is scanned here too > 'open_exceptions' reads its OWN field, not a neighbour's 1ms
+ ✓ src/lib/alertsControlCentreParity.spec.ts > DASH-01 — every condition the control centre counts is scanned here too > 'late_deliveries' reads its OWN field, not a neighbour's 1ms
+ ✓ src/lib/alertsControlCentreParity.spec.ts > DASH-01 — every condition the control centre counts is scanned here too > 'invoices_pending_approval' reads its OWN field, not a neighbour's 1ms
+ ✓ src/lib/alertsControlCentreParity.spec.ts > DASH-01 — every condition the control centre counts is scanned here too > 'payment_requests_pending_approval' reads its OWN field, not a neighbour's 1ms
+ ✓ src/lib/alertsControlCentreParity.spec.ts > DASH-01 — every condition the control centre counts is scanned here too > 'invoices_to_review' reads its OWN field, not a neighbour's 1ms
+ ✓ src/lib/alertsControlCentreParity.spec.ts > DASH-01 — every condition the control centre counts is scanned here too > 'invoices_not_sent_to_accountant' reads its OWN field, not a neighbour's 1ms
+ ✓ src/lib/alertsControlCentreParity.spec.ts > DASH-01 — every condition the control centre counts is scanned here too > 'payment_request_drafts' reads its OWN field, not a neighbour's 1ms
+ ✓ src/lib/alertsControlCentreParity.spec.ts > DASH-01 — every condition the control centre counts is scanned here too > 'open_credits' reads its OWN field, not a neighbour's 1ms
+ ✓ src/lib/alertsControlCentreParity.spec.ts > DASH-01 — every condition the control centre counts is scanned here too > 'open_commitments' reads its OWN field, not a neighbour's 2ms
+ ✓ src/lib/alertsControlCentreParity.spec.ts > DASH-01 — every condition the control centre counts is scanned here too > the whole scan is complete and nothing was left unmeasured 2ms
+ ✓ src/lib/alertsControlCentreParity.spec.ts > DASH-01 — a condition with no data is silent, and one that could not be read is NAMED > a control centre that counts nothing produces no row for those conditions 1ms
+ ✓ src/lib/alertsControlCentreParity.spec.ts > DASH-01 — a condition with no data is silent, and one that could not be read is NAMED > a control centre the reader may not read is nine NAMED failures, not nine silent all-clears 3ms
+ ✓ src/lib/alertsControlCentreParity.spec.ts > DASH-01 — a condition with no data is silent, and one that could not be read is NAMED > the eight snapshot conditions cost ONE call between them 2ms
+ ✓ src/lib/alertsControlCentreParity.spec.ts > CONTROL — no row promises a destination this screen's readers cannot open > every alert lands on a route every reader of /alerts may open 3ms
+ ✓ src/lib/alertsControlCentreParity.spec.ts > CONTROL — no row promises a destination this screen's readers cannot open > and that is a real constraint — /bank fails it, which is why bank matches stay on the dashboard 1ms
+ ✓ src/lib/alertsControlCentreParity.spec.ts > CONTROL — severity order and wording > rows arrive most severe first 2ms
+ ✓ src/lib/alertsControlCentreParity.spec.ts > CONTROL — severity order and wording > every row says its finding in BOTH languages, and reads correctly at one 5ms
+ ✓ src/lib/alertsControlCentreParity.spec.ts > CONTROL — severity order and wording > a new condition at one does not read "1 invoices" 0ms
+ ✓ src/lib/alertsControlCentreParity.spec.ts > CONTROL — severity order and wording > the screen still names what it does NOT scan, bank reconciliation included 0ms
+
+ Test Files  1 passed (1)
+      Tests  34 passed (34)
+   Start at  14:06:19
+   Duration  4.34s (transform 833ms, setup 753ms, import 904ms, tests 73ms, environment 2.20s)
+
