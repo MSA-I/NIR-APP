@@ -77,6 +77,39 @@ rather than left dead because it is half of the named mechanism.
 A5: private.scope_definer_enforcements is re-pinned from pg_proc with a new scope_proof; the
 hash is COMPUTED, never written as a literal.
 
+DRY RUN OF THE PATCH, no database involved: the two anchors were parsed back OUT of the
+migration file and applied to the live body captured in PART 2.
+
+  anchor 1 occurrences in the live body: 1  OK
+  anchor 2 occurrences in the live body: 1  OK
+  resulting body:
+      select s.id,
+             i.currency,
+             sum(b.balance_in_currency)::numeric(14,3),
+             count(b.invoice_id) filter (where b.balance_in_currency > 0)
+      from public.suppliers s
+      join public.invoices i
+        on i.org_id = s.org_id and i.supplier_id = s.id and i.deleted_at is null
+       and i.financial_role = 'payable'
+       and (i.unit_id is null or i.unit_id = any(public.auth_scopes()))
+      join balances b on b.invoice_id = i.id
+      where s.org_id = auth_org() and auth_role() in ('owner', 'accountant')
+      group by s.id, i.currency
+  the migration's own sentinels, checked against that result:
+      has sum(b.balance_in_currency)::numeric(14,3) : true
+      has left join balances                        : false
+      has coalesce(sum(b.balance_in_currency)       : false
+      and the positive sentinel is ABSENT from the ORIGINAL body : true
+
+That last line is the one that matters: the sentinel is a property the patch CREATES, so the
+assertion cannot pass on a body that was never patched. `coalesce(sum(b.balance_in_currency),
+0)::numeric(14,3)` does not contain `sum(b.balance_in_currency)::numeric` — the `, 0)` sits
+between — which is why testing only for the ABSENCE of the old shape would have been worthless.
+
+`i.currency` is deliberately NOT rewritten to `b.currency`. After an inner join the two are the
+same value by construction (the invoice reader selects `i.currency` for the same invoice), so
+the change would be two more anchors for no behaviour at all.
+
 THE OWNER'S FIGURES CANNOT MOVE, and this is structural rather than hopeful: the four
 predicates the supplier reader puts on public.invoices (same org, deleted_at is null,
 financial_role = 'payable', null-or-auth_scopes unit) are exactly the four the invoice reader
