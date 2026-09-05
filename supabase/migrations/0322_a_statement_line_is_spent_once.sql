@@ -52,6 +52,14 @@
 -- ever replaced, and a money sum that does not name its currency is exactly what `check:currency`
 -- exists to refuse.
 
+-- The guard reads `bank_transaction_id` on EVERY write to this table, and until now nothing did:
+-- `0005` indexed `invoice_id` and `payment_id`, `0009` indexed `org_id`, and the column the whole
+-- parent relationship hangs from had no index of its own. Adding a bounded read on an unindexed
+-- column to the write path of a financial table is how a guard becomes a sequential scan per row.
+-- The composite foreign key to `bank_transactions` cascades on delete through this same column, so
+-- the index pays for that too.
+create index if not exists ba_transaction_idx on public.bank_allocations (bank_transaction_id);
+
 create or replace function public.guard_bank_allocation_within_statement_line()
 returns trigger
 language plpgsql
@@ -137,8 +145,8 @@ declare
   v_offenders text;
 begin
   select string_agg(format('  line %s: %s confirmed against %s %s',
-                           line.id, line.claimed, line.amount, line.currency), e'\n'
-                    order by line.id)
+                           per_line.id, per_line.claimed, per_line.amount, per_line.currency), e'\n'
+                    order by per_line.id)
     into v_offenders
   from (
     select t.id, t.amount, t.currency,
@@ -147,8 +155,8 @@ begin
     left join public.bank_allocations ba
       on ba.bank_transaction_id = t.id and ba.currency = t.currency
     group by t.id, t.amount, t.currency
-  ) line
-  where line.claimed > line.amount;
+  ) per_line
+  where per_line.claimed > per_line.amount;
 
   if v_offenders is not null then
     raise exception e'0322: statement lines already over-allocated:\n%', v_offenders;

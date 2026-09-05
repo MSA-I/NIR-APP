@@ -476,6 +476,20 @@ select p115.assert(
      and tg.tgconstraint <> 0 and not tg.tgdeferrable),
   'the statement-line guard is not installed as a non-deferrable constraint trigger');
 
+-- The guard reads `bank_transaction_id` on every write to this table, which had no index on that
+-- column before `0322`. A bound that costs a sequential scan per allocation is a bound somebody
+-- eventually turns off.
+select p115.assert(
+  (select count(*) = 1
+   from pg_catalog.pg_index i
+   join pg_catalog.pg_class c on c.oid = i.indrelid
+   join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+   join pg_catalog.pg_attribute a
+     on a.attrelid = c.oid and a.attnum = i.indkey[0]
+   where n.nspname = 'public' and c.relname = 'bank_allocations'
+     and a.attname = 'bank_transaction_id'),
+  'nothing indexes bank_allocations.bank_transaction_id, which the statement-line guard reads on every write');
+
 drop schema p115 cascade;
 
 select 'p115_a_statement_line_is_spent_once_passed' as result;
