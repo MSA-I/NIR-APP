@@ -152,9 +152,24 @@ describe('EXP-09 — a template a Hebrew bookkeeper can fill in', () => {
     { cellDates: true },
   );
 
+  /*
+   * A date cell is compared as its CALENDAR DATE, not as a serialised `Date`.
+   *
+   * `String(date)` renders in the runner's timezone, and the two workbooks reach this comparison
+   * from different places: the module builds its example row with `Date.UTC`, while the shipped
+   * asset carries whatever offset the machine that generated it had. So the same 15 January read
+   * back as `00:00 GMT+0000` on one runner and `02:00 GMT+0000` on another, and this test passed
+   * in Israel and failed in CI — a guard that reports the timezone of the person running it rather
+   * than the thing it is guarding.
+   *
+   * The claim it is here to make is that the generator and the module agree cell for cell. Two
+   * spreadsheets holding the same day agree, whichever clock read them.
+   */
   const cells = (workbook: XLSX.WorkBook, sheet: string) =>
     XLSX.utils.sheet_to_json<unknown[]>(workbook.Sheets[sheet]!, { header: 1 })
-      .flat().map((value) => String(value ?? ''));
+      .flat().map((value) => (value instanceof Date
+        ? value.toISOString().slice(0, 10)
+        : String(value ?? '')));
 
   /**
    * The shipped asset is written by `scripts/generate-bank-import-assets.mjs`, which is plain Node
