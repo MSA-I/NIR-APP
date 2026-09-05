@@ -329,23 +329,37 @@ const VAT_KEYS = ['vat_amount', 'vat', 'tax_amount', 'מעמ', 'מע"מ'];
 const TOTAL_KEYS = ['total', 'total_amount', 'grand_total', 'amount_due', 'סכום כולל', 'סה"כ לתשלום'];
 
 /**
- * dd/mm/yyyy (and dd.mm.yyyy / dd-mm-yyyy) or an already-ISO date, to yyyy-mm-dd for <input
- * type="date">. Day-first is the Israeli convention these documents are printed in.
+ * dd/mm/yyyy and dd/mm/yy (and the same with `.` or `-`), or an already-ISO date, to yyyy-mm-dd
+ * for <input type="date">. Day-first is the Israeli convention these documents are printed in.
  *
  * Anything else returns '' and the field is left for the person to fill. A date that is merely
  * *probably* right is worse than an empty one here: it lands on a financial record, and an empty
  * required field is visible while a plausible wrong date is not.
+ *
+ * WHY THE TWO-DIGIT YEAR IS READ, added for DOC-05. The four-digit rule refused `31/07/26` — a
+ * date the reader had extracted from a supplier's invoice and marked `זוהה בבירור`, printed on
+ * the page in exactly that form. The consequence was not the empty field the paragraph above
+ * argues for: `InvoiceNew` falls back to `todayISO()`, so a July invoice arrived on the form
+ * dated September, silently, which is precisely the invisible-wrong-date this function exists to
+ * avoid. Refusing the shorter form did not produce the safe outcome; it produced the unsafe one.
+ *
+ * `20yy`, and this is a reading convention rather than a business answer — the same kind of
+ * commitment as day-first above, and the only reading that is not absurd on an invoice a business
+ * has just received. Nothing is inferred beyond the century: the day and month still have to be
+ * a real day and month, the result is still shown in a date field the person can see and correct,
+ * and a year written any other way still returns ''.
  */
 export function normalizeInvoiceDate(raw: string | number | boolean | null): string {
   if (typeof raw !== 'string') return '';
   const text = raw.trim();
   const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
   if (iso) return text;
-  const dayFirst = /^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/.exec(text);
+  const dayFirst = /^(\d{1,2})[./-](\d{1,2})[./-](\d{4}|\d{2})$/.exec(text);
   if (!dayFirst) return '';
   const [, day, month, year] = dayFirst;
   if (Number(month) < 1 || Number(month) > 12 || Number(day) < 1 || Number(day) > 31) return '';
-  return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+  const fullYear = year.length === 2 ? `20${year}` : year;
+  return `${fullYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
 }
 
 export interface InvoiceDraft {

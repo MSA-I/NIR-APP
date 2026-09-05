@@ -265,7 +265,12 @@ export function consolidatedPageTypeKey(documentType: string | null): TKey {
 export function consolidatedPageStatusKey(jobStatus: string | null): TKey {
   if (!jobStatus) return 'consolidated.pageStatusQueued';
   return ({
-    awaiting_scan: 'consolidated.pageStatusAwaitingScan',
+    /* MON-07. `awaiting_scan` is not a queue: it is the manual scan-approval gate DOC-01 named,
+       and nothing is running behind it. This screen used to call it `ממתין לסריקה` — its own
+       wording, which reads as a machine the owner can only wait out, and one page sat there for
+       a day while every figure on the case showed `—`. It now borrows the product's word for the
+       state, which is the rule this file already states two functions above. */
+    awaiting_scan: 'documentStatus.awaitingScanApproval',
     queued: 'consolidated.pageStatusQueued',
     leased: 'consolidated.pageStatusProcessing',
     extracted: 'consolidated.pageStatusProcessing',

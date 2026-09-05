@@ -1,0 +1,65 @@
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a38a04215f5153dab
+
+ ❯ src/pages/invoiceDraftFromDocument.spec.tsx (4 tests | 3 failed) 294ms
+     × ממלאת את תאריך החשבונית מהתאריך שהמסמך מדפיס, גם כששנתו דו-ספרתית 170ms
+     × אינה מצהירה על שיעור הארגון ליד סכום שהגיע מהמסמך 34ms
+     × אינה מצהירה על שיעור מקומי כשהספק אינו מקומי והטופס אינו מחשב מע״מ כלל 41ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/invoiceDraftFromDocument.spec.tsx > DOC-05 · הטיוטה נושאת את תאריך המסמך, לא את היום > ממלאת את תאריך החשבונית מהתאריך שהמסמך מדפיס, גם כששנתו דו-ספרתית
+Error: [2mexpect([22m[31melement[39m[2m).toHaveValue([22m[32m2026-07-31[39m[2m)[22m
+
+Expected the element to have value:
+[32m  2026-07-31[39m
+Received:
+[31m  2026-09-05[39m
+ ❯ src/pages/invoiceDraftFromDocument.spec.tsx:135:18
+    133|
+    134|     const date = await screen.findByLabelText(DATE_LABEL);
+    135|     expect(date).toHaveValue('2026-07-31');
+       |                  ^
+    136|     expect(date).not.toHaveValue(todayISO());
+    137|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  src/pages/invoiceDraftFromDocument.spec.tsx > DOC-13 · תווית המע״מ מצהירה רק על שיעור שבאמת יצר את המספר שלידה > אינה מצהירה על שיעור הארגון ליד סכום שהגיע מהמסמך
+AssertionError: expected 'מע״מ (17.5%)' to be 'מע״מ' // Object.is equality
+
+Expected: "מע״מ"
+Received: "מע״מ (17.5%)"
+
+ ❯ src/pages/invoiceDraftFromDocument.spec.tsx:146:28
+    144|
+    145|     expect(await screen.findByDisplayValue('133.2')).toBeInTheDocument…
+    146|     expect(vatLabelText()).toBe('מע״מ');
+       |                            ^
+    147|   });
+    148|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  src/pages/invoiceDraftFromDocument.spec.tsx > DOC-13 · תווית המע״מ מצהירה רק על שיעור שבאמת יצר את המספר שלידה > אינה מצהירה על שיעור מקומי כשהספק אינו מקומי והטופס אינו מחשב מע״מ כלל
+AssertionError: expected 'מע״מ (17.5%)' to be 'מע״מ' // Object.is equality
+
+Expected: "מע״מ"
+Received: "מע״מ (17.5%)"
+
+ ❯ src/pages/invoiceDraftFromDocument.spec.tsx:154:28
+    152|
+    153|     await screen.findByLabelText(DATE_LABEL);
+    154|     expect(vatLabelText()).toBe('מע״מ');
+       |                            ^
+    155|   });
+    156|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 1 passed (4)
+   Start at  05:05:32
+   Duration  3.74s (transform 988ms, setup 478ms, import 1.43s, tests 294ms, environment 1.23s)
+

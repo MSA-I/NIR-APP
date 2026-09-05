@@ -15,6 +15,7 @@ import {
   type FieldSpec, type MapResult, type SheetData, type SheetRow,
 } from '../lib/importSheet';
 import { fmtMoneyExact, formatUnit, normalizeUnitInput, todayISO } from '../lib/format';
+import { organizationVatRate } from '../lib/vatRate';
 import { QuickCreateSupplier, type QuickCreatedSupplier } from '../components/QuickCreateSupplier';
 import type { Category } from '../lib/types';
 
@@ -296,9 +297,10 @@ function BusinessStep({ onSaved }: { onSaved: () => void }) {
 
   const [f, setF] = useState({
     name: org?.name ?? '',
-    // 18% is the documented default (docs/OPEN-DECISIONS.md row 1) and the column default;
-    // it is stored per invoice, so changing it later never rewrites history
-    vat_rate: org?.vat_rate?.toString() ?? '18',
+    // The documented default (docs/OPEN-DECISIONS.md, שיעור מע״מ) and the column default, now
+    // read from the one place that holds it; it is stored per invoice, so changing it later
+    // never rewrites history
+    vat_rate: String(organizationVatRate(org?.vat_rate)),
     tax_id: business.tax_id ?? '',
     contact_email: business.contact_email ?? '',
     contact_phone: business.contact_phone ?? '',

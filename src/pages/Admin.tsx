@@ -13,6 +13,7 @@ import { ROLE_LABEL } from '../lib/status';
 // recovery to the verified address (campaign report §15), so the function no longer exists.
 import { provisionOrg, generatePassword, type ProvisionResult } from '../lib/platform';
 import { VAT_RATE_MAX, VAT_RATE_MIN, isVatRateInRange } from '../lib/inputBounds';
+import { VAT_RATE_DEFAULT } from '../lib/vatRate';
 
 interface NewOrgForm {
   name: string;
@@ -58,7 +59,9 @@ const emptyForm = (): NewOrgForm => ({
   ownerName: '',
   ownerEmail: '',
   password: generatePassword(),
-  vatRate: '18',
+  // A tenant that does not exist yet has no rate of its own, so the form opens on the one the
+  // column would have given it. The owner may change it here before provisioning.
+  vatRate: String(VAT_RATE_DEFAULT),
   categories: '',
 });
 

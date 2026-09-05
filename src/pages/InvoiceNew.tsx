@@ -10,6 +10,7 @@ import { Breadcrumbs, PageHeader, RecordSkeleton, useToast, ConfirmDialog, Error
 import { CheckList } from './Invoices';
 import { runInvoiceChecks, type CheckResult } from '../lib/checks';
 import { fmtDate, todayISO } from '../lib/format';
+import { organizationVatRate } from '../lib/vatRate';
 import type { Supplier } from '../lib/types';
 import { type PageResponse, fetchAll } from '../lib/supabasePaging';
 import { invoiceCheckFingerprint } from '../lib/checkFingerprint';
@@ -46,6 +47,19 @@ export default function InvoiceNew() {
   const currencySupplierRef = useRef('');
   const [invoiceId] = useState(() => crypto.randomUUID());
   const [dirty, setDirty] = useState(false);
+  /*
+   * DOC-13. Whether the number in the VAT box is one the organisation's rate produced.
+   *
+   * The label may name a rate only when that rate is what made — or is about to make — the value
+   * beside it. On a blank form it is: `onBeforeVat`/`onTotal` apply it the moment an amount is
+   * typed, and the label is the only place the person is told which rate that is. It stops being
+   * true in three ways, and the sweep hit the first: a VAT amount carried in from a scanned
+   * document is the SUPPLIER's arithmetic (133.20 was 18.00% of a 740.00 taxable base while this
+   * tenant is configured at 17.5%, so the screen printed a rate that had produced nothing on it);
+   * a non-domestic supplier means the form computes no VAT at all; and a number typed straight
+   * into the box is the person's, not the rate's.
+   */
+  const [vatFromOrgRate, setVatFromOrgRate] = useState(true);
   const [leaveTarget, setLeaveTarget] = useState<string | null>(null);
 
   /*
@@ -92,6 +106,9 @@ export default function InvoiceNew() {
         // to be reading the screen is a log nobody can search.
         reason: s.reason || (fileName ? `נקלטה מהמסמך הסרוק ${fileName}` : 'נקלטה ממסמך סרוק'),
       }));
+      // The supplier's own VAT figure, at the supplier's own rate. Whatever this organisation is
+      // configured with did not produce it, so the label stops claiming it did.
+      if (draft.vat) setVatFromOrgRate(false);
       setDirty(true);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -162,10 +179,12 @@ export default function InvoiceNew() {
   const domesticSupplier = effectiveSupplier?.country_code != null && org?.country_code != null
     ? effectiveSupplier.country_code === org.country_code
     : true;
-  const vatRate = domesticSupplier ? (org?.vat_rate ?? 18) / 100 : null;
+  const orgVatRate = organizationVatRate(org?.vat_rate);
+  const vatRate = domesticSupplier ? orgVatRate / 100 : null;
   const minorUnits = currencies?.find((currency) => currency.code === f.currency)?.minor_units ?? 2;
   const set = (k: string, v: string) => {
     setDirty(true);
+    if (k === 'vat') setVatFromOrgRate(false);
     setF((s) => ({ ...s, [k]: v }));
   };
 
@@ -176,6 +195,8 @@ export default function InvoiceNew() {
   function onBeforeVat(v: string) {
     const n = Number(v);
     setDirty(true);
+    // The organisation rate is what fills the VAT box from here, so the label may name it again.
+    setVatFromOrgRate(vatRate != null);
     setF((s) => vatRate == null ? { ...s, before_vat: v } : ({
       ...s, before_vat: v,
       vat: n ? (n * vatRate).toFixed(minorUnits) : s.vat,
@@ -185,6 +206,7 @@ export default function InvoiceNew() {
   function onTotal(v: string) {
     const n = Number(v);
     setDirty(true);
+    setVatFromOrgRate(vatRate != null);
     setF((s) => vatRate == null ? { ...s, total: v } : ({
       ...s, total: v,
       before_vat: n ? (n / (1 + vatRate)).toFixed(minorUnits) : s.before_vat,
@@ -396,7 +418,7 @@ export default function InvoiceNew() {
         <div><label className="label" htmlFor="invoice-new-number">{t('invoiceNew.set')}</label><input id="invoice-new-number" className="input num" dir="ltr" value={f.invoice_number} onChange={(e) => set('invoice_number', e.target.value)} /></div>
         <div><label className="label" htmlFor="invoice-new-date">{t('invoiceNew.set_2')}</label><input id="invoice-new-date" type="date" className="input" value={f.invoice_date} onChange={(e) => set('invoice_date', e.target.value)} /></div>
         <div><label className="label" htmlFor="invoice-new-before-vat">{t('invoiceNew.onBeforeVat')}</label><input id="invoice-new-before-vat" type="number" step="0.01" className="input num" value={f.before_vat} onChange={(e) => onBeforeVat(e.target.value)} /></div>
-        <div><label className="label" htmlFor="invoice-new-vat">{t('invoiceNew.vatLabel', { rate: org?.vat_rate ?? 18 })}</label><input id="invoice-new-vat" type="number" step="0.01" className="input num" value={f.vat} onChange={(e) => set('vat', e.target.value)} /></div>
+        <div><label className="label" htmlFor="invoice-new-vat">{vatRate != null && vatFromOrgRate ? t('invoiceNew.vatLabel', { rate: orgVatRate }) : t('invoiceNew.vatLabelNoRate')}</label><input id="invoice-new-vat" type="number" step="0.01" className="input num" value={f.vat} onChange={(e) => set('vat', e.target.value)} /></div>
         <div><label className="label" htmlFor="invoice-new-total">{t('invoiceNew.onTotal')}</label><input id="invoice-new-total" type="number" step="0.01" className="input num font-semibold" value={f.total} onChange={(e) => onTotal(e.target.value)} /></div>
         <div className="sm:col-span-2"><label className="label" htmlFor="invoice-new-notes">{t('invoiceNew.set_3')}</label><textarea id="invoice-new-notes" className="input" rows={2} value={f.notes} onChange={(e) => set('notes', e.target.value)} /></div>
         <div className="sm:col-span-2"><label className="label" htmlFor="invoice-new-reason">{t('invoiceNew.set_4')}</label><input id="invoice-new-reason" className="input" value={f.reason} onChange={(e) => set('reason', e.target.value)} /></div>

@@ -503,6 +503,15 @@ function WorkspaceView({ workspace, canWrite, refreshing, onRefresh, onReload }:
                     {page.is_primary ? t('consolidated.text_27') : t('consolidated.text_28')} ·
                     {' '}{t(consolidatedPageTypeKey(page.document_type))} · {t(consolidatedPageStatusKey(page.job_status))}
                   </p>
+                  {/* MON-07. Rendered for this state only. `awaiting_scan` is the one page state
+                      where nothing is running and nothing will start: a person has to open the
+                      document and approve the scan. Every other state either moves by itself or
+                      is already a named outcome, and a next step printed on every row would be
+                      the same non-information as no next step at all. The sentence is DOC-01's,
+                      not a second wording of it — one gate, one instruction, wherever it shows. */}
+                  {page.job_status === 'awaiting_scan' && (
+                    <p className="mt-1 text-sm text-ink-soft">{t('documentStatus.awaitingScanApprovalDescription')}</p>
+                  )}
                 </div>
                 <button type="button" className="btn-secondary min-h-11"
                   onClick={() => navigate(`/documents/${page.document_id}/review`)}>

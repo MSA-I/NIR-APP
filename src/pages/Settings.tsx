@@ -8,6 +8,7 @@ import {
   BANK_MATCH_DAYS_MIN, BANK_MATCH_DAYS_STEP, VAT_RATE_MAX, VAT_RATE_MIN,
   isBankMatchWindowInRange, isVatRateInRange,
 } from '../lib/inputBounds';
+import { organizationVatRate } from '../lib/vatRate';
 import { OPTIONAL_REASON_LABEL_KEY, reasonOr } from '../lib/reason';
 import { supabase } from '../lib/supabase';
 import { useQuery, unwrap } from '../lib/useQuery';
@@ -86,7 +87,7 @@ export default function Settings() {
   const isOffice = profile?.role === 'owner' || profile?.role === 'office';
   const toast = useToast();
   const [orgName, setOrgName] = useState(org?.name ?? '');
-  const [vatRate, setVatRate] = useState(org?.vat_rate?.toString() ?? '18');
+  const [vatRate, setVatRate] = useState(String(organizationVatRate(org?.vat_rate)));
   const [matchDays, setMatchDays] = useState(org?.settings?.bank_match_days?.toString() ?? '7');
   const [busy, setBusy] = useState(false);
   const [logoPath, setLogoPath] = useState(org?.logo_path ?? null);
