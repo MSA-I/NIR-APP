@@ -45,6 +45,20 @@ QUEUE (coordinator grants in this order, one at a time, by SendMessage):
      accountant, before and after, both read -> `npm run demo:restore`, verified.
   3. PR 15    MON-06                  migration 0321, suite p114
   4. PR 11    MON-04                  migration 0322, suite p115
+     *** READY FOR THE STACK, 05.09.2026. Branch worktree-agent-aa933e5ca166007ba, commits
+     83ce038d and 02af0673. `0322` and `p115` have NEVER TOUCHED A DATABASE -- every SQL claim
+     in them is a claim about text until the first reset. Said plainly by its author.
+     WHAT IT FOUND: the finding's "two CONFIRMED allocations" is false. Confirmed allocations
+     exceed no line anywhere in production; exactly one line exceeds once SUGGESTIONS are counted,
+     and that suggestion is the demo seed's. But the defect the oracle names is real and LARGER --
+     `bank_allocations` has had NO BOUND AT ALL since `0001`. The residual is recorded as §122.
+     ITS RED IS SURGICAL and better than a migration-set red: reset everything, then drop the ONE
+     trigger, run p115, reset again for green. The suite commits its fixtures and the red aborts
+     before its own cleanup, so the second reset is required, not tidiness.
+     CAUTION FOR THE HOLDER: `0322` ASSERTS that no line is already over the bound before it
+     installs the trigger. Safe on production and on the demo seed. If a LOCAL stack has been left
+     with a genuinely over-allocated line the migration will refuse and name it -- that is the
+     assertion working, not a bug. Do not "fix" it by weakening the assertion.
   5. PR 13    PERM-02                 migration 0323, suite p116
      *** READY FOR THE STACK, 05.09.2026. Branch worktree-agent-a74b31599b1611772, commit
      4e3c1008. Everything off-stack is done and committed: the production measurement (the
