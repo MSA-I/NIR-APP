@@ -24,6 +24,10 @@ create index failed_document_replacements_actor_idx
 create function private.reject_failed_document_replacement_mutation()
 returns trigger language plpgsql set search_path = private, pg_temp as $$
 begin
+  if tg_op = 'DELETE'
+     and current_setting('app.audit_purge', true) = 'organization_teardown' then
+    return old;
+  end if;
   raise exception 'failed_document_replacement_immutable' using errcode = '55000';
 end
 $$;
@@ -192,12 +196,15 @@ do $$
 declare
   v_body text := replace(pg_get_functiondef(
     'public.supersede_failed_document(uuid,uuid,uuid,text)'::regprocedure), e'\r', '');
+  v_guard text := replace(pg_get_functiondef(
+    'private.reject_failed_document_replacement_mutation()'::regprocedure), e'\r', '');
 begin
   if position('public.auth_scopes()' in v_body) = 0
      or position('public.remove_document' in v_body) = 0
      or position('original_file_retained' in v_body) = 0
      or position('p_idempotency_key' in v_body) = 0
-     or position('order by scan.created_at desc, scan.id desc' in v_body) = 0 then
+     or position('order by scan.created_at desc, scan.id desc' in v_body) = 0
+     or position('organization_teardown' in v_guard) = 0 then
     raise exception '0318: supersede contract lost scope, latest failed state, soft retention or replay';
   end if;
   if has_function_privilege('anon',

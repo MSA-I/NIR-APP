@@ -521,7 +521,7 @@ async function main() {
     await installReviewMocks(page, priceList);
     await page.goto(`${BASE_URL}/documents/${priceList.id}/review`, { waitUntil: 'domcontentloaded' });
     await settle(page);
-    const receiptHeading = page.getByRole('heading', { name: 'קבלת קליטת מחירון' });
+    const receiptHeading = page.getByRole('heading', { name: 'תוצאת קליטת המחירון' });
     await receiptHeading.waitFor({ timeout: 20_000 });
     const receiptCard = receiptHeading.locator('..');
     const receiptText = await receiptCard.innerText();

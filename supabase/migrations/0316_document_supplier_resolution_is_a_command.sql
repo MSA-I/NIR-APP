@@ -72,6 +72,10 @@ language plpgsql
 set search_path = private, pg_temp
 as $$
 begin
+  if tg_op = 'DELETE'
+     and current_setting('app.audit_purge', true) = 'organization_teardown' then
+    return old;
+  end if;
   raise exception 'document_supplier_creation_command_immutable' using errcode = '55000';
 end
 $$;
@@ -291,12 +295,15 @@ declare
     'public.create_supplier_from_document(uuid,text,text,uuid,text)'::regprocedure), e'\r', '');
   v_read text := replace(pg_get_functiondef(
     'public.get_document_folder_review_states(uuid[])'::regprocedure), e'\r', '');
+  v_guard text := replace(pg_get_functiondef(
+    'private.reject_document_supplier_creation_command_mutation()'::regprocedure), e'\r', '');
 begin
   if position('app.audit_reason' in v_audit) = 0
      or position('p_idempotency_key' in v_create) = 0
      or position('document.unit_id is null or document.unit_id = any(public.auth_scopes())' in v_create) = 0
      or position('cardinality(p_document_ids) > 200' in v_read) = 0
-     or position('private.resolve_document_supplier' in v_read) = 0 then
+     or position('private.resolve_document_supplier' in v_read) = 0
+     or position('organization_teardown' in v_guard) = 0 then
     raise exception '0316: supplier resolution contract anchor missing';
   end if;
   if has_function_privilege('anon',

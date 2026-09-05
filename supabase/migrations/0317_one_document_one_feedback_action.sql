@@ -62,11 +62,22 @@ using (
 
 revoke all on table public.document_review_feedback from public, anon, authenticated, service_role;
 grant select on table public.document_review_feedback to authenticated;
+grant select, insert, update, delete on table public.document_review_feedback to service_role;
 
 insert into private.scope_registry (table_name, scope_class, enforced)
 values ('document_review_feedback', 'org_global', false)
 on conflict (table_name) do update
 set scope_class = excluded.scope_class, enforced = excluded.enforced;
+
+insert into private.org_activity_evidence_registry (table_name, disposition, rationale)
+values (
+  'document_review_feedback', 'evidence',
+  'A row exists only because an owner or office user submitted a document-review note; it is '
+  'direct evidence that the tenant used the product.'
+)
+on conflict (table_name) do update
+set disposition = excluded.disposition,
+    rationale = excluded.rationale;
 
 insert into private.tenant_export_registry (
   table_name, disposition, excluded_columns, rationale
@@ -244,6 +255,22 @@ begin
      or has_table_privilege('authenticated', 'public.document_review_feedback', 'update')
      or has_table_privilege('authenticated', 'public.document_review_feedback', 'delete') then
     raise exception '0317: feedback write boundary is open';
+  end if;
+  if not has_table_privilege('service_role', 'public.document_review_feedback', 'select')
+     or not has_table_privilege('service_role', 'public.document_review_feedback', 'insert')
+     or not has_table_privilege('service_role', 'public.document_review_feedback', 'update')
+     or not has_table_privilege('service_role', 'public.document_review_feedback', 'delete') then
+    raise exception '0317: trusted server lost CRUD on document review feedback';
+  end if;
+  if not exists (
+    select 1 from private.org_activity_evidence_registry registry
+    where registry.table_name = 'document_review_feedback'
+      and registry.disposition = 'evidence'
+  ) or exists (
+    select 1 from private.org_activity_registry_violations() violation
+    where violation.table_name = 'document_review_feedback'
+  ) then
+    raise exception '0317: document review feedback is not classified as tenant activity evidence';
   end if;
 end
 $$;
