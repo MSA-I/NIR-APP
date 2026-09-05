@@ -250,11 +250,38 @@ export default function Bank() {
   );
 }
 
-function UnmatchModal({ tx, onClose, onChanged }: { tx: TxRow; onClose: () => void; onChanged: () => void }) {
+/* Exported for `bankStatementLineAllocation.spec.tsx`. The dialog is the only place in the product
+   that opens a MATCHED line, and until MON-04 it was the only place that said nothing at all about
+   what the line is spoken for. */
+export function UnmatchModal({ tx, onClose, onChanged }: { tx: TxRow; onClose: () => void; onChanged: () => void }) {
   const { errorText, t } = useT();
   const toast = useToast();
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
+
+  /* MON-04. `0322` stops a NEW over-allocation from being written; it cannot un-write one that is
+     already there, and a line written before it — or by a migration or repair script — can still
+     hold more than it is. So the dialog states the figure rather than leaving the reader to assume
+     the two rows in front of them are both fine.
+
+     CONFIRMED rows only, and the same reading the rest of this screen already uses (the candidate
+     query above filters `confirmed` too): a suggestion is a proposal the matcher printed, it claims
+     no money, and counting it here would report an over-allocation on every ordinary suggested
+     line. This is the same boundary `0322` draws in the database. */
+  const allocations = useQuery(
+    async () => unwrap(await supabase.from('bank_allocations')
+      .select('id, amount, currency')
+      .eq('bank_transaction_id', tx.id).eq('confirmed', true)
+      .order('id')) as { id: string; amount: number; currency: string }[],
+    [],
+    [DOMAIN.bank, 'allocations', tx.id],
+  );
+  /* null while the read is in flight or has failed — NOT 0. A measured zero is a claim about the
+     line ("nothing is allocated to it"), and we have not measured anything yet. */
+  const claimed = allocations.data
+    ? allocations.data.reduce((total, row) => total + row.amount, 0)
+    : null;
+  const excess = claimed == null ? null : claimed - tx.amount;
 
   async function unmatch() {
     setBusy(true);
@@ -280,7 +307,19 @@ function UnmatchModal({ tx, onClose, onChanged }: { tx: TxRow; onClose: () => vo
             <span>{fmtDate(tx.tx_date)} · {tx.description}</span>
             <span className="font-semibold num">{fmtMoneyExact(tx.amount, tx.currency)}</span>
           </div>
+          <div className="flex flex-wrap justify-between gap-2 text-ink-muted">
+            <span>{t('bank.allocatedLabel')}</span>
+            <span className="num">{claimed == null ? '—' : fmtMoneyExact(claimed, tx.currency)}</span>
+          </div>
         </SubPanel>
+        {allocations.error && <ErrorNote message={allocations.error} />}
+        {excess != null && excess > 0 && (
+          <Note tone="alert" role="alert">{t('bank.overAllocated', {
+            claimed: fmtMoneyExact(claimed as number, tx.currency),
+            amount: fmtMoneyExact(tx.amount, tx.currency),
+            excess: fmtMoneyExact(excess, tx.currency),
+          })}</Note>
+        )}
         <Note tone="await">{t('bank.text_11')}</Note>
         {/* `text_11` already ends with "a direct match to an invoice requires a separate financial
             correction" — a thing named without a door. The refusal itself

@@ -115,6 +115,7 @@ export const en: Dictionary = {
     payment_request_not_executable: 'This payment request is not in a state that can be executed. Refresh and check its status.',
     payment_execution_fields_required: 'A date, a reference and a reason for execution are all required.',
     payment_execution_conflict: 'The same action was already submitted with different details. Refresh before trying again.',
+    bank_allocation_exceeds_statement_line: 'This bank transaction is already fully allocated. Nothing further can be attached to it — remove or reduce an existing allocation first.',
     allocation_exceeds_balance: 'The allocated amount is larger than the open balance. Refresh and adjust the split.',
     allocation_total_mismatch: 'The split does not add up to the amount of the transaction.',
     allocation_invoice_coverage_mismatch: 'One of the request\'s invoices is not covered exactly by the transfer and the credits assigned to it. Refresh and check how the amount is split between invoices.',
@@ -1152,6 +1153,8 @@ export const en: Dictionary = {
   },
 
   bank: {
+    allocatedLabel: 'Allocated from this line (confirmed)',
+    overAllocated: 'This line carries {claimed} of allocations against an amount of {amount} — {excess} more than the line holds. One of them does not belong here: remove or reduce an existing allocation.',
     directMatchCorrection: 'A financial correction is not the deletion of a payment already recorded — it is a credit recorded against it. It is opened from the invoice card ("Credit request", manager/owner or purchasing manager) and appears on the Credits screen.',
     toleranceRefusal: '{currency}: {refusal} Suggestions by reference are still shown, and matching by hand is open.',
     fmtDate: 'Date',

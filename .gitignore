@@ -45,6 +45,9 @@ deno.lock
 # Local screenshots from scripts/sparkline-visual-check.cjs (manual visual verification)
 .sparkline-shots/
 
+# Local screenshots from scripts/bank-over-allocation-visual-check.cjs (manual visual verification)
+.bank-shots/
+
 # The reading taken before a production rollout, compared against after it.
 # A record of one run on one machine, not a repository fact.
 rollout-*.json

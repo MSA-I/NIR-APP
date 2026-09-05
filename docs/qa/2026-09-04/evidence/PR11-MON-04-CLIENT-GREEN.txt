@@ -1,0 +1,43 @@
+PR 11 · MON-04 · GREEN — the /bank read surface, on the fixed tree
+==================================================================
+
+Command : npx vitest run src/pages/bankStatementLineAllocation.spec.tsx src/pages/bankI18n.spec.ts
+Branch  : worktree-agent-aa933e5ca166007ba (campaign base d9393233)
+Date    : 2026-09-05
+Result  : 10 passed / 0 failed  (6 MON-04 assertions + 4 controls)
+
+Restored with `.tmp/toggle-fix.mjs restore`, which refuses to run if the block it is about to
+insert is already there — so this is the same tree the red was taken from, plus exactly the five
+behavioural blocks and nothing else. `npx tsc --noEmit` is clean on it.
+
+WHAT EACH OF THE SIX MEASURES.
+
+  over-allocation named      two confirmed rows of 2,950.00 on a 2,950.00 line: the allocated row
+                             reads 5,900.00 and an element with role="alert" carries the
+                             dictionary sentence with all three figures substituted — claimed,
+                             the line, and the 2,950.00 excess.
+  a split is not an alarm    1,000 + 1,950 against the same line reads 2,950.00 and there is no
+                             alert at all. Equal is not over.
+  a suggestion claims nothing the shape production actually holds: one confirmed 2,950.00 with an
+                             unconfirmed 2,950.00 beside it. The read asks for `confirmed=eq.true`,
+                             so the row reads 2,950.00 and never 5,900.00, and there is no alert.
+  a failed read is not zero  the allocated row shows `—` and never 0.00, and the dialog carries the
+                             resolved failure sentence rather than swallowing it.
+  the refusal has a key      `bank_allocation_exceeds_statement_line` resolves to itself, and its
+                             neighbour `allocation_exceeds_balance` still resolves to itself.
+  the refusal has a sentence both dictionaries carry it, and it is neither the fallback nor the
+                             invoice-balance sentence.
+
+CONTROLS: the four assertions of `src/pages/bankI18n.spec.ts` are green here and were green in the
+red run.
+
+
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-aa933e5ca166007ba
+
+
+ Test Files  2 passed (2)
+      Tests  10 passed (10)
+   Start at  06:31:36
+   Duration  3.52s (transform 1.07s, setup 996ms, import 1.76s, tests 432ms, environment 2.31s)
+

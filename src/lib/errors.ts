@@ -198,6 +198,13 @@ const PATTERNS: [RegExp, string][] = [
     new RegExp(code, 'i'),
     text,
   ]),
+  // MON-04 (`0322`). Ahead of the generic allocation family for the same reason the credit
+  // refusals above are: this one is about a BANK STATEMENT LINE, not about an invoice balance,
+  // and `allocation_exceeds_balance` would send the reader to "the open balance" — a number that
+  // has nothing to do with why the write was refused. `REQ-01` in this same sweep was exactly that
+  // failure: a refusal falling through to a sentence naming a cause that had not happened.
+  [/bank_allocation_exceeds_statement_line/i,
+    'bank_allocation_exceeds_statement_line'],
   [/allocation_exceeds_balance|payment_request_allocation_invalid/i,
     'allocation_exceeds_balance'],
   [/allocation_total_mismatch|bank_allocation_total_mismatch/i,
