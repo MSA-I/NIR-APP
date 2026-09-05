@@ -7,6 +7,17 @@ since: 2026-09-05
 QUEUE (coordinator grants in this order, one at a time, by SendMessage):
   1. PR 5+6   PERM-01                 migration 0319, suite p112
   2. PR 14    MON-03/FIN-04/FIN-07    migration 0320, suite p113
+     *** READY FOR THE STACK, 05.09.2026. Branch worktree-agent-a4ddfa2e0c205b10b, commits
+     f5d05a8b and a04b7e0f. Off-stack work done: production measurement (the supplier the sweep
+     photographed really does owe $300 -- `FIN-04`'s own diagnosis is INVERTED and `MON-03` is
+     right), ancestry checked by `pg_get_functiondef` (byte-for-byte 0218, md5 recorded), two
+     anchored replacements each count-asserted at 1 and dry-run against the captured live body,
+     migration 0320, suite p113 registered and baselined, and the `FIN-07` label change with its
+     own red (2 failed / 1 passing control) and green. GATES rows deliberately left DIAGNOSED --
+     the DB proof and the screenshots do not exist yet, so `FIXED` would be a claim not measured.
+     Its five steps, in order: reset through 0320 -> p113 RED with 0320 held back -> p113 GREEN
+     with it applied -> headed Edge at 1440x900 on the supplier card and the dashboard as the
+     accountant, before and after, both read -> `npm run demo:restore`, verified.
   3. PR 15    MON-06                  migration 0321, suite p114
   4. PR 11    MON-04                  migration 0322, suite p115
   5. PR 13    PERM-02                 migration 0323, suite p116
@@ -24,6 +35,26 @@ QUEUE (coordinator grants in this order, one at a time, by SendMessage):
           before handoff. Project rule, not a courtesy.
      Then write PR13-PERM-02-RED.txt / -GREEN.txt, set the GATES row, amend 4e3c1008.
      LAND IT LAST of this campaign's migrations: 0323 is our highest number.
+
+THE SHARED STACK WAS CLOBBERED BY THE OTHER CAMPAIGN. Measured 05.09.2026 06:35 local:
+
+    select version from supabase_migrations.schema_migrations where version >= '0310'
+    -> 0310 0311 0312 0313 0314 0316
+
+  OUR 0315 IS NOT THERE and 0316 is. `pg_postmaster_start_time()` = 01:58 UTC (04:58 local), so
+  the stack was rebuilt at 04:58 from the OTHER campaign's migration set -- their branch predates
+  PR 7, so the rebuild simply dropped 0315. No application backend has issued a query since 01:59
+  UTC; only PostgREST, pg_cron and pg_net sit idle.
+
+  THIS LOCK FILE BINDS ONLY THIS CAMPAIGN'S AGENTS. `docs/ux-remediation-documents-assistant` does
+  not read it and reset the stack out from under a holder. That is the same contention this machine
+  has seen before, and it is why the rule is READ THE HEAD, NEVER ASSUME IT.
+
+  EVERY HOLDER FROM NOW ON, FIRST TWO STEPS, NO EXCEPTIONS:
+    1. `supabase db reset` FROM YOUR OWN WORKTREE -- never trust the head you inherit.
+    2. Assert the head afterwards. `0315` must be present, or PR 7's guard is not in the database
+       and every money proof above it is measuring the wrong thing.
+  A red or green measured on a stack whose head you did not read is not evidence.
 
 WHAT COUNTS AS TOUCHING THE STACK:
   docker exec ... psql on supabase_db_supplyflow-p0
