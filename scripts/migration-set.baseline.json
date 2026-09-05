@@ -305,5 +305,12 @@
   "0313_the_rollback_releases_the_address_it_registered.sql",
   "0314_the_second_hebrew_correction_has_a_name_the_database_knows.sql",
   "0315_one_balance_one_approval.sql",
-  "0319_the_settings_refusal_stops_being_cosmetic.sql"
+  "0316_document_supplier_resolution_is_a_command.sql",
+  "0317_one_document_one_feedback_action.sql",
+  "0318_failed_document_replacement.sql",
+  "0319_the_settings_refusal_stops_being_cosmetic.sql",
+  "0320_a_currency_this_role_cannot_value.sql",
+  "0322_a_statement_line_is_spent_once.sql",
+  "0323_a_password_change_is_the_holders_own_record.sql",
+  "0324_the_price_the_reader_could_not_say.sql"
 ]

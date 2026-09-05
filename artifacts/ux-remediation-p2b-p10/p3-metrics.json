@@ -1,0 +1,36 @@
+{
+  "desktop": {
+    "review": {
+      "supplierCreate": {
+        "documentId": "ux-mock-invoice",
+        "reasonPresent": true,
+        "idempotencyPresent": true
+      },
+      "approval": {
+        "supplierId": "supplier-created",
+        "orderId": "order-cancelled"
+      }
+    },
+    "folder": {
+      "batchCalls": 1,
+      "ids": 2
+    }
+  },
+  "mobile": {
+    "review": {
+      "supplierCreate": {
+        "documentId": "ux-mock-invoice",
+        "reasonPresent": true,
+        "idempotencyPresent": true
+      },
+      "approval": {
+        "supplierId": "supplier-created",
+        "orderId": "order-cancelled"
+      }
+    },
+    "folder": {
+      "batchCalls": 1,
+      "ids": 2
+    }
+  }
+}

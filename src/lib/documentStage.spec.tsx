@@ -107,9 +107,9 @@ describe('הסינון והתג מבוססים על אותו מצב קנוני',
 
 describe('חוזה התג מול שער הדפדפן', () => {
   it.each(STAGES)('%s — data-stage נושא את השלב הגולמי, והטקסט עברי אנושי', (stage) => {
-    render(<ProcessingBadge documentId="doc-1" stage={stage} />);
+    render(<ProcessingBadge documentId="doc-1" stage={stage} doc={unfiled} />);
     const badge = screen.getByTestId('document-processing-status');
-    const status = documentUiStatus({ status: stage });
+    const status = documentUiStatus({ status: stage, document: unfiled });
     expect(badge.getAttribute('data-document-id')).toBe('doc-1');
     expect(badge.getAttribute('data-stage')).toBe(stage);
     expect(badge.textContent?.trim()).toBe(say(status.labelKey));
@@ -120,27 +120,28 @@ describe('חוזה התג מול שער הדפדפן', () => {
   // כשיש הסבר הוא חייב להגיע גם ל-title וגם ל-sr-only; כשאין, אסור שיישלח title ריק או span ריק
   // שקורא מסך יעצור עליו. (קודם נדרשה כאן זהות מוחלטת, כשכל שלב נשא משפט — גם כשהוא רק חזר על התג.)
   it.each(STAGES)('%s — ההסבר נגיש גם בלי ריחוף, ומחוץ לטקסט התג', (stage) => {
-    const { container } = render(<ProcessingBadge documentId="doc-4" stage={stage} />);
+    const { container } = render(<ProcessingBadge documentId="doc-4" stage={stage} doc={unfiled} />);
     const badge = screen.getByTestId('document-processing-status');
-    const description = say(documentUiStatus({ status: stage }).descriptionKey);
+    const status = documentUiStatus({ status: stage, document: unfiled });
+    const description = say(status.descriptionKey);
     if (description) {
       expect(badge.getAttribute('title')).toBe(description);
       // ולא ב-title בלבד: tooltip אינו קיים במגע, והתרחיש מריץ את הדף הזה ב-390px.
       expect(container.querySelector('.sr-only')?.textContent).toBe(description);
-      expect(description).not.toContain(say(documentUiStatus({ status: stage }).labelKey));
+      expect(description).not.toContain(say(status.labelKey));
     } else {
       expect(badge.getAttribute('title')).toBeNull();
       expect(container.querySelector('.sr-only')).toBeNull();
     }
     // ומחוץ לתג — check-browser-smoke.cjs מודד את ה-innerText שלו מול תווית אחת.
-    expect(badge.textContent?.trim()).toBe(say(documentUiStatus({ status: stage }).labelKey));
+    expect(badge.textContent?.trim()).toBe(say(status.labelKey));
   });
 
-  it('שורה שהעיבוד שלה הושלם ושויכה מספרת על היעד בתג עצמו', () => {
+  it('שורה שהעיבוד שלה הושלם ושויכה אומרת שהיא משויכת', () => {
     render(<ProcessingBadge documentId="doc-2" stage="completed" doc={onInvoice} />);
     const badge = screen.getByTestId('document-processing-status');
     expect(badge.getAttribute('data-stage')).toBe('completed');
-    expect(badge.textContent?.trim()).toBe('שויך לחשבונית');
+    expect(badge.textContent?.trim()).toBe('משויך');
   });
 
   it('כשמצב העיבוד לא נטען, התג אומר זאת ולא ממציא שלב', () => {

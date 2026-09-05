@@ -169,6 +169,25 @@ describe('the guard fires — deliberately broken snapshots are rejected by name
 });
 
 describe('what a role may be shown', () => {
+  it('expands each formerly owner-only guide only to roles that can perform its described action', () => {
+    const expected: Record<string, readonly string[]> = {
+      use_global_search: ['owner', 'office', 'accountant'],
+      see_dashboard_attention: ['owner', 'office', 'accountant'],
+      navigate_product_workspace: ['owner', 'office', 'accountant'],
+      add_supplier: ['owner', 'office'],
+      explain_purchase_order_flow: ['owner', 'office'],
+      receive_goods: ['owner', 'office'],
+      upload_document: ['owner', 'office'],
+      prepare_monthly_report: ['owner', 'accountant'],
+      start_owner_onboarding: ['owner'],
+    };
+    for (const [id, roles] of Object.entries(expected)) {
+      const entries = PRODUCT_HELP_ENTRIES.filter((entry) => entry.id === id);
+      expect(entries.map((entry) => entry.locale).sort(), id).toEqual(['en', 'he']);
+      for (const entry of entries) expect([...entry.roles].sort(), id).toEqual([...roles].sort());
+    }
+  });
+
   it('covers exactly the three live roles and nothing retired', () => {
     expect([...ASSISTANT_ROLES]).toEqual([...ACTIVE_ROLES]);
   });
@@ -271,5 +290,16 @@ describe('a question phrased the way a person phrases it', () => {
   it('does not let a prefix-stripped rendering widen what a role may see', () => {
     // `suppliers` is staff-only. The relaxed matching is about spelling, never about permission.
     expect(findProductHelp('איך אני מוסיף ספק חדש?', 'accountant')).toEqual([]);
+  });
+
+  it('answers an unresolved-supplier question with the document review guide for staff only', () => {
+    const question = 'המסמך לא מצא ספק, מה עושים?';
+    const owner = findProductHelp(question, 'owner');
+    const office = findProductHelp(question, 'office');
+    expect(owner.map((entry) => entry.id)).toContain('resolve_document_supplier');
+    expect(office.map((entry) => entry.id)).toContain('resolve_document_supplier');
+    expect(productHelpPath(owner.find((entry) => entry.id === 'resolve_document_supplier')!))
+      .toBe('/documents');
+    expect(findProductHelp(question, 'accountant')).toEqual([]);
   });
 });

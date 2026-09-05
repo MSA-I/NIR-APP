@@ -239,13 +239,15 @@ describe('a document being read makes exactly one claim that it is being read', 
     snapshot.stage = 'processing';
     renderSnapshot(snapshot);
 
-    // ZERO printed copies now, not one (owner ruling 25.08.2026: the bar replaces the numbers).
-    // The count is still delivered where a determinate progressbar is supposed to carry it — the
-    // `aria-valuetext` asserted on the next line. `DocumentStatusBadge` renders the very same
-    // string from `progressLabel` for the folder and the upload centre, which have no strip, and
-    // it stays suppressed here; that is the third assertion.
-    expect(screen.queryAllByText('עמוד 3 מתוך 12')).toHaveLength(0);
-    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuetext', 'עמוד 3 מתוך 12');
+    // EXACTLY ONE printed copy, and the count moved back into the words on 04.09.2026. Owner ruling
+    // 25.08.2026 — "the bar replaces the numbers" — was about a DETERMINATE bar drawing the same
+    // count the sentence beside it printed. The bar is indeterminate now and measures nothing, so
+    // there is no second voice; a sentence that never changed while twelve pages were read is what
+    // the rebuild was asked to remove. `DocumentStatusBadge` renders the very same string from
+    // `progressLabel` for the folder and the upload centre, which have no strip, and it stays
+    // suppressed here — that is what keeps the count printed once rather than twice.
+    expect(screen.queryAllByText(/עמוד 3 מתוך 12/)).toHaveLength(1);
+    expect(screen.queryByRole('progressbar')).toBeNull();
     expect(document.querySelectorAll('[data-document-status-progress]')).toHaveLength(0);
   });
 
@@ -254,7 +256,7 @@ describe('a document being read makes exactly one claim that it is being read', 
     snapshot.stage = 'processing';
     renderSnapshot(snapshot);
 
-    expect(screen.getByRole('list', { name: 'שלבי התהליך' })).toBeInTheDocument();
+    expect(screen.getByTestId('document-processing-progress')).toBeInTheDocument();
     // The three that used to stand beside it.
     expect(screen.queryByText('בעיבוד')).toBeNull();
     expect(screen.queryByText(/מוצג כרגע לקריאה בלבד/)).toBeNull();
@@ -301,7 +303,7 @@ describe('a job that stopped is not also promised an update', () => {
 });
 
 describe('one level-one heading per screen', () => {
-  it('leaves the h1 to the page and names its own card instead', () => {
+  it('leaves the h1 to the page and lets the live progress sentence name its own state', () => {
     const snapshot = withJob(READING);
     snapshot.stage = 'processing';
     renderSnapshot(snapshot);
@@ -310,7 +312,19 @@ describe('one level-one heading per screen', () => {
     // a scan is still pending and this component does not mount. Two of them on one page is a
     // WCAG 2.1 AA defect against PRODUCT.md's target.
     expect(screen.queryByRole('heading', { level: 1 })).toBeNull();
-    expect(screen.getByRole('heading', { level: 2, name: 'מצב המסמך' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { level: 2, name: 'מצב המסמך' })).toBeNull();
+    expect(screen.getByTestId('document-processing-progress')).toBeInTheDocument();
+  });
+
+  it('renders a settled state as a compact row rather than a card', () => {
+    const snapshot = snapshotWith(0.95);
+    snapshot.stage = 'review';
+    renderSnapshot(snapshot);
+
+    const status = screen.getByTestId('document-static-status');
+    expect(status).toHaveTextContent('מצב המסמך');
+    expect(status).toHaveTextContent('נדרשת בדיקה');
+    expect(status).not.toHaveClass('card');
   });
 });
 
@@ -340,23 +354,19 @@ describe('שחזור מסמך שנכשל', () => {
 /**
  * What a phone meets first on a review screen.
  *
- * Below `xl` the two columns collapse into one, and the source viewer is a full-width page image
- * with no height cap — roughly 750px of scan at 428px wide. Opening an invoice review used to mean
- * scrolling past all of it before the first word about what the machine concluded. The decision
- * column now comes first visually for every document kind, which is the treatment the price list
- * already had; DOM order is untouched, so the reading order a screen reader follows is unchanged
- * and the source is still one scroll away, on the same screen.
+ * Below `xl` the two columns collapse into one. The source is the evidence being approved, so it
+ * comes first on a phone; the decision follows it. Desktop keeps source and decision side by side.
  */
-describe('בצר — ההחלטה לפני הראיה', () => {
-  it('מסדר את עמודת ההחלטה ראשונה מתחת ל-xl ומחזיר את הסדר המקורי ברוחב מלא', () => {
+describe('בנייד — הראיה לפני ההחלטה', () => {
+  it('מסדר את עמודת המקור ראשונה מתחת ל-xl ושומר את שני הטורים ברוחב מלא', () => {
     renderWorkspace(0.94);
 
     const source = screen.getByTestId('document-source-viewer').parentElement!;
     const decision = screen.getByTestId('document-review-proposals').parentElement!;
 
-    expect(source.className).toContain('order-2');
+    expect(source.className.split(/\s+/)).toContain('order-1');
     expect(source.className).toContain('xl:order-1');
-    expect(decision.className).toContain('order-1');
+    expect(decision.className.split(/\s+/)).toContain('order-2');
     expect(decision.className).toContain('xl:order-2');
     // DOM order is the thing that did not move: source first, exactly as before.
     expect(source.compareDocumentPosition(decision) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();

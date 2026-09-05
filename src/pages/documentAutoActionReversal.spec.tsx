@@ -90,7 +90,9 @@ const rpcCalls: Array<Record<string, unknown>> = [];
 const traffic = (autoActions: unknown[] = [AUTO_ACTION]) => [
   http.get(`${SUPABASE_URL}/rest/v1/documents`, () => HttpResponse.json(DOCS)),
   http.get(`${SUPABASE_URL}/rest/v1/suppliers`, () => HttpResponse.json([])),
+  http.post(`${SUPABASE_URL}/rest/v1/rpc/organization_usage_snapshot`, () => HttpResponse.json([])),
   http.post(`${SUPABASE_URL}/rest/v1/rpc/get_document_processing_statuses`, () => HttpResponse.json([])),
+  http.post(`${SUPABASE_URL}/rest/v1/rpc/get_document_folder_review_states`, () => HttpResponse.json([])),
   http.get(`${SUPABASE_URL}/rest/v1/document_auto_actions`, () => HttpResponse.json(autoActions)),
   http.post(`${SUPABASE_URL}/rest/v1/rpc/revert_document_auto_action`, async ({ request }) => {
     rpcCalls.push(await request.json() as Record<string, unknown>);
@@ -125,19 +127,19 @@ describe('מה השורה אומרת על מסמך ששויך אוטומטית',
     renderGallery('en');
 
     expect(await screen.findAllByText('Assigned automatically')).not.toHaveLength(0);
-    expect(screen.getAllByText(/at unknown confidence/)).not.toHaveLength(0);
+    expect(screen.getAllByText(/without human approval/)).not.toHaveLength(0);
+    expect(screen.getAllByText(/identification level remains in the audit log/i)).not.toHaveLength(0);
     expect(screen.getAllByText(MACHINE)).not.toHaveLength(0);
   });
 
-  it('אומרת שהחשבונית נוצרה על ידי המערכת, ברמת הביטחון שבה פעלה', async () => {
+  it('אומרת שהחשבונית נוצרה ללא אישור אדם ושומרת את רמת הזיהוי ביומן', async () => {
     ROLE.current = 'owner';
     server.use(...traffic());
     renderGallery();
     expect(await screen.findAllByText('שויך אוטומטית')).not.toHaveLength(0);
-    // The confidence is a sentence a person can read, not a raw 0.97 — and it is a SIBLING of the
-    // badge rather than a title attribute, because a tooltip does not exist on touch.
-    expect(screen.getAllByText(/ברמת ביטחון 97%/)).not.toHaveLength(0);
+    expect(screen.getAllByText(/רמת הזיהוי נשמרת ביומן הביקורת/)).not.toHaveLength(0);
     expect(screen.getAllByText(/ללא אישור אדם/)).not.toHaveLength(0);
+    expect(screen.queryAllByText(/ביטחון.*%/)).toHaveLength(0);
   });
 
   // The control, and the assertion that makes the one above mean something: the colleague's
@@ -149,25 +151,22 @@ describe('מה השורה אומרת על מסמך ששויך אוטומטית',
     // Waiting on the MACHINE badge, not on the file name: the documents and the autonomy ledger
     // are two queries, and the rows render before the second answers. Asserting the absence of a
     // badge that has not loaded yet would pass against a screen that never labels anything.
-    const machineBadges = await screen.findAllByText('שויך אוטומטית');
-    const humanBadges = screen.getAllByText('שויך לחשבונית');
-    // Both rows are filed to an invoice and differ in nothing else, so the counts being EQUAL and
-    // non-zero is the claim: exactly one of the two is labelled machine-written. (Each badge
-    // renders once per surface — desktop table and mobile card — which is why this compares the
-    // two counts rather than pinning either to a literal.)
-    expect(humanBadges.length).toBeGreaterThan(0);
-    expect(machineBadges).toHaveLength(humanBadges.length);
+    await screen.findAllByText('שויך אוטומטית');
+    const humanStatuses = screen.getAllByTestId('document-processing-status')
+      .filter((status) => status.getAttribute('data-document-id') === 'd-human');
+    expect(humanStatuses.length).toBeGreaterThan(0);
+    for (const status of humanStatuses) {
+      expect(status).toHaveTextContent('משויך');
+      expect(status).not.toHaveTextContent('שויך אוטומטית');
+    }
   });
 
-  // A confidence the decision record does not carry is UNKNOWN and says so. Never 0% — "the system
-  // was 0% sure and created this invoice anyway" is a sentence about the software that is not true,
-  // and the constitution's rule about dashes instead of zeros applies hardest here.
-  it('ביטחון שאינו ידוע מוצג כ"לא ידועה", לא כאפס', async () => {
+  it('גם כשהביטחון אינו ידוע מוצג אותו פיקוח בלי להמציא אחוז', async () => {
     ROLE.current = 'owner';
     server.use(...traffic([{ ...AUTO_ACTION, decision: { decision_confidence: null } }]));
     renderGallery();
     await screen.findAllByText('שויך אוטומטית');
-    expect(screen.getAllByText(/ברמת ביטחון לא ידועה/)).not.toHaveLength(0);
+    expect(screen.getAllByText(/רמת הזיהוי נשמרת ביומן הביקורת/)).not.toHaveLength(0);
     expect(screen.queryAllByText(/ברמת ביטחון 0%/)).toHaveLength(0);
   });
 });
@@ -222,9 +221,10 @@ describe('הדיאלוג של ביטול השיוך', () => {
 
     const dialog = await screen.findByRole('dialog');
     expect(dialog).toHaveTextContent('ביטול השיוך האוטומטי');
-    // All four things the person needs before undoing a financial record: what the machine did, at
-    // what confidence, what the undo changes, and what survives it.
-    expect(dialog).toHaveTextContent(/ברמת ביטחון 97%/);
+    // The person sees what the machine did, where its identification level remains, what the undo
+    // changes, and what survives it — without exposing a raw confidence percentage.
+    expect(dialog).toHaveTextContent(/רמת הזיהוי נשמרת ביומן הביקורת/);
+    expect(dialog).not.toHaveTextContent(/ביטחון.*%/);
     expect(dialog).toHaveTextContent(/הרשומה נשמרת לביקורת/);
     expect(dialog).toHaveTextContent(/לא מפני שהפער נבדק/);
     expect(dialog).toHaveTextContent(/רישום היצירה ורישום הביטול נשמרים שניהם/);

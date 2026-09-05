@@ -110,6 +110,19 @@ export interface DocumentUploadResume {
   clientUploadKey: string;
 }
 
+interface DocumentRetryEntry {
+  file: File;
+  resume: DocumentUploadResume | null;
+  retryable: boolean;
+  storedSafely: boolean;
+}
+
+interface DocumentRetryBatch {
+  id: number;
+  entries: DocumentRetryEntry[];
+  summary: UploadBatchSummary;
+}
+
 // A retry from QuickCapture, the inbox modal, an attachment panel or the global Upload Center
 // receives the same File object. Keep its safe resume point here, at the upload boundary, so every
 // caller resumes registration/enqueue and none of them has to remember how storage was reached.
@@ -739,14 +752,14 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   /**
-   * The safe resume point per file (the money rule): once an object is stored, every
-   * retry — this screen's button or the Upload Center's — redoes only the failed step
-   * against the same stored path instead of minting a new Date.now() path.
+   * The Upload Center can retry while this component is mounted, so it still needs the fast
+   * per-File lookup. The visible retry queue below also stores the same resume value in its own
+   * batch record: starting a new batch cannot overwrite the key of an older failed one.
    */
   const resumeRef = useRef(new Map<File, DocumentUploadResume>());
   const registeredSeenRef = useRef(new Set<string>());
-  const [retryFiles, setRetryFiles] = useState<File[]>([]);
-  const [uploadSummary, setUploadSummary] = useState<UploadBatchSummary | null>(null);
+  const retryBatchIdRef = useRef(0);
+  const [retryBatches, setRetryBatches] = useState<DocumentRetryBatch[]>([]);
   const [screening, setScreening] = useState(false);
   const [weakPick, setWeakPick] = useState<ScreenedPick | null>(null);
   const [locallyQueued, setLocallyQueued] = useState(0);
@@ -781,8 +794,44 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
     if (changed && !busyRef.current) void refetch();
   }), [refetch]);
 
-  async function uploadFiles(files: File[], previousSummary: UploadBatchSummary | null = null) {
+  function retainFailureBatch(
+    source: DocumentRetryBatch | null,
+    attempted: readonly File[],
+    summary: UploadBatchSummary,
+    failedEntries: DocumentRetryEntry[],
+  ) {
+    const attemptedSet = new Set(attempted);
+    const retainedEntries = source
+      ? source.entries.filter((entry) => !attemptedSet.has(entry.file))
+      : [];
+    const entries = [...retainedEntries, ...failedEntries];
+    setRetryBatches((current) => {
+      if (source) {
+        if (summary.failed.length === 0) return current.filter((batch) => batch.id !== source.id);
+        return current.map((batch) => batch.id === source.id ? { ...batch, entries, summary } : batch);
+      }
+      if (summary.failed.length === 0) return current;
+      retryBatchIdRef.current += 1;
+      return [...current, { id: retryBatchIdRef.current, entries, summary }];
+    });
+  }
+
+  function discardRetryBatch(batch: DocumentRetryBatch) {
+    // Discarding means "stop offering this browser retry". It never deletes an object or a
+    // registered document; stored originals retain exactly the server-side state they reached.
+    for (const entry of batch.entries) resumeRef.current.delete(entry.file);
+    setRetryBatches((current) => current.filter((candidate) => candidate.id !== batch.id));
+  }
+
+  async function uploadFiles(
+    files: File[],
+    previousSummary: UploadBatchSummary | null = null,
+    retryBatch: DocumentRetryBatch | null = null,
+  ) {
     if (!files.length || !profile) return;
+    const explicitResumes = new Map(
+      retryBatch?.entries.map((entry) => [entry.file, entry.resume] as const) ?? [],
+    );
     setBusy(true);
     busyRef.current = true;
     try {
@@ -792,7 +841,6 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
       if (receiptPhotoMustRemainQueued(entityType, navigator.onLine !== false, receiptPending)) {
         for (const file of files) await queuePendingDocumentPhoto(entityType, entityId, documentKind, file);
         setLocallyQueued((count) => count + files.length);
-        setUploadSummary(null);
         await offlineQueue.refresh();
         toast(files.length === 1
           ? t('fileUpload.text_7')
@@ -805,7 +853,7 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
         (file) => uploadDocument(profile.org_id, entityType, entityId, file, {
           ...metadata,
           enqueueProcessing: canMutateDocuments,
-        }, { resume: resumeRef.current.get(file) ?? null }),
+        }, { resume: explicitResumes.get(file) ?? resumeRef.current.get(file) ?? null }),
         {
           t,
           errorText,
@@ -852,20 +900,24 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
         setLocallyQueued((count) => count + locallyQueuedForSync.size);
         await offlineQueue.refresh();
       }
-      const failed = failures
-        .filter(({ item, retryable }) => !locallyQueuedForSync.has(item) && !locallyNeedsAttention.has(item) && retryable)
-        .map(({ item }) => item);
+      const visibleFailures = failures
+        .filter(({ item }) => !locallyQueuedForSync.has(item) && !locallyNeedsAttention.has(item));
+      const failedEntries = visibleFailures.map((failure) => ({
+        file: failure.item,
+        resume: failure.resume ?? explicitResumes.get(failure.item) ?? null,
+        retryable: failure.retryable,
+        storedSafely: failure.resume !== null || failure.registered,
+      }));
       const registered = failures.filter(({ registered: isRegistered }) => isRegistered).length;
-      setRetryFiles(failed);
       const summary = mergeDocumentUploadSummary(previousSummary, files, {
         succeeded: result.succeeded,
         failed: result.failed.filter(({ item }) => !locallyQueuedForSync.has(item)),
       });
-      setUploadSummary(summary);
+      retainFailureBatch(retryBatch, files, summary, failedEntries);
       if (result.succeeded.length || registered) await refetch();
       if (summary.failed.length) {
         const succeededLabel = canMutateDocuments ? t('fileUpload.text_9') : t('fileUpload.text_10');
-        const detail = failures[0] ? ` ${failures[0].code}` : '';
+        const detail = failures[0] ? ` ${errorText(new Error(failures[0].code))}` : '';
         toast(t('fileUpload.batchPartial', { succeeded: summary.succeeded.length, label: succeededLabel, failed: summary.failed.length }) + detail, 'error');
       } else if (locallyQueuedForSync.size) {
         toast(t('fileUpload.filesQueuedLocally', { count: locallyQueuedForSync.size }));
@@ -876,11 +928,16 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
       }
     } catch (e) {
       const failure = documentUploadFailure(e);
-      setRetryFiles(failure.retryable ? files : []);
-      setUploadSummary(mergeDocumentUploadSummary(previousSummary, files, {
+      const summary = mergeDocumentUploadSummary(previousSummary, files, {
         succeeded: [],
         failed: files.map((item) => ({ item, error: e })),
-      }));
+      });
+      retainFailureBatch(retryBatch, files, summary, files.map((file) => ({
+        file,
+        resume: failure.resume ?? explicitResumes.get(file) ?? null,
+        retryable: failure.retryable,
+        storedSafely: failure.resume !== null || failure.registered,
+      })));
       toast(errorText(e), 'error');
     } finally {
       setBusy(false);
@@ -896,7 +953,6 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
    */
   async function onPick(files: FileList | null) {
     if (!files?.length) return;
-    setUploadSummary(null);
     setScreening(true);
     let pick: ScreenedPick;
     try {
@@ -951,7 +1007,10 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-        <span className="text-sm font-medium text-ink-soft flex items-center gap-1.5"><Paperclip size={ICON.sm} /> {t('fileUpload.text_11')}</span>
+        <div>
+          <span className="text-sm font-medium text-ink-soft flex items-center gap-1.5"><Paperclip size={ICON.sm} /> {t('fileUpload.text_11')}</span>
+          <p className="mt-1 text-xs text-ink-muted">{t('fileUpload.uploadLimitHint')}</p>
+        </div>
         {/* The "סוג" select that stood here — delivery note / invoice / other, chosen before the
             camera opened — is gone. This is the receiving screen: the person holding the phone is
             standing at the truck with the paper in the other hand, and the one question they
@@ -960,7 +1019,7 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
             still seeds a value from the entity, and 0084's trigger replaces it with what the
             document says. */}
         {canUploadNow && <div className="flex flex-wrap items-center gap-2">
-          <button className="btn-secondary btn-sm" disabled={busy || screening || retryFiles.length > 0} onClick={() => inputRef.current?.click()}>
+          <button className="btn-secondary btn-sm" disabled={busy || screening} onClick={() => inputRef.current?.click()}>
             {busy || screening ? <Loader2 size={ICON.sm} className="animate-spin" /> : capture ? <Camera size={ICON.sm} /> : <Paperclip size={ICON.sm} />}
               {capture ? t('fileUpload.text_12') : t('fileUpload.text_13')}
           </button>
@@ -986,26 +1045,35 @@ export function DocumentList({ entityType, entityId, canUpload = true, capture }
           </span>
         </Note>
       )}
-      {uploadSummary && (
-        <Note tone={uploadSummary.failed.length ? 'alert' : 'done'} className="mb-2">
-          <div role="status">
-            <div>
-              <span className="num">{uploadSummary.succeeded.length}</span> {canMutateDocuments ? t('fileUpload.text_14') : t('fileUpload.text_15')} ·{' '}
-              <span className="num">{uploadSummary.failed.length}</span> {t('fileUpload.notCompleted')}
-            </div>
-            {uploadSummary.failed.length > 0 && (
-              <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
-                <span className="text-xs">{t('fileUpload.failedList', { files: uploadSummary.failed.join(', ') })}</span>
-                {retryFiles.length > 0 && (
-                  <button type="button" className="btn-ghost btn-sm" disabled={busy} onClick={() => void uploadFiles(retryFiles, uploadSummary)}>
+      {retryBatches.map((batch) => {
+        const retryableEntries = batch.entries.filter((entry) => entry.retryable);
+        return (
+          <Note key={batch.id} tone="alert" className="mb-2">
+            <div role="status" className="min-w-0 flex-1">
+              <div>
+                <span className="num">{batch.summary.succeeded.length}</span> {canMutateDocuments ? t('fileUpload.text_14') : t('fileUpload.text_15')} ·{' '}
+                <span className="num">{batch.summary.failed.length}</span> {t('fileUpload.notCompleted')}
+              </div>
+              <div className="mt-1 text-xs">{t('fileUpload.failedList', { files: batch.summary.failed.join(', ') })}</div>
+              {batch.entries.some((entry) => entry.storedSafely) && (
+                <div className="mt-1 text-xs">{t('fileUpload.retrySourceRetained')}</div>
+              )}
+              <div className="mt-2 flex flex-wrap gap-2">
+                {retryableEntries.length > 0 && (
+                  <button type="button" className="btn-ghost btn-sm" disabled={busy}
+                    onClick={() => void uploadFiles(retryableEntries.map((entry) => entry.file), batch.summary, batch)}>
                     {t('fileUpload.text_16')}
                   </button>
                 )}
+                <button type="button" className="btn-ghost btn-sm" disabled={busy}
+                  onClick={() => discardRetryBatch(batch)}>
+                  {t('fileUpload.discardRetry')}
+                </button>
               </div>
-            )}
-          </div>
-        </Note>
-      )}
+            </div>
+          </Note>
+        );
+      })}
       {error && docs && <ErrorNote message={error} />}
       {processing.error && docs && <ErrorNote message={processing.error} />}
       {fetching && docs && <div className="mb-2 text-xs text-ink-muted" role="status">{t('fileUpload.text_17')}</div>}

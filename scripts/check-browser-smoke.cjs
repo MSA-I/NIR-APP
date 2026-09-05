@@ -501,8 +501,13 @@ async function roleAndViewportMatrix(browser) {
 
 async function quickActionsContract(browser) {
   const roleLabels = {
-    owner: ['הזמנה חדשה', 'מרכז הבקרה', 'צילום מסמך', 'קבלת סחורה', 'בקרת מסמכים'],
-    office: ['הזמנה חדשה', 'מרכז הבקרה', 'צילום מסמך', 'קבלת סחורה', 'מסמכים'],
+    // Both procurement roles get the SAME five doors from 04.09.2026 (owner report: a first-day
+    // user understood nothing on this bar but the camera). `בקרת מסמכים` is the operator's queue
+    // and `קבלת סחורה` can do nothing before an order exists; both kept their place in the drawer.
+    // What took their slots is where the camera's output lands and the list without which no other
+    // action on this bar produces anything.
+    owner: ['מרכז הבקרה', 'הזמנה חדשה', 'צילום מסמך', 'מסמכים', 'ספקים'],
+    office: ['מרכז הבקרה', 'הזמנה חדשה', 'צילום מסמך', 'מסמכים', 'ספקים'],
     // 'תשלומים לביצוע', not 'תשלומים'. The bar used to hand-write the second, which is
     // `/payments`'s canonical name, while its own target is `/pay` — so for the ONE role that
     // holds both screens, the bar's "תשלומים" opened the execution queue and the drawer's
@@ -512,8 +517,8 @@ async function quickActionsContract(browser) {
     accountant: ['מרכז הבקרה', 'חשבוניות', 'תשלומים לביצוע'],
   };
   const roleTargets = {
-    owner: ['/orders/new?fresh=1', '/dashboard', null, '/receiving', '/documents/operations'],
-    office: ['/orders/new?fresh=1', '/dashboard', null, '/receiving', '/documents'],
+    owner: ['/dashboard', '/orders/new?fresh=1', null, '/documents', '/suppliers'],
+    office: ['/dashboard', '/orders/new?fresh=1', null, '/documents', '/suppliers'],
     accountant: ['/dashboard', '/invoices', '/pay'],
   };
 
@@ -606,13 +611,13 @@ async function quickActionsContract(browser) {
           await page.goto(`${baseURL}${route}`);
           await settle(page);
           await assertFullMobileActions(page, route,
-            ['order', 'dashboard', 'capture', 'receive', 'document-operations']);
+            ['dashboard', 'order', 'capture', 'documents', 'suppliers']);
         }
 
         await page.goto(`${baseURL}/receiving/f0000000-0000-4000-8000-000000000011`);
         await settle(page);
         await assertFullMobileActions(page, 'receiving detail',
-          ['order', 'dashboard', 'capture', 'receive', 'document-operations']);
+          ['dashboard', 'order', 'capture', 'documents', 'suppliers']);
         assert.equal(await page.locator('.phone-taskbar').count(), 1, 'receiving detail lost its contextual phone taskbar');
       }
     } finally {
@@ -930,7 +935,7 @@ async function receivingAccessibility(browser) {
     await page.getByRole('button', { name: 'הגדלת הכמות שהתקבלה עבור מוצר בדיקת נגישות' }).waitFor();
     // The office receiver keeps the complete role-aware bar on the exact screen under audit.
     await assertFullMobileActions(page, 'receiving detail accessibility',
-      ['order', 'dashboard', 'capture', 'receive', 'documents']);
+      ['dashboard', 'order', 'capture', 'documents', 'suppliers']);
     assert.equal(await page.locator('.phone-taskbar').count(), 1, 'receiving detail lost its contextual phone taskbar');
     // Same repair as the order-approval claim below: the phrase this looked for exists nowhere,
     // so the assertion could not fail. The reason box a routine receipt would grow is
@@ -1723,22 +1728,34 @@ async function orderSupplierComparison(browser) {
 }
 
 async function paymentRequestNamesAndModalStack(browser) {
-  const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 1024, height: 768 } });
+  const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 1440, height: 900 } });
   const supplierId = '94000000-0000-4000-8000-000000000001';
   const invoiceId = '94000000-0000-4000-8000-000000000011';
+  let invoiceReviewStatus = 'pending';
   const request = {
-    id: 'p4-request', org_id: 'p4-org', supplier_id: supplierId, number: 7001, amount: 850,
+    id: 'p4-request', org_id: 'p4-org', supplier_id: supplierId, number: 7001, amount: 850, currency: 'ILS',
     due_date: '2026-07-30', status: 'draft', notes: 'בדיקת שכבות', created_at: '2026-07-22T08:00:00Z',
     supplier: { name: 'ספק בדיקת שכבות' },
   };
-  await context.route('**/rest/v1/payment_requests?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [request] }));
-  await context.route('**/rest/v1/payment_request_invoices?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [] }));
+  await context.route('**/rest/v1/payment_requests?**', (route) => {
+    const url = new URL(route.request().url());
+    return route.fulfill({ status: 200, headers: jsonHeaders, json: url.searchParams.has('amount') ? [] : [request] });
+  });
+  await context.route('**/rest/v1/payment_request_invoices?**', (route) => route.fulfill({
+    status: 200,
+    headers: jsonHeaders,
+    json: [{
+      invoice_id: invoiceId,
+      amount_allocated: 850,
+      invoice: { invoice_number: 'INV-P4-01', invoice_date: '2026-07-01', review_status: invoiceReviewStatus },
+    }],
+  }));
   await context.route('**/rest/v1/financial_supplier_directory?**', (route) => route.fulfill({
     status: 200,
     headers: jsonHeaders,
     json: [{ id: supplierId, name: 'ספק בדיקת שכבות', tax_id: null, payment_terms: null, status: 'active', bank_details: null }],
   }));
-  await context.route('**/rest/v1/invoices?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [{ id: invoiceId, supplier_id: supplierId, invoice_number: 'INV-P4-01', invoice_date: '2026-07-01', total_amount: 850, currency: 'ILS', review_status: 'approved' }] }));
+  await context.route('**/rest/v1/invoices?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [{ id: invoiceId, supplier_id: supplierId, invoice_number: 'INV-P4-01', invoice_date: '2026-07-01', total_amount: 850, currency: 'ILS', review_status: invoiceReviewStatus }] }));
   await context.route('**/rest/v1/invoice_balances_by_currency?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [{ invoice_id: invoiceId, currency: 'ILS', balance_in_currency: 850 }] }));
   await context.route('**/rest/v1/bank_transactions?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [] }));
   await context.route('**/rest/v1/credit_requests?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [] }));
@@ -1749,14 +1766,32 @@ async function paymentRequestNamesAndModalStack(browser) {
       requested_invoice_count: 1,
       visible_invoice_count: 1,
       paid_invoice_count: 0,
-      unapproved_invoice_count: 0,
+      unapproved_invoice_count: invoiceReviewStatus === 'approved' ? 0 : 1,
+      over_allocated_invoice_count: 0,
+      currency: 'ILS',
       amount_matches_open_balance: true,
       similar_bank_transfer_check: 'unavailable',
-      open_credit_total: 0,
+      open_credit_total_by_currency: [],
     },
   }));
   const page = await context.newPage();
   captureConsole(page, 'payment-request-modal');
+  const capturePaymentRequestViewport = async (dialog, fileName, width, height) => {
+    await page.setViewportSize({ width, height });
+    await page.waitForTimeout(100);
+    const metrics = await page.evaluate(() => ({
+      documentWidth: document.documentElement.scrollWidth,
+      clientWidth: document.documentElement.clientWidth,
+    }));
+    const overflow = metrics.documentWidth - metrics.clientWidth;
+    report.viewports.push({
+      role: 'owner', label: fileName.replace(/\.png$/, ''), width, height, ...metrics, overflow,
+    });
+    if (width === 390) assert(overflow <= 1, `${fileName}: horizontal document overflow ${overflow}px`);
+    assert(await dialog.isVisible(), `${fileName}: payment-request dialog is not visible`);
+    await page.screenshot({ path: path.join(outDir, fileName), fullPage: true });
+    report.screenshots.push(fileName);
+  };
   try {
     await login(page, 'owner');
     await page.goto(`${baseURL}/payment-requests`);
@@ -1765,6 +1800,13 @@ async function paymentRequestNamesAndModalStack(browser) {
     await opener.click();
     const parent = page.getByRole('dialog', { name: /דרישת תשלום #7001/ });
     await parent.waitFor();
+    const dependency = parent.getByText(/ממתינה לאישור החשבונית INV-P4-01 לתשלום/);
+    await dependency.waitFor();
+    assert.match(await dependency.innerText(), /INV-P4-01/, 'approval dependency did not name its invoice');
+    await capturePaymentRequestViewport(parent, 'payment-request-dependency-1440.png', 1440, 900);
+    await capturePaymentRequestViewport(parent, 'payment-request-dependency-390.png', 390, 844);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.waitForTimeout(100);
     await parent.getByRole('button', { name: 'ביטול', exact: true }).click();
     const child = page.getByRole('dialog', { name: 'ביטול דרישת תשלום' });
     await child.waitFor();
@@ -1780,6 +1822,7 @@ async function paymentRequestNamesAndModalStack(browser) {
     await page.waitForFunction((node) => document.activeElement === node, openerHandle, { timeout: 3_000 });
     assert(await opener.evaluate((node) => document.activeElement === node), 'nested modal did not restore opener focus');
 
+    invoiceReviewStatus = 'approved';
     const createButton = page.getByRole('button', { name: 'דרישה חדשה' });
     await createButton.click();
     const create = page.getByRole('dialog', { name: 'דרישת תשלום חדשה' });
@@ -1787,7 +1830,20 @@ async function paymentRequestNamesAndModalStack(browser) {
     const checkbox = create.getByRole('checkbox', { name: 'בחירת חשבונית INV-P4-01 של ספק בדיקת שכבות להקצאה בדרישת התשלום' });
     await checkbox.waitFor({ timeout: 20_000 });
     await checkbox.check();
-    await create.getByRole('spinbutton', { name: 'סכום ההקצאה לחשבונית INV-P4-01 של ספק בדיקת שכבות' }).waitFor();
+    const amount = create.getByRole('spinbutton', { name: 'סכום ההקצאה לחשבונית INV-P4-01 של ספק בדיקת שכבות' });
+    await amount.waitFor();
+    await amount.fill('850.01');
+    const critical = create.locator('.note-alert').filter({ hasText: /הסכום שהוקצה לחשבונית INV-P4-01 גבוה מהיתרה הפתוחה שלה/ });
+    await critical.waitFor();
+    assert.match(await critical.innerText(), /INV-P4-01/, 'over-balance finding did not name its invoice');
+    const draft = create.getByRole('button', { name: 'שמירה כטיוטה חסומה — הסכום שהוקצה גבוה מהיתרה הפתוחה של החשבונית' });
+    const submit = create.getByRole('button', { name: 'השליחה לאישור חסומה — הסכום שהוקצה גבוה מהיתרה הפתוחה של החשבונית' });
+    assert(await draft.isDisabled(), 'over-balance draft save remained enabled');
+    assert(await submit.isDisabled(), 'over-balance approval submit remained enabled');
+    await capturePaymentRequestViewport(create, 'payment-request-overbalance-1440.png', 1440, 900);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await submit.scrollIntoViewIfNeeded();
+    await capturePaymentRequestViewport(create, 'payment-request-overbalance-390.png', 390, 844);
     await page.keyboard.press('Escape');
     await create.waitFor({ state: 'hidden' });
   } finally {
@@ -2492,7 +2548,9 @@ async function documentOcrAcceptance(browser) {
     await review.locator('[data-testid="document-review-proposals"]').waitFor();
     assert.equal(await review.getByRole('button', { name: 'אישור הסוג המוצע' }).count(), 0,
       'document review still requires manual type approval');
-    await review.getByText('המערכת מסווגת את המסמך אוטומטית. אין צורך באישור ידני.').waitFor();
+    const typeRow = review.locator('[data-testid="document-review-proposals"]');
+    await typeRow.getByRole('heading', { name: 'סוג המסמך' }).waitFor();
+    await typeRow.getByText('סווג אוטומטית', { exact: true }).waitFor();
     // The per-block keyboard list, the bbox overlay and the grades left this screen with the
     // owner's second pass over it ("בפירוש אין צורך לראות את הקווים הכחולים הללו"). Asserted as an
     // absence, in a real browser, because that is the claim now: the viewer shows the document.
@@ -2641,7 +2699,7 @@ async function automaticPriceListAcceptance(browser) {
 
     const panel = page.locator('[data-testid="price-list-review-confirmation"]');
     await panel.waitFor({ timeout: 25_000 });
-    await panel.getByRole('heading', { name: 'קבלת קליטת מחירון' }).waitFor({ timeout: 25_000 });
+    await panel.getByRole('heading', { name: 'תוצאת קליטת המחירון' }).waitFor({ timeout: 25_000 });
     assert.equal(await page.locator('[data-testid="document-review-proposals"]').count(), 0,
       'the generic interpretation panels still precede the price-list result');
     assert.equal(await page.locator('[data-testid="document-export-preview"]').count(), 0,
@@ -2652,21 +2710,22 @@ async function automaticPriceListAcceptance(browser) {
     assert.match(body, /2 שורות נקלטו/, 'automatic price-list receipt did not report two accepted rows');
     assert.match(body, /1 שורות ממתינות/, 'automatic price-list receipt did not report one waiting row');
     assert.match(body, /1 מוצרים חדשים נוצרו/, 'automatic price-list receipt did not report the created product');
-    const detailsToggle = panel.locator('[data-testid="price-list-details-toggle"]');
-    assert.equal(await detailsToggle.getAttribute('aria-expanded'), 'false',
-      'the global price-list details control was not collapsed by default');
+    // "פרטים נוספים" was removed from this screen on 04.09.2026 (owner ruling). What is left on a
+    // FINISHED intake is one door named after what it shows: the rows the intake actually took.
+    assert.equal(await panel.locator('[data-testid="price-list-details-toggle"]').count(), 0,
+      'the generic details toggle came back to the price-list screen');
+    const showLines = panel.locator('[data-testid="price-list-show-lines"]');
+    await showLines.waitFor({ timeout: 25_000 });
     assert.equal(await panel.locator('#price-list-line-details article').count(), 0,
-      'price-list rows were visible before the global details control was opened');
+      'price-list rows were visible before anybody asked to see them');
 
     await auditAccessibility(page, 'ocr-price-list/1440');
     await page.screenshot({ path: path.join(outDir, 'ocr-price-list-collapsed-1440.png'), fullPage: true });
     report.screenshots.push('ocr-price-list-collapsed-1440.png');
 
-    await detailsToggle.click();
-    assert.equal(await detailsToggle.getAttribute('aria-expanded'), 'true',
-      'the global price-list details control did not open all rows');
+    await showLines.click();
     assert.equal(await panel.locator('#price-list-line-details article').count(), 3,
-      'the global price-list details control did not reveal every row');
+      'the receipt door did not reveal every row the intake took');
     const expandedBody = await panel.innerText();
     assert.match(expandedBody, /נקלטה אוטומטית/, 'the existing product row was not marked as automatically applied');
     assert.match(expandedBody, /מוצר חדש נוצר ונקלט/, 'the keyed new product row was not marked as created');
@@ -2679,15 +2738,15 @@ async function automaticPriceListAcceptance(browser) {
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.waitForTimeout(250);
-    await detailsToggle.click();
+    await panel.locator('[data-testid="price-list-details-close"]').click();
     assert.equal(await panel.locator('#price-list-line-details article').count(), 0,
-      'the global price-list details control did not collapse every row on mobile');
+      'the rows did not fold away again on mobile');
     const [mobileResultBox, mobileSourceBox] = await Promise.all([
       panel.boundingBox(),
       page.locator('[data-testid="document-source-viewer"]').boundingBox(),
     ]);
-    assert(mobileResultBox && mobileSourceBox && mobileResultBox.y < mobileSourceBox.y,
-      'the original document still appears before the latest price-list result on mobile');
+    assert(mobileResultBox && mobileSourceBox && mobileSourceBox.y < mobileResultBox.y,
+      'the latest price-list result still appears before the original document on mobile');
     await auditAccessibility(page, 'ocr-price-list/390');
     await page.screenshot({ path: path.join(outDir, 'ocr-price-list-collapsed-390.png'), fullPage: true });
     report.screenshots.push('ocr-price-list-collapsed-390.png');
@@ -2723,8 +2782,10 @@ async function manualPriceListConfirmation(browser) {
     await confirm.waitFor({ timeout: 25_000 });
     await page.locator('[data-testid="price-list-intake-summary"]').waitFor({ timeout: 25_000 });
 
+    // One sentence, counting what the reader can act on. It replaced six blocks that all described
+    // these same 22 lines (owner ruling 04.09.2026).
     assert.match(await panel.locator('[data-testid="price-list-intake-summary"]').innerText(),
-      /20 מתוך 22 שורות זוהו במלואן/,
+      /22 שורות במחירון · 20 מוכנות לקליטה · 2 דורשות מוצר חדש\./,
       'the confirmation screen did not report the twenty rows the server had already matched');
     // The screen must not claim an automatic intake on a document where none happened.
     const headerBody = await panel.innerText();
@@ -2742,11 +2803,14 @@ async function manualPriceListConfirmation(browser) {
       null,
       { timeout: 25_000 },
     ).catch(() => { throw new Error('the primary intake button never became clickable') });
-    assert.match(await confirm.innerText(), /קליטת\s*20\s*המחירים שנבחרו/,
+    assert.match(await confirm.innerText(), /עדכון\s*20\s*המחירים/,
       'the primary button did not carry the matched row count');
-    const detailsToggle = panel.locator('[data-testid="price-list-details-toggle"]');
-    assert.equal(await detailsToggle.getAttribute('aria-expanded'), 'false',
-      'the per-line form was open by default again');
+    // The month and the audit note are inside the line panel now, not between the reader and the
+    // one button; the generic toggle is gone entirely.
+    assert.equal(await panel.locator('[data-testid="price-list-details-toggle"]').count(), 0,
+      'the generic details toggle came back to the price-list screen');
+    assert.doesNotMatch(await panel.innerText(), /החודש קובע לאיזו גרסת מחירון/,
+      'the target-month field is standing in front of the primary decision again');
     assert.equal(await panel.locator('#price-list-line-details article').count(), 0,
       'per-line cards were rendered before anybody asked for them');
 
@@ -2774,7 +2838,7 @@ async function manualPriceListConfirmation(browser) {
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.waitForTimeout(250);
-    await detailsToggle.click();
+    await panel.locator('[data-testid="price-list-details-close"]').click();
     assert.equal(await panel.locator('#price-list-line-details article').count(), 0,
       'the per-line form did not fold away again on mobile');
     // auditAccessibility also fails on any horizontal overflow, which is the measurement that
@@ -3190,7 +3254,7 @@ async function priceListSupplierDoor(browser) {
  *  one precedence ladder here, so an active inbox document never renders a second "לא משויך" badge. */
 const DOCUMENT_HUMAN_STATE_LABELS = [
   'עיבוד תקוע', 'העיבוד נכשל', 'ממתין לעיבוד', 'בעיבוד', 'נדרשת בדיקה', 'לא משויך',
-  'שויך אוטומטית', 'משויך', 'שויך לחשבונית', 'שויך לקבלת סחורה',
+  'ספק לא מזוהה', 'שויך אוטומטית', 'משויך', 'שויך לחשבונית', 'שויך לקבלת סחורה',
 ];
 
 /** Pipeline-only labels that still must not leak into the everyday document surface. Labels such
@@ -3255,9 +3319,8 @@ async function documentVocabulary(browser) {
       assert.equal(gallery.includes(label), false,
         `the documents folder still shows the pipeline label «${label}»`);
     }
-    // The precondition, stated so the percentage scan below cannot quietly become vacuous or
-    // spuriously fail: a filing the MACHINE performed does name its confidence, on purpose
-    // (FilingBadge / autoActionDescription), and has its own scenario. This fixture contains none.
+    // This fixture contains no machine filing. The dedicated scenario below proves that a machine
+    // filing remains visibly supervised without exposing a raw confidence percentage.
     assert.equal(await page.getByText('שויך אוטומטית').count(), 0,
       'the fixture now contains an auto-applied document; this scenario measures the reading vocabulary only');
     assert.equal(/\d\s*%/.test(gallery), false,
@@ -3323,7 +3386,7 @@ const AUTO_ACTION_REASON = 'בדיקת שער: החשבונית שנוצרה א�
  * fixture writes one: an auto-applied row requires a real interpretation, a real invoice and the
  * autonomy flag on, and seeding that would mean a browser scenario manufacturing a financial
  * record. What is under test here is the SCREEN — that a machine-authored filing is
- * distinguishable from a colleague's, that it says at what confidence it acted, that the undo is
+ * distinguishable from a colleague's, that it says where the identification level is recorded, that the undo is
  * offered, that it cannot be confirmed without a reason, that the reason reaches the server, and
  * that the row stops claiming to be filed afterwards. The server's own refusals (role, second
  * reversal, allocated money) are `p14_apply_interpretation.sql`'s subject, not a browser's.
@@ -3382,8 +3445,10 @@ async function machineFiledDocument(browser) {
     // record a model wrote from one a colleague typed.
     assert(gallery.includes('ללא אישור אדם'),
       'the machine-filed row never says that no person approved it');
-    assert(gallery.includes('ברמת ביטחון 94%'),
-      'the machine-filed row does not name the confidence the machine acted on');
+    assert(gallery.includes('רמת הזיהוי נשמרת ביומן הביקורת'),
+      'the machine-filed row does not say where its identification level remains');
+    assert.equal(gallery.includes('ברמת ביטחון 94%'), false,
+      'the machine-filed row still exposes a raw confidence percentage');
     await page.screenshot({ path: path.join(outDir, 'document-auto-filed-1440.png'), fullPage: true });
     report.screenshots.push('document-auto-filed-1440.png');
 
@@ -3403,10 +3468,12 @@ async function machineFiledDocument(browser) {
     await dialog.waitFor();
     const dialogText = await dialog.evaluate((node) => node.textContent || '');
     // The four things the dialog owes a person before it offers the button: what the machine did,
-    // at what confidence, what the undo changes, and what survives it.
-    for (const sentence of ['ללא אישור אדם', 'ברמת ביטחון 94%', 'הרשומה נשמרת לביקורת', 'יומן הביקורת']) {
+    // where its identification level remains, what the undo changes, and what survives it.
+    for (const sentence of ['ללא אישור אדם', 'רמת הזיהוי נשמרת ביומן הביקורת', 'הרשומה נשמרת לביקורת', 'יומן הביקורת']) {
       assert(dialogText.includes(sentence), `the reversal dialog does not say «${sentence}»`);
     }
+    assert.equal(/ברמת ביטחון \d/.test(dialogText), false,
+      'the reversal dialog still exposes a raw confidence percentage');
     const confirm = dialog.getByRole('button', { name: 'ביטול השיוך', exact: true });
     // The reason box stopped gating the button on 11.08.2026 (owner: nobody reads these notes).
     // What is asserted below instead is the half that still matters: whatever a person types

@@ -17,6 +17,7 @@ export type DocumentStatusState =
    */
   | 'awaiting_scan'
   | 'review'
+  | 'supplier_unresolved'
   | 'unassigned'
   | 'assigned'
   | 'completed'
@@ -53,6 +54,8 @@ export interface DocumentUiStatus {
    */
   descriptionVars?: Record<string, string | number>;
   loading: boolean;
+  /** False for internal loading/unavailable/history markers that should draw no list badge. */
+  badgeVisible: boolean;
   countsAsUnassigned: boolean;
   priority: number;
   elapsedSeconds: number | null;
@@ -115,6 +118,8 @@ export interface DocumentStatusInput {
   /** Optional canonical answer from a future server contract. When present, it wins. */
   isStuck?: boolean | null;
   stuckReason?: string | null;
+  /** Batched server assessment for folder rows; never fetched once per row. */
+  reviewState?: 'supplier_unresolved' | 'blocked' | 'ready_for_approval' | null;
 }
 
 export const DOCUMENT_STUCK_JOB_AGE_SECONDS = 2 * 60 * 60;
@@ -122,7 +127,7 @@ export const DOCUMENT_STUCK_IDLE_SECONDS = 30 * 60;
 export const DOCUMENT_STUCK_ATTEMPT_COUNT = 8;
 
 const ACTIVE_RAW_STATUSES: ReadonlySet<string> = new Set([
-  'queued', 'leased', 'extracted', 'interpreting', 'processing',
+  'queued', 'awaiting_scan', 'leased', 'extracted', 'interpreting', 'processing',
 ]);
 
 /**
@@ -170,10 +175,8 @@ function isArchived(document: FilingDocument | null | undefined): boolean {
   return document?.entity_type === 'archive';
 }
 
-function assignedLabelKey(document: FilingDocument | null | undefined, autoAssigned: boolean): TKey {
+function assignedLabelKey(autoAssigned: boolean): TKey {
   if (autoAssigned) return 'documentStatus.assignedAutomatically';
-  if (document?.entity_type === 'invoice') return 'documentStatus.assignedToInvoice';
-  if (document?.entity_type === 'goods_receipt') return 'documentStatus.assignedToReceipt';
   return 'documentStatus.assignedGeneric';
 }
 
@@ -185,6 +188,7 @@ function result(
   loading = false,
   elapsedSeconds: number | null = null,
   progress: { done: number; total: number } | null = null,
+  badgeVisible = true,
 ): DocumentUiStatus {
   const priorities: Record<DocumentStatusState, number> = {
     stuck: 0,
@@ -194,6 +198,7 @@ function result(
     // ascending order on this column is what the office sorts by to find that work.
     awaiting_scan: 2,
     review: 2,
+    supplier_unresolved: 2,
     unassigned: 3,
     assigned: 4,
     completed: 4,
@@ -206,6 +211,7 @@ function result(
     tone,
     descriptionKey,
     loading,
+    badgeVisible,
     countsAsUnassigned: state === 'unassigned',
     priority: priorities[state],
     elapsedSeconds,
@@ -295,7 +301,8 @@ export function isDocumentProcessingStuck(input: DocumentStatusInput): boolean {
  */
 export function documentUiStatus(input: DocumentStatusInput): DocumentUiStatus {
   if (input.status === null && !input.job) {
-    return result('unavailable', 'documentStatus.statusLoading', 'idle', null);
+    return result('unavailable', 'documentStatus.statusLoading', 'idle', null,
+      false, null, null, false);
   }
   const status = input.job?.status ?? input.status ?? 'unprocessed';
   const evaluatedAt = input.evaluatedAt ?? Date.now();
@@ -303,7 +310,8 @@ export function documentUiStatus(input: DocumentStatusInput): DocumentUiStatus {
     ?? ageSeconds(input.job?.created_at, evaluatedAt);
 
   if (status === 'failed' && isSupersededProcessingFailure(input.job?.last_error_code)) {
-    return result('historical', 'documentStatus.replacedByNewAttempt', 'idle', documentProcessingFailureKey(input.job?.last_error_code));
+    return result('historical', 'documentStatus.replacedByNewAttempt', 'idle',
+      documentProcessingFailureKey(input.job?.last_error_code), false, null, null, false);
   }
   // Everything below picks a label first and a description second, and the description is allowed
   // to be empty. See DocumentUiStatus.description: a sentence that restates the badge is not
@@ -345,6 +353,15 @@ export function documentUiStatus(input: DocumentStatusInput): DocumentUiStatus {
       elapsed,
     );
   }
+  // Two campaigns added a rung here at once, and BOTH belong — the merge kept both and chose the
+  // order deliberately rather than by arrival. `awaiting_scan` sits first because it is EARLIER in
+  // the pipeline: a document whose scan has not been approved has not reached the point where a
+  // supplier could be resolved at all, so reporting "supplier unresolved" on it would name a step
+  // the person cannot yet take. A document that is only `supplier_unresolved` is unaffected.
+  if (input.reviewState === 'supplier_unresolved') {
+    return result('supplier_unresolved', 'documentStatus.supplierUnresolved', 'alert',
+      'documentStatus.supplierUnresolvedDescription');
+  }
   if (status === 'review') {
     return result('review', 'documentStatus.needsReview', 'await', 'documentStatus.needsReviewDescription');
   }
@@ -359,7 +376,7 @@ export function documentUiStatus(input: DocumentStatusInput): DocumentUiStatus {
   if (input.document) {
     // The only sentence worth carrying here is the supervisory one a machine filing brings with
     // it. "המסמך שויך ליעד עסקי" under a badge reading "שויך לחשבונית" said nothing twice.
-    const assigned = result('assigned', assignedLabelKey(input.document, input.autoAssigned ?? false), 'done',
+    const assigned = result('assigned', assignedLabelKey(input.autoAssigned ?? false), 'done',
       input.autoAssignmentDescriptionKey ?? null);
     return input.autoAssignmentDescriptionVars
       ? { ...assigned, descriptionVars: input.autoAssignmentDescriptionVars }
@@ -368,7 +385,8 @@ export function documentUiStatus(input: DocumentStatusInput): DocumentUiStatus {
   if (status === 'completed') {
     return result('completed', 'documentStatus.completed', 'done', null);
   }
-  return result('unavailable', 'documentStatus.statusUnavailable', 'idle', null);
+  return result('unavailable', 'documentStatus.statusUnavailable', 'idle', null,
+    false, null, null, false);
 }
 
 /**
@@ -386,23 +404,16 @@ export function documentStatusElapsed(
   return { key: 'documentStatus.elapsedDays', vars: { count: Math.floor(seconds / 86_400) } };
 }
 
-export function documentMatchesFilingFilter(
-  status: DocumentUiStatus,
-  filing: 'all' | 'unfiled' | 'linked',
-): boolean {
-  if (filing === 'all') return true;
-  if (filing === 'unfiled') return status.countsAsUnassigned;
-  return status.state === 'assigned' || status.state === 'completed';
-}
-
 /**
  * Old URLs used raw pipeline stages. They are ambiguous under canonical precedence: a queued job
  * may be stuck, a failed job may be superseded history, and an unprocessed document may already
- * be assigned. Therefore only current canonical filter tokens survive; old tokens fall back to
- * "all" instead of showing a control that claims a filter different from the rendered badges.
+ * be assigned. Therefore only current canonical filter tokens survive. `unfiled` is the one exact
+ * legacy mapping: `/inbox` meant the same visible bucket now named `unassigned`; `linked` remains
+ * ambiguous because it mixed assigned and completed states.
  */
 export function documentStatusFilterFromParam(value: string | null): DocumentStatusFilter | null {
   if (!value) return null;
+  if (value === 'unfiled') return 'unassigned';
   if (DOCUMENT_STATUS_FILTER_VALUES.has(value as DocumentStatusFilter)) return value as DocumentStatusFilter;
   return null;
 }

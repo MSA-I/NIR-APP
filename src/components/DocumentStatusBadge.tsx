@@ -8,6 +8,7 @@ export function DocumentStatusBadge({ status, ...attributes }: {
 } & Omit<React.ComponentPropsWithoutRef<'span'>, 'children'>) {
   const { t } = useT();
   const elapsedParts = documentStatusElapsed(status.elapsedSeconds);
+  if (!status.badgeVisible) return null;
   // The badge is where a status stops being a decision and becomes words, so it is where the keys
   // resolve. `documentStatus.ts` decides WHICH state this is; it no longer decides in what
   // language, which is what let the same module be read by a screen, a spec and a spreadsheet.
@@ -27,11 +28,19 @@ export function DocumentStatusBadge({ status, ...attributes }: {
         {status.state === 'stuck' && <AlertTriangle size={ICON.xs} className="shrink-0" aria-hidden="true" />}
         {t(status.labelKey)}
       </span>
+      {/* MERGE, 05.09.2026 — kept deliberately, and the coordinator should know it was a choice.
+          The other campaign moved BOTH of these out of the badge and into `DocumentProcessingProgress`,
+          which `DocumentReviewWorkspace` is the only caller of. That is the review screen, and the
+          review screen only — which is exactly the defect the sentence below records and this sweep
+          closed. So both spans stay here. `badgeVisible` (theirs) and these spans (ours) are not in
+          conflict: theirs decides whether the badge renders at all, these decide what is inside it
+          when it does. The cost is that on the review screen the figure now appears twice, in the
+          badge and in the strip; the alternative was the inbox going blind again. */}
       {/* The page counter, wherever the badge is. The lifecycle strip that shows it lives on the
           review screen only, so somebody watching an upload from the inbox or the upload centre saw
           "בעיבוד · 4 דק׳" and had no way to tell a busy queue from a stalled read. */}
       {status.progress && (
-        <span className="num text-xs text-ink-muted" data-document-status-progress>· {t('documentStatus.pageProgress', status.progress)}</span>
+        <span className="num text-xs text-ink-muted" data-document-status-progress>· {t('documentProcessingProgress.pageProgress', status.progress)}</span>
       )}
       {/* `awaiting_scan` joins the two states that carry their age, and it is the state that needs
           it most: nothing is running, so nothing will ever look wrong on its own. "2 ימים" beside

@@ -7,11 +7,10 @@ import { Link } from 'react-router';
 import { supabase } from '../../lib/supabase';
 import type { PriceListPredictedLine } from '../../lib/useDocumentProcessing';
 import { useAuth } from '../../auth/AuthContext';
-import { ConfirmDialog, Disclosure, ICON, MonthPicker, Note, SubPanel } from '../ui';
+import { ConfirmDialog, ICON, MonthPicker, Note, SubPanel } from '../ui';
 import { PrimaryDecision } from './PrimaryDecision';
-import { PriceListAutomationReadiness } from './PriceListAutomationReadiness';
 import { FILING_REASON_KEYS, type ReviewSnapshot } from './model';
-import { bidiIsolate, formatUnit, normalizeUnitInput } from '../../lib/format';
+import { bidiIsolate, fmtMonth, formatUnit, normalizeUnitInput } from '../../lib/format';
 
 interface PriceListReviewConfirmationProps {
   snapshot: ReviewSnapshot;
@@ -58,6 +57,30 @@ interface SubmissionReceipt {
 
 function valueText(value: string | number | null, t: (key: TKey) => string): string {
   return value === null ? t('priceListReview.valueNotRecognised') : String(value);
+}
+
+const SOURCE_LINE_LABELS: Readonly<Record<string, TKey>> = {
+  description: 'priceListReview.sourceDescription',
+  product_name: 'priceListReview.sourceDescription',
+  sku: 'priceListReview.sourceSku',
+  barcode: 'priceListReview.sourceBarcode',
+  quantity: 'priceListReview.sourceQuantity',
+  unit: 'priceListReview.sourceUnit',
+  unit_price: 'priceListReview.sourceUnitPrice',
+  discount_amount: 'priceListReview.sourceDiscount',
+  vat_rate: 'priceListReview.sourceVat',
+  line_total: 'priceListReview.sourceLineTotal',
+};
+
+function sourceLineSummary(
+  values: Record<string, string | number | null>,
+  t: (key: TKey) => string,
+) {
+  return Object.entries(values).map(([key, value]) => ({
+    key,
+    label: t(SOURCE_LINE_LABELS[key] ?? 'priceListReview.sourceAdditionalValue'),
+    value: valueText(value, t),
+  }));
 }
 
 /** Best-effort name prefill for a new product, taken from the line's own extracted values. */
@@ -179,7 +202,6 @@ function parseReceipt(value: unknown, t: (key: TKey) => string): SubmissionRecei
       || typeof row.rejected_count !== 'number'
       || typeof row.unchanged_count !== 'number'
       || typeof row.idempotent !== 'boolean') {
-  const { t } = useT();
     throw new Error(t('priceListReview.receiptMalformed'));
   }
   return row as unknown as SubmissionReceipt;
@@ -594,15 +616,20 @@ export function PriceListReviewConfirmation({
   }
 
   const showControls = canStart;
-  /** The price list of this document has been taken in — by this session's confirmation or before it. */
-  const priceListIngested = Boolean(receipt || autoDecision?.submission_id);
+  /* `priceListIngested` lived here until 04.09.2026. Its only reader was the automation-readiness
+     disclosure, which told an already-ingested document that it had nothing left to prepare. Both
+     went together; the receipt block below is what says a price list has been taken in. */
   const selectedCount = drafts.filter((draft) => draft.approved).length;
   const returnPath = '/prices';
-  // Counted off the predictions rather than off the drafts: these two numbers state what the machine
-  // read, and they have to stay true after somebody unticks a line they want to check by hand.
+  // Counted off the predictions rather than off the drafts: this states what the machine read, and
+  // it has to stay true after somebody unticks a line they want to check by hand.
+  //
+  // `readyIndexes` — its mirror image — stood beside it until 04.09.2026 and served one purpose:
+  // the summary "N מתוך M שורות זוהו במלואן". That sentence went with the rest of the six-block
+  // header. What the screen states now is what the reader can act on (`pendingIndexes`), not what
+  // the matcher managed, and the difference is not cosmetic: after a bulk creation the machine's
+  // count is still zero while every line is ready to submit.
   const catalogue = new Set(products.map(({ id }) => id));
-  const readyIndexes = lineItems.flatMap((_, index) =>
-    prefillable(predictions.get(index), catalogue) ? [index] : []);
   const unmatchedIndexes = lineItems.flatMap((_, index) =>
     prefillable(predictions.get(index), catalogue) ? [] : [index]);
   const predictionsMissing = showControls && lineItems.length > 0 && predictions.size === 0;
@@ -743,13 +770,48 @@ export function PriceListReviewConfirmation({
       </div>
     </div>
   );
-  const detailsToggle = lineItems.length > 0 && (
-    <button type="button" className="btn-secondary" data-testid="price-list-details-toggle"
+  /**
+   * The way back out of the line list, and the ONLY toggle this screen still has.
+   *
+   * "פרטים נוספים" — a button that opened 74 forms on a screen whose whole promise is that a
+   * read price list costs one click — was removed by owner ruling 04.09.2026 ("להסיר לגמרי").
+   * The line list is now reached by exactly one door, „טיפול בשורות שנותרו”, which is offered only
+   * while lines are actually still open and which opens them already filtered to those lines. A
+   * reader who took that door needs a way back, so the close half of the old toggle survives —
+   * inside the panel it closes, where it is an exit rather than an invitation.
+   */
+  const detailsClose = (
+    <button type="button" className="btn-secondary" data-testid="price-list-details-close"
       aria-expanded={detailsOpen} aria-controls="price-list-line-details"
-      onClick={() => setDetailsOpen((open) => !open)}>
-      {detailsOpen ? t('priceListReview.text_6') : t('priceListReview.text_7')}
+      onClick={() => setDetailsOpen(false)}>
+      {t('priceListReview.text_6')}
     </button>
   );
+
+  /**
+   * The one sentence the screen leads with. Four states, one line each, and each names the thing
+   * the button beside it is about to do.
+   *
+   * The counts come from the DRAFTS (`pendingIndexes`), never from the matcher's own tally. After a
+   * bulk creation the matcher has still matched nothing — its predictions were computed before
+   * those products existed — while every line now carries a product and a price. A sentence written
+   * off the matcher would say "אף אחד מהם עדיין לא קיים אצלך" above a button offering to take all
+   * 74 prices in.
+   */
+  const linkedCount = lineItems.length - pendingIndexes.length;
+  const intakeSummary = predictionsMissing
+    // Not the same fact as "nothing matched": nothing was ever compared. Saying the products do not
+    // exist would be a claim about the catalogue that no run of the matcher supports.
+    ? t('priceListReview.firstRunNoMatching', { count: lineItems.length })
+    : pendingIndexes.length === 0
+      ? bulkCreated !== null
+        ? t('priceListReview.createAllDone', { count: bulkCreated })
+        : t('priceListReview.firstRunAllExisting', { count: lineItems.length })
+      : linkedCount === 0
+        ? t('priceListReview.firstRunNoneExisting', { count: lineItems.length })
+        : t('priceListReview.firstRunPartial', {
+          total: lineItems.length, ready: linkedCount, missing: pendingIndexes.length,
+        });
 
   return (
     <section className="card card-pad min-w-0" aria-labelledby="price-list-review-title" data-testid="price-list-review-confirmation">
@@ -787,40 +849,21 @@ export function PriceListReviewConfirmation({
         </span>
       </div>
 
-      <dl className="mt-4 grid gap-3 sm:grid-cols-3">
-        <div className="rounded-lg bg-surface-sunken p-3">
-          <dt className="text-sm font-medium text-ink-soft">{t('priceListReview.text_16')}</dt>
-          <dd className="mt-1 break-words text-ink-body">{currentInterpretation.payload.supplier.suggested_name || t('priceListReview.text_17')}</dd>
-        </div>
-        <div className="rounded-lg bg-surface-sunken p-3">
-          <dt className="text-sm font-medium text-ink-soft">{t('priceListReview.text_18')}</dt>
-          <dd className="num mt-1 text-ink-body">{lineItems.length}</dd>
-        </div>
-        <div className="rounded-lg bg-surface-sunken p-3">
-          <dt className="text-sm font-medium text-ink-soft">{t('priceListReview.text_19')}</dt>
-          <dd className="num mt-1 text-ink-body">{snapshot.extraction?.payload.document.page_count ?? '—'}</dd>
-        </div>
-      </dl>
+      {/* The supplier / line-count / page-count tiles stood here until 04.09.2026. Three boxes of
+          metadata above the one decision the screen exists to take, and none of them changed what
+          the reader was going to do next: the line count is inside the sentence below, the page
+          count answers a question nobody asked, and the suggested supplier name is already the
+          document's own title on the page above. Owner report: "יש יותר מדי פרטים … זהו, לא שום
+          פרט מעבר".
 
-      {/* Same gate as the review controls, and for the same reason the two sentences above differ:
-          a price list that has already been taken in has nothing left to prepare, and „מוכנים
-          ליצירה N" beside a live „הכנת האצווה" button on such a document offered work that is over.
-          When the intake is done the block says so instead of disappearing without explanation. */}
-      {/* Folded, because this is an operator tool wearing a customer's screen. It speaks of dry
-          runs, calibration batches and Platform activation, and its dry run answers "בדיקת
-          הכשירות נכשלה — פנה לתמיכה" — a red failure for a check the customer never asked to run
-          and cannot act on. It stays here and stays reachable; it no longer greets somebody
-          reading their first price list. */}
-      {(showControls || priceListIngested) && (
-        <Disclosure title={t('priceListReview.operationalTools')} className="mt-4 card"
-          id="price-list-automation-readiness">
-          <PriceListAutomationReadiness
-            documentId={snapshot.documentId}
-            interpretationId={currentInterpretation.id}
-            ingested={priceListIngested}
-          />
-        </Disclosure>
-      )}
+          The „כלי הכנה לאוטומציה (למתקדמים)" disclosure went at the same time, and it took
+          `PriceListAutomationReadiness` with it. It was an operator tool wearing a customer's
+          screen — dry runs, calibration batches, Platform activation — and its dry run greeted a
+          first-time reader with "בדיקת הכשירות נכשלה — פנה לתמיכה", a red failure for a check they
+          never asked to run and cannot act on. Folding it was not enough; it is gone. The
+          calibration gate it was preparing is `DEBT §42`, which was already blocked for a
+          different reason, and §42 now records that its only surface has to be rebuilt inside the
+          operator console rather than on the customer's document. */}
 
       {autoDecision && (
         <SubPanel className="mt-4">
@@ -849,18 +892,25 @@ export function PriceListReviewConfirmation({
             </p>
           )}
           <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-            {detailsToggle}
+            {/* NOT the "פרטים נוספים" toggle that was removed from the intake screen, and the
+                difference is the whole reason this one stays. There it opened 74 empty forms in
+                front of somebody who had not yet decided anything. Here the decision is over and
+                the rows are the receipt: this is the only way to see which lines a completed intake
+                actually took, so it is named after them instead of after itself. */}
+            {!detailsOpen && lineItems.length > 0 ? (
+              <button type="button" className="btn-secondary" data-testid="price-list-show-lines"
+                aria-expanded={false} aria-controls="price-list-line-details"
+                onClick={() => { setOnlyUnmatched(false); setDetailsOpen(true); }}>
+                {t('priceListReview.showIngestedLines')}
+              </button>
+            ) : <span />}
             {!autoDecision.reverted_at && autoDecision.submission_id && (
               <button type="button" className="btn-danger" onClick={() => setRevertOpen(true)}>
                 {t('priceListReview.text_25')}
               </button>
-              )}
+            )}
           </div>
         </SubPanel>
-      )}
-
-      {!autoDecision && !showControls && detailsToggle && (
-        <div className="mt-4 flex justify-start">{detailsToggle}</div>
       )}
 
       {recoveryLoading && !receipt && (
@@ -885,7 +935,7 @@ export function PriceListReviewConfirmation({
       {attemptedPayload && !receipt && (
         <Note tone="await" className="mt-4 flex-wrap">
           <span className="min-w-0 flex-1">
-            {t('priceListReview.lockedAfterFirst')}<span className="num">{attemptedPayload.approvedRows.length}</span> {t('priceListReview.slice')} <span className="num">{attemptedPayload.targetMonth.slice(0, 7)}</span>{t('priceListReview.replayNoChanges')}
+            {t('priceListReview.lockedAfterFirst')}<span className="num">{attemptedPayload.approvedRows.length}</span> {t('priceListReview.slice')} <span className="num">{fmtMonth(attemptedPayload.targetMonth, locale)}</span>{t('priceListReview.replayNoChanges')}
           </span>
           {canReplay && (
             <button type="button" className="btn-secondary" disabled={busy} onClick={() => void submitPayload(attemptedPayload)}>
@@ -901,46 +951,33 @@ export function PriceListReviewConfirmation({
           <button type="button" className="btn-secondary" onClick={() => setCatalogRevision((value) => value + 1)}>{t('priceListReview.setCatalogRevision')}</button>
         </Note>
       )}
-      {/* An empty catalogue is where every customer starts, so it is stated as a step rather than
-          as a failure, and the action that clears it sits in the note that names it. The confirm
-          button further down stays disabled — correctly, there is nothing yet to confirm — but it
-          is no longer the only thing on offer. */}
-      {showControls && !catalogLoading && !catalogError && products.length === 0 && (
-        <div className="mt-4" data-testid="price-list-empty-catalogue">
-          <Note tone="info" className="flex-wrap">
-            {/* Full width on a phone so the sentence gets the line and the button drops beneath
-                it. Sharing the row at 390px left the text in a two-word column beside a button
-                that took most of the width. */}
-            <span className="w-full sm:w-auto sm:min-w-0 sm:flex-1">
-              {t('priceListReview.text_30')} {t('priceListReview.createAllLead')}
-            </span>
-            {unmatchedIndexes.length > 0 && (
-              <button type="button" className="btn-primary" data-testid="price-list-create-all"
-                disabled={busyCreate} onClick={() => void createAllMissingProducts()}>
-                {busyCreate
-                  ? <Loader2 className="animate-spin" size={ICON.md} aria-hidden="true" />
-                  : <Plus size={ICON.md} aria-hidden="true" />}
-                {busyCreate
-                  ? t('priceListReview.createAllBusy')
-                  : t('priceListReview.createAllAction', { count: unmatchedIndexes.length })}
-              </button>
-            )}
-          </Note>
-        </div>
-      )}
-      {bulkCreated !== null && (
-        <div className="mt-3" data-testid="price-list-create-all-done">
-          <Note tone="done" role="status">{t('priceListReview.createAllDone', { count: bulkCreated })}</Note>
-        </div>
-      )}
-      {createError && products.length === 0 && (
-        <div className="mt-3">
-          <Note tone="alert" role="alert">{t('priceListReview.createAllFailed')}{createError}</Note>
-        </div>
-      )}
+      {/* ONE sentence and ONE button. Rebuilt 04.09.2026 on an owner report from the live site:
+          "אם אני מעלה מסמך ולא קיים שום מוצר זה אמור להראות שאין שום מוצר והאם הוא רוצה לקלוט
+          אותם — זהו".
 
-      {/* The whole decision, above the lines rather than below them: what was read, what is
-          missing, and one button. The per-line form is the exception path, not the route. */}
+          What stood here was six blocks that all described the same 74 lines: a summary counting
+          what the machine matched, a second line counting what was ticked, an info note explaining
+          that nothing was prefilled, an amber note naming why lines went unmatched, a blue
+          first-run note offering to create the products, and a month field with a free-text audit
+          note above the button. On a first price list every one of them was true and the reader
+          still could not tell what to press — the button said "קליטת 0 המחירים שנבחרו" and was
+          disabled.
+
+          The state machine underneath is unchanged, and it is what makes one button possible: the
+          primary is "take these prices in" whenever there is anything to take in, and "create the
+          products" only when there is not. A first price list against an empty catalogue therefore
+          offers creation, and every state after it offers the intake — including the mixed list,
+          where the forty matched lines are taken in by the same one click that a fully matched list
+          uses, and the thirty-four that need a person wait behind „טיפול בשורות שנותרו”.
+
+          The bulk creation follows them in there rather than crowding the front of the screen with
+          a third control: a reader who has lines to correct is already in the panel, and that is
+          where creating the missing products in one act belongs.
+
+          The month and the audit note moved into the line panel. `targetMonth` already defaults to
+          the current month on mount and `reason` already falls back through `reasonOr`, so neither
+          field was ever a question the ordinary reader had to answer; they were two inputs standing
+          between a person and the only button on the screen. */}
       {showControls && lineItems.length > 0 && (
         <div className="mt-4 border-t border-line pt-4" data-testid="price-list-intake-action">
           {catalogLoading ? (
@@ -949,27 +986,75 @@ export function PriceListReviewConfirmation({
               {t('priceListReview.text_31')}
             </p>
           ) : (
-            <p className="text-sm font-medium text-ink-body" role="status" data-testid="price-list-intake-summary">
-              <span className="num">{readyIndexes.length}</span> {t('priceListReview.text_32')} <span className="num">{lineItems.length}</span>{t('priceListReview.fullyRecognised')}
-              {/* What the machine read, which stays true after a person or a bulk creation has
-                  since handled some of it. How much is still open is the note further down. */}
-              {unmatchedIndexes.length > 0 && (
-                <> · <span className="num">{unmatchedIndexes.length}</span> {t('priceListReview.text_33')}</>
-              )}
-            </p>
+            <>
+              <p className="text-sm font-medium text-ink-body" role="status" data-testid="price-list-intake-summary">
+                {intakeSummary}
+              </p>
+              {error && <Note tone="alert" role="alert" className="mt-3">{error}</Note>}
+              {createError && <Note tone="alert" role="alert" className="mt-3">{t('priceListReview.createAllFailed')}{createError}</Note>}
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                {/* The switch is `selectedCount`, not `pendingIndexes`: it asks "is there anything
+                    to take in", which is the only question the primary button can answer. Switching
+                    on the pending lines instead would hide the intake from a mixed list — forty
+                    matched lines the reader is entitled to take in with the same one click that a
+                    fully matched list gets, held hostage by thirty-four that need a person. */}
+                {selectedCount > 0 ? (
+                  <PrimaryDecision label={t('priceListReview.label')}>
+                    <button type="button" className="btn-primary" data-testid="price-list-intake-confirm"
+                      disabled={busy || !!catalogError || products.length === 0}
+                      onClick={() => void confirmPriceList()}>
+                      {busy ? <Loader2 className="animate-spin" size={ICON.md} aria-hidden="true" /> : <CheckCircle2 size={ICON.md} aria-hidden="true" />}
+                      {busy ? t('priceListReview.text_39') : t('priceListReview.confirmAction', { count: selectedCount })}
+                    </button>
+                  </PrimaryDecision>
+                ) : (
+                  <button type="button" className="btn-primary" data-testid="price-list-create-all"
+                    disabled={busyCreate || unmatchedIndexes.length === 0} onClick={() => void createAllMissingProducts()}>
+                    {busyCreate
+                      ? <Loader2 className="animate-spin" size={ICON.md} aria-hidden="true" />
+                      : <Plus size={ICON.md} aria-hidden="true" />}
+                    {busyCreate
+                      ? t('priceListReview.createAllBusy')
+                      : t('priceListReview.createAllAction', { count: pendingIndexes.length })}
+                  </button>
+                )}
+                {/* The single remaining door into the 74 forms, and it is offered only while lines
+                    are genuinely still open. It opens them already filtered to those lines. */}
+                {pendingIndexes.length > 0 && !detailsOpen && (
+                  <button type="button" className="btn-secondary" data-testid="price-list-show-unmatched"
+                    onClick={() => { setOnlyUnmatched(true); setDetailsOpen(true); }}>
+                    {t('priceListReview.text_42')}
+                  </button>
+                )}
+              </div>
+            </>
           )}
-          {selectedCount !== readyIndexes.length && !catalogLoading && (
-            <p className="mt-1 text-xs text-ink-muted" role="status">
-              {t('priceListReview.selectedNow')}<span className="num">{selectedCount}</span>{t('priceListReview.selectedNowTail')}
-            </p>
-          )}
-          {predictionsMissing && !catalogLoading && (
-            <Note tone="info" className="mt-3">
-              {t('priceListReview.text_34')}{' '}
-              {t('priceListReview.text_35')}
-            </Note>
-          )}
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        </div>
+      )}
+
+      {lineItems.length === 0 && <p className="mt-4 text-sm text-ink-muted">{t('priceListReview.text_43')}</p>}
+      {detailsOpen && lineItems.length > 0 && (
+      <div id="price-list-line-details" className="mt-4 space-y-3">
+        {/* Creating every missing product in one act. It is the front screen's primary button only
+            while there is nothing to take in; once there is, it belongs here — beside the lines it
+            is about to fill, and in front of the reader who opened this panel to deal with them. */}
+        {showControls && selectedCount > 0 && unmatchedIndexes.length > 0 && (
+          <button type="button" className="btn-secondary" data-testid="price-list-create-all-remaining"
+            disabled={busyCreate} onClick={() => void createAllMissingProducts()}>
+            {busyCreate
+              ? <Loader2 className="animate-spin" size={ICON.md} aria-hidden="true" />
+              : <Plus size={ICON.md} aria-hidden="true" />}
+            {busyCreate
+              ? t('priceListReview.createAllBusy')
+              : t('priceListReview.createAllAction', { count: pendingIndexes.length })}
+          </button>
+        )}
+        {/* The two fields that used to stand between the reader and the only button on the screen.
+            Both already answer themselves — `targetMonth` is set to the current month on mount and
+            `reason` falls back through `reasonOr` — so they belong where somebody who wants to
+            override them will look, which is the same panel as the per-line corrections. */}
+        {showControls && (
+          <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <span className="label">{t('priceListReview.text_36')}</span>
               <MonthPicker label={t('priceListReview.text_36')} value={targetMonth} onChange={setTargetMonth} disabled={busy} />
@@ -980,46 +1065,7 @@ export function PriceListReviewConfirmation({
               <textarea className="input" rows={2} maxLength={1000} value={reason} onChange={(event) => setReason(event.target.value)} disabled={busy} />
             </label>
           </div>
-          {error && <Note tone="alert" role="alert" className="mt-3">{error}</Note>}
-          {/* The button stays here, at the head of the lines, at every width — the placement this
-              block's own comment above already chose. It used to be lifted into a floating bar on a
-              phone so it would follow the reviewer down the paged list; the bar came to rest in the
-              middle of the list rather than at its edge (see `PrimaryDecision`), and the count it
-              carries is also printed here, above the lines. "פרטים נוספים" stays inline — a
-              disclosure toggle is not the action this screen is for. */}
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-            {detailsToggle}
-            <PrimaryDecision label={t('priceListReview.label')}>
-              <button type="button" className="btn-primary" data-testid="price-list-intake-confirm"
-                disabled={busy || selectedCount === 0 || catalogLoading || !!catalogError || products.length === 0}
-                onClick={() => void confirmPriceList()}>
-                  {busy ? <Loader2 className="animate-spin" size={ICON.md} aria-hidden="true" /> : <CheckCircle2 size={ICON.md} aria-hidden="true" />}
-                {busy ? t('priceListReview.text_39') : <>{t('priceListReview.text_40')} <span className="num">{selectedCount}</span> {t('priceListReview.text_41')}</>}
-              </button>
-            </PrimaryDecision>
-          </div>
-          {/* Silent while the catalogue is empty. "לא הותאמו לבד — מק״ט חסר" is true, and it is
-              the third time the same screen states the same fact: the summary line above counts
-              them, the note above that explains why, and this would name a cause the reader
-              cannot act on until products exist. It returns the moment there is a catalogue to
-              match against, which is when it starts telling the reader something new. */}
-          {pendingIndexes.length > 0 && !catalogLoading && products.length > 0 && (
-            <Note tone="await" className="mt-3 flex-wrap">
-              <span className="min-w-0 flex-1">
-                <span className="num">{pendingIndexes.length}</span>{t('priceListReview.unmatchedExplain')}
-              </span>
-              <button type="button" className="btn-secondary" data-testid="price-list-show-unmatched"
-                onClick={() => { setOnlyUnmatched(true); setDetailsOpen(true); }}>
-                {t('priceListReview.text_42')}
-              </button>
-            </Note>
-          )}
-        </div>
-      )}
-
-      {lineItems.length === 0 && <p className="mt-4 text-sm text-ink-muted">{t('priceListReview.text_43')}</p>}
-      {detailsOpen && lineItems.length > 0 && (
-      <div id="price-list-line-details" className="mt-4 space-y-3">
+        )}
         {showControls && pendingIndexes.length > 0 && (
           <label className="flex min-h-11 items-center gap-3 text-sm text-ink-body">
             <input type="checkbox" className="size-5 shrink-0" checked={onlyUnmatched}
@@ -1062,14 +1108,13 @@ export function PriceListReviewConfirmation({
                 </div>
               </div>
               <SubPanel className="mt-3">
-                  <dl className="grid gap-2 sm:grid-cols-2">
-                    {Object.entries(item.values).map(([key, value]) => (
-                      <div key={key} className="min-w-0 rounded-lg bg-surface-sunken p-2">
-                        <dt className="text-xs font-medium text-ink-muted">{key}</dt>
-                        <dd className="mt-1 break-words text-sm text-ink-body">{valueText(value, t)}</dd>
-                      </div>
+                  <ul className="flex flex-wrap gap-x-4 gap-y-1 text-sm" aria-label={t('priceListReview.sourceLineSummary')}>
+                    {sourceLineSummary(item.values, t).map(({ key, label, value }) => (
+                      <li key={key} className="min-w-0 break-words text-ink-body">
+                        <span className="font-medium text-ink-muted">{label}:</span>{' '}{value}
+                      </li>
                     ))}
-                  </dl>
+                  </ul>
 
                   {autoLine?.reason_code && (
                     <Note tone="await" className="mt-3">
@@ -1165,6 +1210,7 @@ export function PriceListReviewConfirmation({
           );
         })}
         {pager}
+        <div className="flex justify-start">{detailsClose}</div>
       </div>
       )}
 
@@ -1172,15 +1218,11 @@ export function PriceListReviewConfirmation({
       {refreshWarning && <Note tone="alert" role="alert" className="mt-4">{refreshWarning}</Note>}
       {receipt && (
         <div className="mt-4 rounded-lg border border-done-line bg-done-wash p-4" aria-live="polite">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="font-semibold text-ink-body">{t('priceListReview.text_61')}</h3>
-            <span className={receipt.idempotent ? 'badge-info' : 'badge-done'}>{receipt.idempotent ? t('priceListReview.text_62') : t('priceListReview.text_63')}</span>
-          </div>
+          <h3 className="font-semibold text-ink-body">{t('priceListReview.text_61')}</h3>
           <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
-            <div><dt className="inline font-medium">גרסה: </dt><dd className="inline num">{receipt.revision}</dd></div>
-            <div><dt className="inline font-medium">שורות שהתקבלו: </dt><dd className="inline num">{receipt.accepted_count}</dd></div>
-            <div><dt className="inline font-medium">שורות שנדחו: </dt><dd className="inline num">{receipt.rejected_count}</dd></div>
-            <div><dt className="inline font-medium">שורות ללא שינוי: </dt><dd className="inline num">{receipt.unchanged_count}</dd></div>
+            <div><dt className="inline font-medium">{t('priceListReview.text_66')} </dt><dd className="inline num">{receipt.accepted_count}</dd></div>
+            <div><dt className="inline font-medium">{t('priceListReview.text_67')} </dt><dd className="inline num">{receipt.rejected_count}</dd></div>
+            <div><dt className="inline font-medium">{t('priceListReview.text_68')} </dt><dd className="inline num">{receipt.unchanged_count}</dd></div>
           </dl>
           <div className="mt-4">
             <Link className="btn-secondary" to={returnPath}>{t('priceListReview.text_69')}</Link>

@@ -94,7 +94,9 @@ const documents = http.get(`${SUPABASE_URL}/rest/v1/documents`, ({ request }) =>
 // unstubbed endpoint would make these tests pass or fail on timing.
 const quietTraffic = [
   http.get(`${SUPABASE_URL}/rest/v1/suppliers`, () => HttpResponse.json([])),
+  http.post(`${SUPABASE_URL}/rest/v1/rpc/organization_usage_snapshot`, () => HttpResponse.json([])),
   http.post(`${SUPABASE_URL}/rest/v1/rpc/get_document_processing_statuses`, () => HttpResponse.json([])),
+  http.post(`${SUPABASE_URL}/rest/v1/rpc/get_document_folder_review_states`, () => HttpResponse.json([])),
   http.get(`${SUPABASE_URL}/rest/v1/document_auto_actions`, () => HttpResponse.json([])),
 ];
 
@@ -103,7 +105,7 @@ function renderGallery(props: { archive?: boolean }) {
     <QueryClientProvider client={createAppQueryClient()}>
       <OrgScopeProvider org="org-1">
         <ToastProvider>
-          <MemoryRouter>{children}</MemoryRouter>
+          <MemoryRouter initialEntries={[props.archive ? '/documents/archive' : '/documents']}>{children}</MemoryRouter>
         </ToastProvider>
       </OrgScopeProvider>
     </QueryClientProvider>
@@ -166,7 +168,7 @@ describe('מה שמסך הארכיון אומר על עצמו', () => {
     server.use(documents, ...quietTraffic);
     renderGallery({});
     expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('תיקיית המסמכים');
-    expect(screen.getByText(/כל החשבוניות/)).toBeInTheDocument();
+    expect(screen.getByText('איתור כל מסמך שנקלט למערכת ושיוכו לרשומה העסקית שלו.')).toBeInTheDocument();
   });
 
   // The state the archive is actually in until the interpretation layer starts filing, so it has
@@ -197,6 +199,37 @@ describe('כפתור ההעלאה', () => {
     renderGallery({});
     expect(await screen.findAllByText(FILED)).not.toHaveLength(0);
     expect(screen.queryByRole('button', { name: /העלאת מסמך/ })).toBeInTheDocument();
+  });
+
+  it('אינו מכפיל את תיאור המסך שכבר מגיע מקטלוג הנתיבים', async () => {
+    server.use(documents, ...quietTraffic);
+    renderGallery({});
+    await screen.findAllByText(FILED);
+
+    expect(screen.getByText('איתור כל מסמך שנקלט למערכת ושיוכו לרשומה העסקית שלו.')).toBeInTheDocument();
+    expect(screen.queryByText('כל החשבוניות, תעודות המשלוח, הזיכויים והמסמכים הנוספים במקום אחד.')).toBeNull();
+  });
+});
+
+describe('מצב בדיקת הספק בתיקייה', () => {
+  it('קורא את כל המצבים בבקשה מרוכזת ומציג ספק לא מזוהה', async () => {
+    const requests: string[][] = [];
+    server.use(
+      http.post(`${SUPABASE_URL}/rest/v1/rpc/get_document_folder_review_states`, async ({ request }) => {
+        const body = await request.json() as { p_document_ids: string[] };
+        requests.push(body.p_document_ids);
+        return HttpResponse.json([
+          { document_id: 'd-3', state: 'supplier_unresolved', suggested_supplier_name: 'ספק מהמסמך' },
+        ]);
+      }),
+      documents,
+      ...quietTraffic,
+    );
+    renderGallery({});
+
+    expect(await screen.findAllByText('ספק לא מזוהה')).not.toHaveLength(0);
+    expect(requests).toHaveLength(1);
+    expect(requests[0]).toEqual(['d-2', 'd-3', 'd-4']);
   });
 });
 
@@ -239,7 +272,7 @@ describe('פעולות הארכיון', () => {
     await screen.findAllByText(ARCHIVED);
     await openMenuFor(ARCHIVED);
     expect(screen.getByText('החזרה לטיפול')).toBeInTheDocument();
-    expect(screen.getByText('הסרה')).toBeInTheDocument();
+    expect(screen.getByText('הסרה מהארכיון — הקובץ נשמר')).toBeInTheDocument();
   });
 
   // The control that makes the assertion above mean something: the same row shape in the folder
@@ -268,7 +301,7 @@ describe('פעולות הארכיון', () => {
     await userEvent.click(screen.getByRole('button', { name: 'ביטול' }));
 
     await openMenuFor(ARCHIVED);
-    await userEvent.click(screen.getByText('הסרה'));
+    await userEvent.click(screen.getByText('הסרה מהארכיון — הקובץ נשמר'));
     expect(await screen.findByRole('dialog')).toHaveTextContent('הסרת מסמך מהארכיון');
     expect(screen.queryByLabelText(/סיבה/)).not.toBeInTheDocument();
     // The file survives, and the dialog says so rather than letting "הסרה" read as destruction.
@@ -288,12 +321,13 @@ describe('עמודת התיוק אינה נשאלת בארכיון', () => {
     expect(screen.queryByLabelText('סטטוס תיוק')).not.toBeInTheDocument();
   });
 
-  it('תיקיית המסמכים כן מציגה את שניהם', async () => {
+  it('תיקיית המסמכים מציגה את מצב השיוך בשורה אבל לא מסנן כפול', async () => {
     server.use(documents, ...quietTraffic);
     renderGallery({});
     await screen.findAllByText(UNFILED);
     expect(screen.queryAllByText('לא משויך')).not.toHaveLength(0);
-    expect(screen.getByLabelText('סטטוס תיוק')).toBeInTheDocument();
+    expect(screen.queryByLabelText('סטטוס תיוק')).not.toBeInTheDocument();
+    expect(screen.getByTestId('documents-processing-filter')).toBeInTheDocument();
   });
 });
 
@@ -318,7 +352,31 @@ describe('קליטה אחת — הסוג נקרא מהמסמך, לא נבחר מ
 
     expect(within(dialog).queryByLabelText('סוג מסמך')).not.toBeInTheDocument();
     // …and it says who will answer the question instead, so the omission does not read as a gap.
-    expect(within(dialog).getByText(/המערכת תזהה בעצמה מה סוג המסמך/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/מעלים צילום או קובץ\. המקור נשמר/)).toBeInTheDocument();
+    expect(within(dialog).queryByText(/המערכת תזהה בעצמה מה סוג המסמך/)).toBeNull();
+  });
+
+  it('אינו חותם את תאריך היום כשהמשתמש לא פתח את השדות האופציונליים', async () => {
+    server.use(documents, ...quietTraffic);
+    renderGallery({});
+    await screen.findAllByText(UNFILED);
+
+    await userEvent.click(screen.getByRole('button', { name: /העלאת מסמך/ }));
+    const dialog = await screen.findByRole('dialog', { name: 'העלאת מסמך' });
+    const date = dialog.querySelector('input[type="date"]') as HTMLInputElement;
+    expect(date.value).toBe('');
+  });
+
+  it('מציג את תקרת 10MB לפני בחירת הקובץ', async () => {
+    server.use(documents, ...quietTraffic);
+    renderGallery({});
+    await screen.findAllByText(UNFILED);
+
+    await userEvent.click(screen.getByRole('button', { name: /העלאת מסמך/ }));
+    const dialog = await screen.findByRole('dialog', { name: 'העלאת מסמך' });
+    const input = dialog.querySelector('input[type="file"]') as HTMLInputElement;
+    const limit = within(dialog).getByText(/10MB/);
+    expect(limit.compareDocumentPosition(input) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('מסמך שטרם נקרא מציג — בעמודת הסוג, ומסמך שנקרא מציג את סוגו', async () => {

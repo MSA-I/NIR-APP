@@ -605,13 +605,6 @@ function displayMeta(
   return UPLOAD_STATE_META[entry.status];
 }
 
-function formatFileSize(bytes: number): string {
-  if (!bytes) return '';
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
 function useOnlineStatus() {
   return useSyncExternalStore(
     (listener) => {
@@ -739,8 +732,11 @@ export function UploadCenter() {
           return (
             <li key={entry.id} className="px-3 py-2.5">
               <div className="flex flex-wrap items-center gap-2">
+                {/* MERGE, 05.09.2026 — ours. The other side draws a bare <bdi>, which is the
+                    exact shape DOC-07's widened guard now refuses: a bare <bdi> does not force LTR,
+                    so a Hebrew-and-Latin file name still renders in the wrong order. The file size
+                    beside it is this campaign's too. */}
                 <span className="min-w-0 flex-1 truncate text-sm text-ink-mid" title={entry.fileName}><bdi dir="ltr">{entry.fileName}</bdi></span>
-                {entry.size > 0 && <span className="num text-xs text-ink-muted">{formatFileSize(entry.size)}</span>}
                 {processingStatus
                   ? <DocumentStatusBadge status={processingStatus} />
                   : <StatusBadge meta={displayMeta(entry, stage, t)} />}

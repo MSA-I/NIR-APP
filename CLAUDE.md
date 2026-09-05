@@ -88,7 +88,9 @@ Vite 6 · React 19 · **React Router 8** · TypeScript strict · Supabase · **T
   **אין ESLint ואין Prettier** בריפו; TypeScript ו־Knip מכסים את השכבה הסטטית הנוכחית.
 - `npm run quality` — שער האינטגרציה הכבד: SQL ו־preflight מול Supabase מבודד, חוזי Deno,
   OCR worker ותרחישי דפדפן. השער רץ ב־CI; אין להריץ אותו מקומית כחלק מעבודה רגילה.
-  ב־CI כל job מופעל רק כאשר הנתיבים הרלוונטיים השתנו. `workflow_dispatch` מריץ את כולם.
+  ב־CI כל job מופעל רק כאשר הנתיבים הרלוונטיים השתנו. ‏`workflow_dispatch` מסמן כיום
+  ‏`edge`/`ocr`/`audit`/`sql`/`browser`, אבל **אינו מסמן `render=true`** — לכן הוא אינו מריץ
+  את מסלול ה-render עד שהפער ב-`quality-gate.yml` יתוקן.
 
   **איך מריצים את השער עכשיו:**
   ```
@@ -112,8 +114,8 @@ Vite 6 · React 19 · **React Router 8** · TypeScript strict · Supabase · **T
   (‏88), ‏`Invoke-PriceListEdgeSmoke`, ‏`Invoke-OcrEdgeSmoke` ו-`check-p4-integrated-journey.cjs`.
   אלה קשורים ל-PowerShell של Windows ורצים רק בריצה הידנית. **תיק ירוק אינו טענה שהם עברו.**
 
-  **וגם — כל 32 שומרי `npm run verify` רצים ב-CI (נמדד 04.09.2026 על עץ העבודה).** ה-job
-  `verify` ב-`build.yml` מריץ אותם **בשמן** ואינו קורא `npm run verify` בשום מקום — 18 בצעדים
+  **וגם — כל 33 שומרי `npm run verify` רצים ב-CI (נמדד 04.09.2026 על עץ העבודה).** ה-job
+  `verify` ב-`build.yml` מריץ אותם **בשמן** ואינו קורא `npm run verify` בשום מקום — 19 בצעדים
   ממוקדים, ו-14 בצעד „The guards verify runs that this workflow did not" (`build.yml:265-278`).
   הפער ש-`DEBT §105` תיעד — 13 מ-27 שלא רצו באף workflow — **נסגר**, ו-`check:gate-controls`
   גוזר עכשיו מ-`package.json` את הטענה „לכל תת-פקודה ב-`verify` יש צעד ב-`build.yml`", כך
@@ -178,7 +180,7 @@ Vite 6 · React 19 · **React Router 8** · TypeScript strict · Supabase · **T
   ואפס מסמכים עובדו במשך חמישה ימים. ‏`Up` אינו ראיה — הראיה היא `job_claimed` ביומן.
 
   שינוי חוצה־משטחים מחבר את הדרישות; הוא אינו מחזיר אוטומטית את השער הידני המלא. ריצת
-  `workflow_dispatch` היא חריג מפורש שמריץ הכול. PASS היסטורי לעולם אינו מחליף check טרי על ה־SHA.
+  `workflow_dispatch` היא חריג מפורש שמריץ את כל המסלולים **מלבד `render`**. PASS היסטורי לעולם אינו מחליף check טרי על ה־SHA.
 - מיגרציות לייצור: **`scripts/rollout-apply.ps1`** — מחיל טווח לפי סדר, כותב את שורת
   `supabase_migrations.schema_migrations` מיד אחרי כל apply שהצליח, מוודא בקריאה חוזרת שהשורה
   נכתבה, ועוצר **בלי שורה** על הקובץ שנכשל (כל מה שלפניו מוחל ורשום). „להוסיף את שורת ה-ledger

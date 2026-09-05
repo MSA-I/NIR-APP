@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { FileSpreadsheet, Loader2, RefreshCw } from 'lucide-react';
 import { generateDocumentExport, type DocumentExportResult } from '../../lib/documentExport';
-import { ICON, Note } from '../ui';
+import { Disclosure, ICON, Note } from '../ui';
 import { resolveExportTemplateWinner, type ReviewSnapshot } from './model';
 import { useT } from '../../lib/i18n/LocaleProvider';
 import type { TKey } from '../../lib/i18n/t';
@@ -30,10 +30,12 @@ export function DocumentExportPreview({ snapshot, actorId, autoFocus }: Document
   const [result, setResult] = useState<DocumentExportResult | null>(null);
   const [previewFailed, setPreviewFailed] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [templateDetailsOpen, setTemplateDetailsOpen] = useState(false);
 
   useEffect(() => {
     setResult(null);
     setPreviewFailed(false);
+    setTemplateDetailsOpen(false);
   }, [selected?.version.id]);
 
   useEffect(() => {
@@ -91,16 +93,18 @@ export function DocumentExportPreview({ snapshot, actorId, autoFocus }: Document
             </button>
           </div>
 
-          <dl className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm text-ink-muted">
-            <div><dt className="inline font-medium">{t('documentExportPreview.text_4')} </dt><dd className="inline">{t(formatLabelKey[selected.contract.format])}</dd></div>
-            <div><dt className="inline font-medium">{t('documentExportPreview.text_5')} </dt><dd className="inline num">{selected.version.version}</dd></div>
-            <div><dt className="inline font-medium">{t('documentExportPreview.text_6')} </dt><dd className="inline num">{selected.contract.columns.length}</dd></div>
-          </dl>
-
           {previewFailed && <Note tone="alert" role="alert" className="mt-4">{t('documentExportPreview.setError')}</Note>}
 
           {result && (
             <div className="mt-5 min-w-0" aria-live="polite">
+              <Disclosure title={t('documentExportPreview.templateDetails')}
+                className="mb-4 rounded-lg ring-1 ring-line-soft" onToggle={setTemplateDetailsOpen}>
+                {templateDetailsOpen && <dl className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-ink-muted">
+                  <div><dt className="inline font-medium">{t('documentExportPreview.text_4')} </dt><dd className="inline">{t(formatLabelKey[selected.contract.format])}</dd></div>
+                  <div><dt className="inline font-medium">{t('documentExportPreview.text_5')} </dt><dd className="inline num">{selected.version.version}</dd></div>
+                  <div><dt className="inline font-medium">{t('documentExportPreview.text_6')} </dt><dd className="inline num">{selected.contract.columns.length}</dd></div>
+                </dl>}
+              </Disclosure>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h3 className="font-semibold text-ink-body">{t('documentExportPreview.text_7')}</h3>
                 <span className="badge-done">{t(formatLabelKey[result.format])} · {t(

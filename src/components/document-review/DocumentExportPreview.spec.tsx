@@ -57,9 +57,15 @@ describe('DocumentExportPreview language boundary', () => {
 
     expect(screen.getByRole('heading', { name: 'Export preview' })).toBeInTheDocument();
     expect(screen.getByText(/תבנית ספק מקורית/)).toBeInTheDocument();
+    expect(screen.queryByText('Template version:')).toBeNull();
+    expect(screen.queryByText('Columns:')).toBeNull();
     await user.click(screen.getByRole('button', { name: 'Generate preview' }));
 
     expect(await screen.findByText('Preview result')).toBeInTheDocument();
+    expect(screen.queryByText('Template version:')).toBeNull();
+    await user.click(screen.getByText('Template details'));
+    expect(screen.getByText('Template version:')).toBeInTheDocument();
+    expect(screen.getByText('Columns:')).toBeInTheDocument();
     expect(screen.getByText('שם מהמפרט')).toBeInTheDocument();
     expect(screen.getByText('עגבניות מהמסמך')).toBeInTheDocument();
     expect(screen.getByText('Table · 1 row')).toBeInTheDocument();

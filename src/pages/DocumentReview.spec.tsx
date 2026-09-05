@@ -1,18 +1,24 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Route, Routes } from 'react-router';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { LocaleProvider } from '../lib/i18n/LocaleProvider';
 
 const rpc = vi.hoisted(() => vi.fn());
 const invoke = vi.hoisted(() => vi.fn());
 const refetch = vi.hoisted(() => vi.fn(async () => true));
+const scanningRefetch = vi.hoisted(() => vi.fn(async () => true));
+const createSignedUrl = vi.hoisted(() => vi.fn());
+const uploadDocument = vi.hoisted(() => vi.fn());
 /** Mutable so a test can move the pipeline forward between renders, which is the whole subject of
  *  the second describe: a message that belongs to a state has to disappear when that state does. */
 const processing = vi.hoisted(() => ({
   snapshots: {} as Record<string, unknown>,
+}));
+const scanning = vi.hoisted(() => ({
+  states: {} as Record<string, unknown>,
 }));
 const failedSnapshots = {
   'document-1': {
@@ -23,11 +29,19 @@ const failedSnapshots = {
   },
 };
 vi.mock('../lib/supabase', () => ({
-  supabase: { rpc, functions: { invoke } },
+  supabase: {
+    rpc,
+    functions: { invoke },
+    storage: { from: () => ({ createSignedUrl }) },
+  },
+}));
+vi.mock('../components/FileUpload', () => ({
+  DOCUMENT_UPLOAD_ACCEPT: 'application/pdf,image/jpeg',
+  uploadDocument,
 }));
 vi.mock('../auth/AuthContext', () => ({
   useAuth: () => ({
-    profile: { id: 'owner-1', role: 'owner' },
+    profile: { id: 'owner-1', org_id: 'org-1', role: 'owner' },
     organizationAccess: { mode: 'active', canWrite: true },
   }),
 }));
@@ -39,7 +53,9 @@ vi.mock('../lib/useDocumentProcessing', () => ({
   }),
 }));
 vi.mock('../lib/useDocumentScanning', () => ({
-  useDocumentScanning: () => ({ loading: false, error: null, states: {}, refetch: vi.fn() }),
+  useDocumentScanning: () => ({
+    loading: false, error: null, states: scanning.states, refetch: scanningRefetch,
+  }),
 }));
 vi.mock('../components/document-review/DocumentReviewWorkspace', () => ({
   DocumentReviewWorkspace: ({ onReprocess }: { onReprocess?: () => void }) => (
@@ -52,9 +68,14 @@ import DocumentReview from './DocumentReview';
 const reviewSource = readFileSync(join(process.cwd(), 'src', 'pages', 'DocumentReview.tsx'), 'utf8');
 const edgeSource = readFileSync(join(process.cwd(), 'supabase', 'functions', 'interpret-document', 'index.ts'), 'utf8');
 
+function LocationProbe() {
+  return <output data-testid="location-probe">{useLocation().pathname}</output>;
+}
+
 const renderReview = (locale: 'he' | 'en' = 'he') => render(
   <LocaleProvider initialLocale={locale}>
     <MemoryRouter initialEntries={['/documents/document-1/review']}>
+      <LocationProbe />
       <Routes><Route path="/documents/:documentId/review" element={<DocumentReview />} /></Routes>
     </MemoryRouter>
   </LocaleProvider>,
@@ -65,6 +86,11 @@ describe('מסך בדיקת מסמך שנכשל', () => {
     rpc.mockReset();
     invoke.mockReset();
     refetch.mockClear();
+    scanningRefetch.mockClear();
+    createSignedUrl.mockReset();
+    createSignedUrl.mockResolvedValue({ data: { signedUrl: 'https://example.test/source' }, error: null });
+    uploadDocument.mockReset();
+    scanning.states = {};
     processing.snapshots = failedSnapshots;
   });
 
@@ -78,6 +104,68 @@ describe('מסך בדיקת מסמך שנכשל', () => {
       p_reason: 'עיבוד מחדש ממסך בדיקת המסמך לאחר כשל',
     }));
     expect(refetch).toHaveBeenCalledOnce();
+  });
+});
+
+describe('החלפת מסמך אחרי כשל סריקה', () => {
+  beforeEach(() => {
+    rpc.mockReset();
+    invoke.mockReset();
+    refetch.mockClear();
+    scanningRefetch.mockClear();
+    createSignedUrl.mockReset();
+    createSignedUrl.mockResolvedValue({ data: { signedUrl: 'https://example.test/source' }, error: null });
+    uploadDocument.mockReset();
+    uploadDocument.mockResolvedValue({ documentId: 'document-2', jobId: 'job-2' });
+    processing.snapshots = {
+      'document-1': {
+        documentId: 'document-1', stage: 'failed',
+        document: {
+          id: 'document-1', file_name: 'failed.pdf', storage_path: 'org-1/failed.pdf',
+          document_kind: 'invoice',
+        },
+        job: { id: 'job-1', status: 'failed', last_error_message: 'scan failed' },
+        interpretation: null,
+      },
+    };
+    scanning.states = {
+      'document-1': {
+        document_id: 'document-1', scan_job_id: 'scan-1', processing_job_id: 'job-1',
+        status: 'failed', requested_mode: 'auto', manual_corners: null,
+        last_error_code: 'corrupt_document', last_error_message: null,
+        output_id: null, output_storage_path: null, output_mode: null,
+        detected_corners: null, corners_source: null, rotation_degrees: null,
+        accepted: false, updated_at: '2026-09-05T00:00:00Z',
+      },
+    };
+  });
+
+  it('retries only the supersede command with the same key after the upload already succeeded', async () => {
+    rpc
+      .mockResolvedValueOnce({ data: null, error: { message: 'supersede response lost' } })
+      .mockResolvedValueOnce({
+        data: { replacement_document_id: 'document-2', idempotent: true }, error: null,
+      });
+    const { container } = renderReview();
+    const input = await waitFor(() => {
+      const found = container.querySelector('input[type="file"]');
+      expect(found).not.toBeNull();
+      return found!;
+    });
+    const replacement = new File(['replacement'], 'replacement.pdf', { type: 'application/pdf' });
+
+    fireEvent.change(input, { target: { files: [replacement] } });
+    await waitFor(() => expect(rpc).toHaveBeenCalledWith('supersede_failed_document', expect.objectContaining({
+      p_failed_document_id: 'document-1',
+      p_replacement_document_id: 'document-2',
+    })));
+    const firstKey = (rpc.mock.calls[0]![1] as { p_idempotency_key: string }).p_idempotency_key;
+
+    await userEvent.click(await screen.findByRole('button', { name: 'ניסיון נוסף' }));
+    await waitFor(() => expect(rpc).toHaveBeenCalledTimes(2));
+    expect(uploadDocument).toHaveBeenCalledTimes(1);
+    expect((rpc.mock.calls[1]![1] as { p_idempotency_key: string }).p_idempotency_key).toBe(firstKey);
+    expect(screen.getByTestId('location-probe')).toHaveTextContent('/documents/document-2/review');
   });
 });
 
@@ -148,7 +236,7 @@ describe('התראת פענוח שנכשל', () => {
     });
 
     renderReview('en');
-    expect(await screen.findByText('The interpretation service is currently unavailable. Try again later.'))
+    expect(await screen.findByText('The data check is currently unavailable. Try again later.'))
       .toBeInTheDocument();
     expect(screen.queryByText('שירות הפירוש אינו זמין כרגע.')).toBeNull();
     expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();

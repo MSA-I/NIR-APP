@@ -1,0 +1,12 @@
+{
+  "desktop": {
+    "controlsAtRest": 1,
+    "noteReread": true,
+    "reasonPresent": true
+  },
+  "mobile": {
+    "controlsAtRest": 1,
+    "noteReread": true,
+    "reasonPresent": true
+  }
+}

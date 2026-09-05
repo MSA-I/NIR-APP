@@ -786,138 +786,159 @@
   {
     "ordinal": 112,
     "kind": "suite",
+    "path": "supabase/tests/p109_document_supplier_resolution.sql",
+    "label": "A document with no supplier can create one through a tenant-derived owner-or-office command: a stable idempotency key returns the first row, a changed replay is refused, the generic supplier audit carries the human reason, role, reason and cross-tenant denials write nothing, the folder reads all requested unresolved states in one bounded call, and the review payload keeps machine-read supplier text distinct from the human choice",
+    "role": "postgres"
+  },
+  {
+    "ordinal": 113,
+    "kind": "suite",
+    "path": "supabase/tests/p110_document_review_feedback.sql",
+    "label": "One document-level feedback action stores one immutable human note without choosing an annotation: owner writes and rereads it, exact replay and a fresh duplicate press return the first row, a changed note conflicts, accountant, missing reason, foreign document and wrong interpretation write nothing, the audit carries actor and reason, and browser roles hold no direct write grant",
+    "role": "postgres"
+  },
+  {
+    "ordinal": 114,
+    "kind": "suite",
+    "path": "supabase/tests/p111_failed_document_supersede.sql",
+    "label": "A terminally failed scan can be superseded by owner or office through one tenant- and unit-scoped command: the latest scan state must still be failed, the old document is soft-deleted while its immutable Storage object remains, the replacement stays active, exact replay converges, changed keys and reused replacements conflict, every role, tenant, scope, reason and shape denial writes nothing, the audit carries actor and reason, and browser roles hold no direct private-table DML",
+    "role": "postgres"
+  },
+  {
+    "ordinal": 115,
+    "kind": "suite",
     "path": "supabase/tests/p116_a_password_change_is_the_holders_own_record.sql",
     "label": "A password change is the holder's own record: the accountant who is the subject of none of them stops reading the owner's and a colleague's password_changed rows while still reading their OWN, the owner -- the only role with an audit surface -- still reads every one of its tenant's, the same narrowing holds in a second tenant and across the boundary between them, and the row set the accountant loses is EXACTLY the two rows named rather than any part of the identity or financial ledger beside them; every read issued as authenticated with that person's own subject, because a read as postgres skips RLS and proves nothing",
     "role": "postgres"
   },
   {
-    "ordinal": 113,
+    "ordinal": 116,
     "kind": "suite",
     "path": "supabase/tests/payment_credit_override.sql",
     "label": "Payment approval with legal-entity scoped open-credit override",
     "role": "postgres"
   },
   {
-    "ordinal": 114,
+    "ordinal": 117,
     "kind": "suite",
     "path": "supabase/tests/monthly_report_snapshots.sql",
     "label": "Immutable legal-entity monthly accountant snapshots",
     "role": "postgres"
   },
   {
-    "ordinal": 115,
+    "ordinal": 118,
     "kind": "preflight",
     "path": "supabase/tests/p1_preflight.sql",
     "label": "P1 preflight",
     "role": null
   },
   {
-    "ordinal": 116,
+    "ordinal": 119,
     "kind": "suite",
     "path": "supabase/tests/p1_financial_commands.sql",
     "label": "P1 financial commands, rollback and idempotency",
     "role": "postgres"
   },
   {
-    "ordinal": 117,
+    "ordinal": 120,
     "kind": "suite",
     "path": "supabase/tests/p1_price_submissions.sql",
     "label": "Owner and office price-list reservation, registration, intake, review and evidence",
     "role": "postgres"
   },
   {
-    "ordinal": 118,
+    "ordinal": 121,
     "kind": "suite",
     "path": "supabase/tests/p1_price_submissions_concurrency.sql",
     "label": "Concurrent owner and office price-list submission and idempotency",
     "role": "supabase_admin"
   },
   {
-    "ordinal": 119,
+    "ordinal": 122,
     "kind": "reset",
     "path": null,
     "label": "supabase db reset",
     "role": null
   },
   {
-    "ordinal": 120,
+    "ordinal": 123,
     "kind": "suite",
     "path": "supabase/tests/p2_data_reliability.sql",
     "label": "P2 retry, alerts, pagination and reliability",
     "role": "postgres"
   },
   {
-    "ordinal": 121,
+    "ordinal": 124,
     "kind": "suite",
     "path": "supabase/tests/server_list_contracts.sql",
     "label": "Server list predicates, duplicate key across pages and tenant scope",
     "role": "postgres"
   },
   {
-    "ordinal": 122,
+    "ordinal": 125,
     "kind": "suite",
     "path": "supabase/tests/roadmap_db_contracts.sql",
     "label": "Roadmap supplier, inventory, savings and WhatsApp contracts",
     "role": "postgres"
   },
   {
-    "ordinal": 123,
+    "ordinal": 126,
     "kind": "suite",
     "path": "supabase/tests/p1_concurrency.sql",
     "label": "P1 real concurrent sessions",
     "role": "supabase_admin"
   },
   {
-    "ordinal": 124,
+    "ordinal": 127,
     "kind": "suite",
     "path": "supabase/tests/payment_credit_override_concurrency.sql",
     "label": "Concurrent payment replay, approval, execution and credit creation",
     "role": "supabase_admin"
   },
   {
-    "ordinal": 125,
+    "ordinal": 128,
     "kind": "suite",
     "path": "supabase/tests/monthly_report_snapshots_concurrency.sql",
     "label": "Concurrent immutable monthly snapshot version allocation",
     "role": "supabase_admin"
   },
   {
-    "ordinal": 126,
+    "ordinal": 129,
     "kind": "suite",
     "path": "supabase/tests/p63_financial_credit_concurrency.sql",
     "label": "Two accountants racing for one credit remainder: one payment, one named refusal, no double allocation",
     "role": "supabase_admin"
   },
   {
-    "ordinal": 127,
+    "ordinal": 130,
     "kind": "suite",
     "path": "supabase/tests/p108_one_balance_one_approval.sql",
     "label": "One balance, one approval: an invoice of 640 already holding 300 approved refuses a second approval of the whole balance BY NAME while still ALLOWING the second request to be typed, splitting a payment across two approvals of 250 and 390 still passes, two sessions approving on the same locked invoice leave exactly one winner and one named refusal, and the writer that could not see a partially consumed credit stops admitting 900 where the reader prints 780 -- every refusal measured as an authenticated owner rather than as the superuser, so the financial guard and the role checks are actually in the path",
     "role": "supabase_admin"
   },
   {
-    "ordinal": 128,
+    "ordinal": 131,
     "kind": "suite",
     "path": "supabase/tests/p113_a_currency_this_role_cannot_value.sql",
     "label": "A currency this role cannot value gets no row rather than a zero: the accountant sees the shekel debt it may value and NOTHING at all where the supplier owes 300 dollars on an unapproved invoice, so the card draws an em dash instead of the sentence that supplier owes nothing here, a supplier it can value nothing of returns nothing at all, a currency it CAN value is still reported in full, a measured zero that was paid off stays a zero rather than becoming an em dash, the owner's six rows are byte-for-byte what they were, and 150 shekels and 300 dollars are never one row of 450 -- every reading taken as an authenticated owner and an authenticated accountant rather than as the superuser, so RLS, the view grants and the role arms are actually in the path",
     "role": "postgres"
   },
   {
-    "ordinal": 129,
+    "ordinal": 132,
     "kind": "suite",
-    "path": "supabase/tests/p111_a_price_the_reader_can_say.sql",
+    "path": "supabase/tests/p114_a_price_the_reader_can_say.sql",
     "label": "A price the reader can say, and a sum that admits when it was never measured: a unit price printed the way a Hebrew invoice prints it reaches the review grid as 4.20 instead of an em dash, the three lines carrying it are summed to 969.00 with the coverage counted rather than left at a fabricated 0.00, and the header-versus-lines block that fired against that fabrication is gone; a line whose price is genuinely ABSENT makes the sum null with `lines_net` named in missing_rungs, a per-line finding naming the missing price and a document finding saying the sum was not measured -- never a partial sum compared against a whole header; a price printed in another currency is refused BY NAME rather than falling silent; and the filing refusal names the date it could not read instead of announcing that an invoice number displayed at confidence 0.95 is missing -- every assessment read as an authenticated office clerk through the definer read, and the filing ladder reached in the trusted no-JWT shape the Edge Function uses, because the command grants EXECUTE to service_role and not to authenticated",
     "role": "postgres"
   },
   {
-    "ordinal": 130,
+    "ordinal": 133,
     "kind": "suite",
     "path": "supabase/tests/p112_the_settings_boundary_is_not_cosmetic.sql",
     "label": "The /settings boundary is the database's and not the router's: no client role can select a colleague's phone or backup address off profiles, nor the tenant's commercial columns off organizations, while every other column of both stays readable and a person keeps the UPDATE on their own two; the owner reads all four narrowed surfaces through a directory that is not security_invoker, keeps security_barrier and carries both its role and its tenant predicate, office and accountant read NOTHING from any of them, a second tenant's owner reads only their own, and the direct column path is refused for the owner too -- every read measured as an authenticated subject rather than as the superuser, aggregated per row and compared to a literal, never counted",
     "role": "postgres"
   },
   {
-    "ordinal": 131,
+    "ordinal": 134,
     "kind": "suite",
     "path": "supabase/tests/p115_a_statement_line_is_spent_once.sql",
     "label": "A statement line is spent once: a 2,950 line already holding its whole amount in confirmed allocations refuses a second full match BY NAME through match_bank_transaction called as an authenticated owner, the table refuses the same second allocation whatever wrote it, one shekel past a legal 1,000 + 1,950 split is refused while the split itself stands, an allocation MOVED from another line onto a full one is refused where the same move onto a line with room is accepted, two sessions racing 2,000 and 2,000 at that line leave exactly one winner and one named refusal while two racing 1,000 and 1,000 both stand, and a full-amount SUGGESTION beside a confirmed match is not an over-allocation because a suggestion claims no money",

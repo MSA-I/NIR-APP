@@ -10,6 +10,7 @@ import {
 import { useFeatureFlags } from '../lib/flags';
 import { APP_NAME } from '../lib/branding';
 import { useAuth } from '../auth/AuthContext';
+import { supabase } from '../lib/supabase';
 import {
   assistantAuthorizationFingerprint,
   useAssistantRunSession,
@@ -17,6 +18,15 @@ import {
 } from '../lib/assistant/runSession';
 import AssistantDialog from './assistant/AssistantDialog';
 import { ICON } from './ui';
+
+export const ASSISTANT_AUTO_RESTORE_MS = 10 * 60 * 1000;
+
+export function assistantConversationIsFresh(updatedAt: string, nowMs = Date.now()): boolean {
+  const updatedMs = Date.parse(updatedAt);
+  if (!Number.isFinite(updatedMs) || !Number.isFinite(nowMs)) return false;
+  const ageMs = nowMs - updatedMs;
+  return ageMs >= 0 && ageMs <= ASSISTANT_AUTO_RESTORE_MS;
+}
 
 /**
  * העוזר של InPlace — the trigger and its dialog.
@@ -39,8 +49,10 @@ export default function AssistantPanel({ session: sharedSession }: {
   const location = useLocation();
   const [open, setOpen] = useState(false);
   const [sourceReturnFromLocation, setSourceReturnFromLocation] = useState<string | null>(null);
+  const [hasBusinessData, setHasBusinessData] = useState<boolean | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const wasOpenRef = useRef(false);
+  const businessDataOrgRef = useRef<string | null>(null);
   const localSession = useAssistantRunSession(assistantAuthorizationFingerprint({
     userId: authSession?.user.id,
     profileId: profile?.id,
@@ -53,6 +65,24 @@ export default function AssistantPanel({ session: sharedSession }: {
   }));
   const session = sharedSession ?? localSession;
   const hasActiveCheck = session.pending || session.result !== null || session.submittedQuestion !== null;
+
+  // Same first-run oracle the dashboard uses: with no live supplier, no order, invoice, receipt or
+  // price can exist. One HEAD count chooses usage guidance versus questions about real data; no
+  // rows cross the wire. It runs only when a panel is opened, once per organization per instance.
+  useEffect(() => {
+    const orgId = org?.id;
+    if (!open || !orgId || businessDataOrgRef.current === orgId) return;
+    businessDataOrgRef.current = orgId;
+    setHasBusinessData(null);
+    let cancelled = false;
+    void (async () => {
+      const result = await supabase.from('suppliers')
+        .select('id', { count: 'exact', head: true })
+        .is('deleted_at', null);
+      if (!cancelled && !result.error) setHasBusinessData((result.count ?? 0) > 0);
+    })();
+    return () => { cancelled = true; };
+  }, [open, org?.id]);
 
   /**
    * A refresh empties the run session — it lives in browser memory on purpose, because a stored
@@ -81,6 +111,7 @@ export default function AssistantPanel({ session: sharedSession }: {
         const conversations = await listAssistantConversations(1);
         const newest = conversations[0];
         if (cancelled || !newest) return;
+        if (!assistantConversationIsFresh(newest.updated_at)) return;
         const turns = await loadAssistantConversation(newest.id);
         if (cancelled) return;
         // `adoptHistory`, never `restoreHistory`: the guard above ran BEFORE these two awaits, and
@@ -167,6 +198,7 @@ export default function AssistantPanel({ session: sharedSession }: {
       {open && (
         <AssistantDialog
           session={session}
+          hasBusinessData={hasBusinessData ?? Boolean(org?.onboarding_completed_at)}
           onClose={() => setOpen(false)}
           onMobileSourceNavigate={() => {
             setSourceReturnFromLocation(location.key);

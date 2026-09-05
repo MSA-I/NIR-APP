@@ -1,12 +1,14 @@
 import { useT } from '../../lib/i18n/LocaleProvider';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { reasonOr } from '../../lib/reason';
 import { todayISO } from '../../lib/format';
 import { AlertTriangle, Check, CircleCheck, Info, Loader2, ShieldAlert } from 'lucide-react';
 import { Link } from 'react-router';
 import { supabase } from '../../lib/supabase';
 import { fmtMoneyExact, fmtNum } from '../../lib/format';
+import { fetchAll } from '../../lib/supabasePaging';
 import { Disclosure, ICON, Note, ReasonField, useToast } from '../ui';
+import { SupplierSelectField, useQuickSupplier, type SupplierOption } from '../QuickSupplierPicker';
 import { DocumentLineMapping } from './DocumentLineMapping';
 import { ReconciliationStrip } from './ReconciliationStrip';
 import { PrimaryDecision } from './PrimaryDecision';
@@ -49,6 +51,34 @@ const SEVERITY_TONE: Record<FindingSeverity, 'alert' | 'await' | 'info' | 'idle'
 /** Above this many distinct complaints the tail folds; five fits a phone without scrolling. */
 const VISIBLE_BLOCKING_GROUPS = 5;
 
+type ReviewOrderOption = {
+  id: string;
+  number: number;
+  status: string;
+  currency: string;
+  items: Array<{ qty: number; received_qty: number }>;
+};
+
+function orderWarningKeys(order: ReviewOrderOption): Array<
+  'docAssessment.orderCancelled' | 'docAssessment.orderClosed' | 'docAssessment.orderFullyReceived'
+> {
+  const warnings: Array<
+    'docAssessment.orderCancelled' | 'docAssessment.orderClosed' | 'docAssessment.orderFullyReceived'
+  > = [];
+  if (order.status === 'cancelled') warnings.push('docAssessment.orderCancelled');
+  // `received` is the persisted terminal/closed state in the current enum. Accept `closed` too so
+  // a future vocabulary change cannot turn the warning off while the UI and DB roll forward.
+  if (order.status === 'closed' || order.status === 'received') {
+    warnings.push('docAssessment.orderClosed');
+  }
+  if (order.status === 'received'
+      || (order.items.length > 0
+        && order.items.every((item) => Number(item.received_qty) >= Number(item.qty)))) {
+    warnings.push('docAssessment.orderFullyReceived');
+  }
+  return warnings;
+}
+
 function Cell({ children }: { children: React.ReactNode }) {
   return <td className="td num">{children}</td>;
 }
@@ -85,6 +115,17 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [reason, setReason] = useState('');
+  const [supplierId, setSupplierId] = useState<string | null>(null);
+  const [supplierSelectionSource, setSupplierSelectionSource] = useState<'machine' | 'human' | null>(null);
+  const [supplierOptions, setSupplierOptions] = useState<SupplierOption[]>([]);
+  const [suppliersLoading, setSuppliersLoading] = useState(true);
+  const [suppliersError, setSuppliersError] = useState<string | null>(null);
+  const [orderId, setOrderId] = useState<string | null>(null);
+  const [orderSelectionSource, setOrderSelectionSource] = useState<'machine' | 'human' | null>(null);
+  const [orderOptions, setOrderOptions] = useState<ReviewOrderOption[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [ordersError, setOrdersError] = useState<string | null>(null);
+  const orderRequest = useRef(0);
   const [edits, setEdits] = useState<Record<number, ReviewedLineEdit>>({});
   /**
    * The reconciliation table builds its cells only once someone opens it.
@@ -143,15 +184,70 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
       return;
     }
     setLoadError(null);
-    setRead(result.data as DocumentReviewRead);
+    const next = result.data as DocumentReviewRead;
+    const resolvedSupplier = next.assessment?.supplier_id
+      ?? next.supplier_resolution?.supplier_id
+      ?? null;
+    setRead(next);
+    setSupplierId(resolvedSupplier);
+    setSupplierSelectionSource(resolvedSupplier ? 'machine' : null);
+    const resolvedOrder = next.assessment?.order_id ?? next.order_resolution?.order_id ?? null;
+    setOrderId(resolvedOrder);
+    setOrderSelectionSource(resolvedOrder ? 'machine' : null);
   }, [documentId]);
 
   useEffect(() => { void load(); }, [load]);
 
-  const supplierId = read?.assessment?.supplier_id
-    ?? read?.supplier_resolution?.supplier_id
-    ?? null;
-  const orderId = read?.assessment?.order_id ?? null;
+  const intakeCurrency = read?.assessment?.currency ?? null;
+
+  const loadSuppliers = useCallback(async () => {
+    setSuppliersLoading(true);
+    try {
+      const rows = await fetchAll<SupplierOption>((from, to) => supabase.from('suppliers')
+        .select('id, name').is('deleted_at', null).order('name').order('id').range(from, to));
+      setSupplierOptions(rows);
+      setSuppliersError(null);
+    } catch (failure) {
+      setSuppliersError(errorText(failure));
+    } finally {
+      setSuppliersLoading(false);
+    }
+  }, [errorText]);
+  useEffect(() => { void loadSuppliers(); }, [loadSuppliers]);
+
+  const supplierPicker = useQuickSupplier(supplierOptions, (selectedId) => {
+    setSupplierId(selectedId || null);
+    setSupplierSelectionSource(selectedId ? 'human' : null);
+    setOrderId(null);
+    setOrderSelectionSource(null);
+  });
+
+  const loadOrders = useCallback(async () => {
+    const request = ++orderRequest.current;
+    if (!supplierId || !intakeCurrency) {
+      setOrderOptions([]);
+      setOrdersLoading(false);
+      setOrdersError(null);
+      return;
+    }
+    setOrdersLoading(true);
+    try {
+      const rows = await fetchAll<ReviewOrderOption>((from, to) => supabase
+        .from('purchase_orders')
+        .select('id, number, status, currency, items:purchase_order_items(qty, received_qty)')
+        .eq('supplier_id', supplierId).eq('currency', intakeCurrency)
+        .order('created_at', { ascending: false }).order('id').range(from, to));
+      if (request !== orderRequest.current) return;
+      setOrderOptions(rows);
+      setOrdersError(null);
+    } catch (failure) {
+      if (request !== orderRequest.current) return;
+      setOrdersError(errorText(failure));
+    } finally {
+      if (request === orderRequest.current) setOrdersLoading(false);
+    }
+  }, [errorText, intakeCurrency, supplierId]);
+  useEffect(() => { void loadOrders(); }, [loadOrders]);
 
   const blocking = useMemo(() => blockingFindings(read?.assessment ?? null), [read]);
   const advisory = useMemo(() => advisoryFindings(read?.assessment ?? null), [read]);
@@ -256,18 +352,19 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
 
   const [storedKey, approvedKey] = storageAndApprovalKeys(read);
   const assessment = read.assessment;
-  const intakeCurrency = assessment?.currency ?? null;
+  const selectedOrder = orderOptions.find((order) => order.id === orderId) ?? null;
+  const selectedOrderWarnings = selectedOrder ? orderWarningKeys(selectedOrder) : [];
   const editable = !read.data_approved && read.state !== 'awaiting_interpretation';
 
   return (
-    <section className="space-y-5" aria-label={t('docAssessment.aria_label')}>
+    <section className="space-y-4" aria-label={t('docAssessment.aria_label')}>
       {/* The two states, as two sentences with two icons. Never one word covering both. */}
-      <div className="card p-4">
+      <div className="card p-3">
         <p className="flex items-start gap-2 text-sm text-ink-body">
           <CircleCheck size={ICON.sm} aria-hidden="true" className="mt-0.5 shrink-0" />
           <span>{t(storedKey)}</span>
         </p>
-        <p className="mt-2 flex items-start gap-2 text-sm text-ink-body">
+        <p className="mt-1 flex items-start gap-2 text-sm text-ink-body">
           {read.data_approved
             ? <CircleCheck size={ICON.sm} aria-hidden="true" className="mt-0.5 shrink-0" />
             : <Info size={ICON.sm} aria-hidden="true" className="mt-0.5 shrink-0" />}
@@ -327,48 +424,105 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
           explanation is indistinguishable from a guess. */}
       {read.supplier_resolution && (
         <div className="card p-4">
-          <h3 className="text-sm font-medium text-ink-soft">{t('docAssessment.text_5')}</h3>
-          <p className="mt-1 text-sm text-ink-body">
-            {read.supplier_resolution.resolved
-              ? t('docAssessment.supplierResolved', { evidence: resolutionText(read.supplier_resolution.matched_by, t) ?? '' })
-              : read.supplier_resolution.reason === 'ambiguous'
-                ? t('docAssessment.text_6')
-                : t('docAssessment.text_7')}
-          </p>
-          {read.supplier_resolution.candidates.length > 0 && (
-            <ul className="mt-2 space-y-1 text-sm text-ink-muted">
-              {read.supplier_resolution.candidates.map((candidate, index) => (
-                <li key={index}>
-                  {String(candidate.name ?? candidate.supplier_id ?? '')}
-                  {candidate.evidence ? ` — ${candidate.evidence}` : ''}
-                  {candidate.authoritative ? '' : t('docAssessment.text_8')}
-                </li>
-              ))}
-            </ul>
+          <SupplierSelectField
+            picker={supplierPicker}
+            id="document-review-supplier"
+            label={t('docAssessment.text_5')}
+            value={supplierId ?? ''}
+            createContext={{
+              documentId: read.document_id,
+              suggestedName: read.supplier_resolution.suggested_name,
+              reason: reason || t('docAssessment.createSupplierReason'),
+            }}
+            placeholder={suppliersLoading
+              ? t('docAssessment.supplierLoading')
+              : t('docAssessment.supplierPlaceholder')}
+            disabled={!editable || suppliersLoading || Boolean(suppliersError) || busy}
+          />
+          {suppliersError && (
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-sm text-alert-fg" role="alert">
+              <span>{t('docAssessment.supplierLoadFailed')}</span>
+              <button type="button" className="btn-secondary min-h-11"
+                onClick={() => void loadSuppliers()}>{t('docAssessment.supplierRetry')}</button>
+            </div>
+          )}
+          {read.supplier_resolution.suggested_name && (
+            <p className="mt-2 text-sm text-ink-muted">
+              {t('docAssessment.machineReadSupplier', {
+                name: read.supplier_resolution.suggested_name,
+              })}
+            </p>
+          )}
+          {supplierId && (
+            <p className="mt-1 text-sm text-ink-body">
+              {supplierSelectionSource === 'human'
+                ? t('docAssessment.supplierChosenByHuman', {
+                  name: supplierPicker.suppliers.find((row) => row.id === supplierId)?.name ?? supplierId,
+                })
+                : t('docAssessment.supplierResolved', {
+                  evidence: resolutionText(read.supplier_resolution.matched_by, t) ?? '',
+                })}
+            </p>
+          )}
+          {!supplierId && !suppliersLoading && !suppliersError && (
+            <p className="mt-1 text-sm text-alert-fg">
+              {read.state === 'supplier_unresolved'
+                ? t('docAssessment.supplierUnresolvedBlocksApproval')
+                : read.supplier_resolution.reason === 'ambiguous'
+                  ? t('docAssessment.text_6')
+                  : t('docAssessment.text_7')}
+            </p>
           )}
         </div>
       )}
 
-      {read.order_resolution && (
+      {supplierId && read.document_type !== 'credit_note' && (
         <div className="card p-4">
-          <h3 className="text-sm font-medium text-ink-soft">{t('docAssessment.text_9')}</h3>
-          <p className="mt-1 text-sm text-ink-body">
-            {read.order_resolution.resolved
-              ? t('docAssessment.orderResolved', { evidence: resolutionText(read.order_resolution.matched_by, t) ?? '' })
-              : read.order_resolution.reason === 'ambiguous'
-                ? t('docAssessment.text_10')
-                /* A document with no order is legitimate, not a failure (0107). */
-                : t('docAssessment.text_11')}
-          </p>
-          {read.order_resolution.candidates.length > 0 && (
-            <ul className="mt-2 space-y-1 text-sm text-ink-muted">
-              {read.order_resolution.candidates.map((candidate, index) => (
-                <li key={index}>
-                  {t('docAssessment.orderWord')}{' '}<span className="num">{String(candidate.number ?? '')}</span>
-                  {candidate.evidence ? ` — ${candidate.evidence}` : ''}
-                </li>
-              ))}
-            </ul>
+          <label className="label" htmlFor="document-review-order">{t('docAssessment.text_9')}</label>
+          <select id="document-review-order" className="input" value={orderId ?? ''}
+            disabled={!editable || ordersLoading || Boolean(ordersError) || busy}
+            onChange={(event) => {
+              setOrderId(event.target.value || null);
+              setOrderSelectionSource(event.target.value ? 'human' : null);
+            }}>
+            <option value="">{ordersLoading
+              ? t('docAssessment.orderLoading')
+              : t('docAssessment.orderNone')}</option>
+            {orderOptions.map((order) => {
+              const warning = orderWarningKeys(order).map((key) => t(key)).join(' · ');
+              return (
+                <option key={order.id} value={order.id}>
+                  {t('docAssessment.orderOption', {
+                    number: order.number,
+                    warning: warning ? ` · ${warning}` : '',
+                  })}
+                </option>
+              );
+            })}
+          </select>
+          {ordersError && (
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-sm text-alert-fg" role="alert">
+              <span>{t('docAssessment.orderLoadFailed')}</span>
+              <button type="button" className="btn-secondary min-h-11"
+                onClick={() => void loadOrders()}>{t('docAssessment.supplierRetry')}</button>
+            </div>
+          )}
+          {selectedOrderWarnings.length > 0 && (
+            <Note tone="alert" role="alert" className="mt-2">
+              {t('docAssessment.orderRiskWarning', {
+                status: selectedOrderWarnings.map((key) => t(key)).join(' · '),
+              })}
+            </Note>
+          )}
+          {orderId && orderSelectionSource === 'machine' && read.order_resolution && (
+            <p className="mt-2 text-sm text-ink-body">
+              {t('docAssessment.orderResolved', {
+                evidence: resolutionText(read.order_resolution.matched_by, t) ?? '',
+              })}
+            </p>
+          )}
+          {!orderId && !ordersLoading && !ordersError && (
+            <p className="mt-2 text-sm text-ink-muted">{t('docAssessment.text_11')}</p>
           )}
         </div>
       )}

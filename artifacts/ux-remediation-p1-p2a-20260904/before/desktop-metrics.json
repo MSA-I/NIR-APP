@@ -1,0 +1,68 @@
+{
+  "documents": {
+    "controls": 24,
+    "panels": 1,
+    "textBlocks": 4,
+    "documentRows": 0,
+    "progressTelemetry": 0,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "bodyHeight": 900
+  },
+  "inboxRedirect": {
+    "url": "http://localhost:5200/documents?filing=unfiled",
+    "metrics": {
+      "controls": 24,
+      "panels": 1,
+      "textBlocks": 4,
+      "documentRows": 0,
+      "progressTelemetry": 0,
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "bodyHeight": 900
+    },
+    "rowIds": []
+  },
+  "realReviewLinkCount": 0,
+  "invoiceReview": {
+    "controls": 19,
+    "panels": 11,
+    "textBlocks": 37,
+    "documentRows": 0,
+    "progressTelemetry": 0,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "bodyHeight": 2350
+  },
+  "priceListReview": {
+    "controls": 16,
+    "panels": 3,
+    "textBlocks": 16,
+    "documentRows": 0,
+    "progressTelemetry": 0,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "bodyHeight": 1180
+  },
+  "assistant": {
+    "controls": 32,
+    "panels": 2,
+    "textBlocks": 14,
+    "documentRows": 0,
+    "progressTelemetry": 0,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "bodyHeight": 900
+  },
+  "consoleErrorCount": 2
+}

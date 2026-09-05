@@ -189,6 +189,10 @@ export function useAssistantRunSession(
           authorizationRef.current !== authorizationFingerprint
         ) return false;
         const raw = error instanceof Error ? error.message : String(error);
+        // A typed question already remains in `question`. A suggestion bypasses that state and
+        // used to disappear after a failed run, leaving no retry without retyping it. Put the
+        // exact submitted text back in the composer for both paths; the next submit reuses it.
+        setQuestion(trimmed);
         setRawError(raw);
         setErrorText(resolveError(error));
         setAnnouncement(t('assistantRun.failed'));

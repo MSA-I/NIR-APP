@@ -135,6 +135,8 @@ export interface Resolution {
   matched_by: string | null;
   reason: string | null;
   candidates: ResolutionCandidate[];
+  /** Name read from the document. It is a machine hint until a person selects or creates. */
+  suggested_name?: string | null;
   supplier_id?: string | null;
   order_id?: string | null;
 }

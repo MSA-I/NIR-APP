@@ -167,22 +167,10 @@ describe('a rung that was never read', () => {
 });
 
 describe('the second ladder', () => {
-  /**
-   * Withholding and what actually landed are NOT extracted by anything today. A zero here would
-   * claim the document was read and found to withhold nothing. Merging them into the gap above
-   * would make every document in the country read "cannot be calculated".
-   */
-  it('reports both rungs as not extracted, and never as zero', () => {
+  it('does not spend a permanent card on two values no document can currently provide', () => {
     show(assessment());
-    expect(screen.getByText('Withholding at source')).toBeInTheDocument();
-    expect(screen.getByText('Actually received')).toBeInTheDocument();
-    expect(screen.getAllByText('not extracted')).toHaveLength(2);
-  });
-
-  it('states in words that it does not touch the gap above', () => {
-    show(assessment());
-    expect(screen.getByText(/does not affect the gap above/)).toBeInTheDocument();
-    // And it did not: the first ladder still reconciles.
+    expect(screen.queryByText('Withholding at source')).toBeNull();
+    expect(screen.queryByText('Actually received')).toBeNull();
     expect(screen.getByText(/reconcile within the allowed difference/)).toBeInTheDocument();
   });
 });

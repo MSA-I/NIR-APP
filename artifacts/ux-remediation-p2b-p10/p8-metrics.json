@@ -1,0 +1,102 @@
+{
+  "desktop": {
+    "observed": [
+      {
+        "code": "corrupt_document",
+        "action": "replace"
+      },
+      {
+        "code": "decompressed_size_limit",
+        "action": "replace"
+      },
+      {
+        "code": "file_size_limit",
+        "action": "replace"
+      },
+      {
+        "code": "processing_resource_failure",
+        "action": "retry"
+      },
+      {
+        "code": "processing_timeout",
+        "action": "retry"
+      },
+      {
+        "code": "scan_image_too_small",
+        "action": "replace"
+      },
+      {
+        "code": "claim_attempt_limit_exceeded",
+        "action": "retry"
+      },
+      {
+        "code": "document_deleted",
+        "action": "none"
+      },
+      {
+        "code": "unknown_from_worker",
+        "action": "none"
+      }
+    ],
+    "tusPosts": 1,
+    "registrationCount": 1,
+    "supersedeBodies": [
+      {
+        "p_failed_document_id": "88000000-0000-4000-8000-000000000101",
+        "p_replacement_document_id": "88000000-0000-4000-8000-000000000102",
+        "p_idempotency_key": "448fee37-1224-49bd-8672-b62de077082c",
+        "p_reason": "החלפת מסמך שסריקתו נכשלה"
+      }
+    ]
+  },
+  "mobile": {
+    "observed": [
+      {
+        "code": "corrupt_document",
+        "action": "replace"
+      },
+      {
+        "code": "decompressed_size_limit",
+        "action": "replace"
+      },
+      {
+        "code": "file_size_limit",
+        "action": "replace"
+      },
+      {
+        "code": "processing_resource_failure",
+        "action": "retry"
+      },
+      {
+        "code": "processing_timeout",
+        "action": "retry"
+      },
+      {
+        "code": "scan_image_too_small",
+        "action": "replace"
+      },
+      {
+        "code": "claim_attempt_limit_exceeded",
+        "action": "retry"
+      },
+      {
+        "code": "document_deleted",
+        "action": "none"
+      },
+      {
+        "code": "unknown_from_worker",
+        "action": "none"
+      }
+    ],
+    "tusPosts": 1,
+    "registrationCount": 1,
+    "supersedeBodies": [
+      {
+        "p_failed_document_id": "89000000-0000-4000-8000-000000000101",
+        "p_replacement_document_id": "89000000-0000-4000-8000-000000000102",
+        "p_idempotency_key": "cbc085b5-8b5e-4f35-a3c6-84691dc357c4",
+        "p_reason": "החלפת מסמך שסריקתו נכשלה"
+      }
+    ]
+  }
+}

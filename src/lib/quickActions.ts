@@ -1,5 +1,5 @@
 import type { TKey } from '../lib/i18n/t.ts';
-import { Activity, Camera, CreditCard, FileText, FolderOpen, LayoutDashboard, PackageCheck, ShoppingCart, type LucideIcon } from 'lucide-react';
+import { Camera, CreditCard, FileText, FolderOpen, LayoutDashboard, ShoppingCart, Truck, type LucideIcon } from 'lucide-react';
 import { isActiveRole, type ActiveRole, type Role } from './types';
 import { staticRouteTitle } from './routePresentation';
 
@@ -34,19 +34,31 @@ const barLabel = (path: Parameters<typeof staticRouteTitle>[0]): TKey =>
 
 // The role-aware quick-action bar, phone only since the desktop speed-dial was removed
 // (09.08.2026). Order is canonical and is asserted in layout.spec.ts.
+//
+// Rebuilt 04.09.2026 on an owner report: "חוץ מהמצלמה אין שום דבר שאני בתור משתמש חדש מבין ישר".
+// Two of the five slots were answering a question a first-day user does not have yet:
+// `בקרת מסמכים` (/documents/operations) is the operator's queue - what is stuck, what failed,
+// what waits for a human - and `קבלת סחורה` cannot do anything until an order exists. Both keep their
+// place in the drawer, which is where a screen that presumes prior state belongs.
+//
+// What replaced them is the pair the setup wizard itself puts first (`Onboarding` STEPS: business,
+// categories, SUPPLIERS, PRODUCTS): the document folder, which is where the camera's output lands
+// and therefore the only screen a new user has a reason to open on day one, and the supplier list,
+// without which no other action on this bar can produce anything. The bar stays FIXED for every
+// user at every stage (owner ruling 04.09.2026) - a bar whose slots change as data arrives is a
+// second thing to learn, not a shortcut.
 const QUICK_ACTIONS: readonly QuickAction[] = [
-  { key: 'order', labelKey: barLabel('/orders/new'), icon: ShoppingCart, kind: 'link', to: '/orders/new?fresh=1', roles: ['owner', 'office'] },
   { key: 'dashboard', labelKey: barLabel('/dashboard'), icon: LayoutDashboard, kind: 'link', to: '/dashboard', roles: ['owner', 'office', 'accountant'] },
+  { key: 'order', labelKey: barLabel('/orders/new'), icon: ShoppingCart, kind: 'link', to: '/orders/new?fresh=1', roles: ['owner', 'office'] },
   // The one action with no route of its own: it opens the camera, so no catalogue entry names it.
   { key: 'capture', labelKey: 'nav.captureDocument', icon: Camera, kind: 'capture', roles: ['owner', 'office'] },
-  { key: 'receive', labelKey: barLabel('/receiving'), icon: PackageCheck, kind: 'link', to: '/receiving', roles: ['owner', 'office'] },
-  // Keep five items for both procurement roles so capture stays in the exact middle. Document
-  // operations is owner-only; office receives the permitted document gallery in the same slot.
-  { key: 'document-operations', labelKey: barLabel('/documents/operations'), icon: Activity, kind: 'link', to: '/documents/operations', roles: ['owner'] },
-  { key: 'documents', labelKey: barLabel('/documents'), icon: FolderOpen, kind: 'link', to: '/documents', roles: ['office'] },
+  // Same destination for both procurement roles now. The owner used to get the operations console
+  // in this slot and the office user got the folder; one door, one name, is what a bar is for.
+  { key: 'documents', labelKey: barLabel('/documents'), icon: FolderOpen, kind: 'link', to: '/documents', roles: ['owner', 'office'] },
+  { key: 'suppliers', labelKey: barLabel('/suppliers'), icon: Truck, kind: 'link', to: '/suppliers', roles: ['owner', 'office'] },
   // "חשבונית חדשה" was removed here (G1, 10.08.2026). This application RECEIVES supplier
   // invoices; it does not issue them to anyone. The action that replaces it already sits two rows
-  // up: `capture` — photograph the invoice that arrived. `/invoices/new` still exists as a route,
+  // up: `capture` - photograph the invoice that arrived. `/invoices/new` still exists as a route,
   // reachable from a document that has been reviewed, which is the only way an invoice should
   // come into being.
   { key: 'invoices', labelKey: barLabel('/invoices'), icon: FileText, kind: 'link', to: '/invoices', roles: ['accountant'] },

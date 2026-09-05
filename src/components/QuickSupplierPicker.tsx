@@ -29,7 +29,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
-import { QuickCreateSupplier, type QuickCreatedSupplier } from './QuickCreateSupplier';
+import {
+  QuickCreateSupplier,
+  type QuickCreatedSupplier,
+  type QuickSupplierCreationContext,
+} from './QuickCreateSupplier';
 import { ICON } from './ui';
 import { useT } from '../lib/i18n/LocaleProvider';
 import type { TKey } from '../lib/i18n/t';
@@ -117,7 +121,7 @@ export function useQuickSupplier<T extends SupplierOption>(
   fetched: readonly T[] | null | undefined,
   onSelect: (supplierId: string) => void,
 ): QuickSupplierPicker & { suppliers: (T | QuickCreatedSupplier)[] } {
-  const { profile } = useAuth();
+  const profile = useAuth()?.profile;
   const [dialogOpen, setDialogOpen] = useState(false);
   const [created, setCreated] = useState<QuickCreatedSupplier[]>([]);
   // Synced in an effect, not during render. A render-phase ref write is harmless while every
@@ -163,7 +167,7 @@ export function useQuickSupplier<T extends SupplierOption>(
  * disabled — a greyed control explains the state; a vanished one reads as the old dead end.
  */
 export function SupplierSelectField({
-  picker, id, label, value, placeholder, disabled, describedBy, className,
+  picker, id, label, value, placeholder, disabled, describedBy, className, createContext,
 }: {
   picker: QuickSupplierPicker;
   id: string;
@@ -173,6 +177,7 @@ export function SupplierSelectField({
   disabled?: boolean;
   describedBy?: string;
   className?: string;
+  createContext?: QuickSupplierCreationContext;
 }) {
   const { t } = useT();
   const fieldHintId = `${id}-quick-create-field-hint`;
@@ -239,7 +244,8 @@ export function SupplierSelectField({
         </p>
       )}
       {picker.dialogOpen && (
-        <QuickCreateSupplier onClose={picker.closeDialog} onCreated={picker.acceptCreated} />
+        <QuickCreateSupplier onClose={picker.closeDialog} onCreated={picker.acceptCreated}
+          context={createContext} />
       )}
     </div>
   );

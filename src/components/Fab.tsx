@@ -1,7 +1,7 @@
 import { useT } from '../lib/i18n/LocaleProvider';
 import { Link, useLocation } from 'react-router';
 import type { CSSProperties } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, RotateCcw } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { isRouteFamilyActive, quickActionsFor } from '../lib/quickActions';
 import { useQuickCapture } from './QuickCapture';
@@ -87,6 +87,10 @@ export default function Fab({ inboxCount = null }: {
         {mobileActions.map(({ key, labelKey, icon: Icon, kind, to }) => {
           const label = t(labelKey);
           if (kind === 'capture') {
+            const actionLabel = busy
+              ? t('fab.uploading')
+              : retryCount ? t('fab.retryAction', { count: retryCount }) : label;
+            const CaptureIcon = retryCount ? RotateCcw : Icon;
             return (
               <button key={key} type="button" className={`${restClass} mobile-action-raised`} data-quick-action-key={key}
                 disabled={busy} aria-busy={busy || undefined}
@@ -100,10 +104,10 @@ export default function Fab({ inboxCount = null }: {
                       the nearest rung (ICON.xl, 22) visibly shrinks the most-used control. Reported
                       to the integrator as a missing rung rather than silently rounded. */}
                   {busy
-                  ? <Loader2 size={26} className="animate-spin" aria-hidden="true" />
-                    : <Icon size={26} aria-hidden="true" />}
+                    ? <Loader2 size={26} className="animate-spin" aria-hidden="true" />
+                    : <CaptureIcon size={26} aria-hidden="true" />}
                 </span>
-                <span className="mobile-action-label">{label}</span>
+                <span className="mobile-action-label">{actionLabel}</span>
               </button>
             );
           }

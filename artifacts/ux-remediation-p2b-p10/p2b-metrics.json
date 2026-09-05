@@ -1,0 +1,28 @@
+{
+  "desktop": {
+    "controls": 23,
+    "baselineControls": 24,
+    "redirected": "/documents?processing=unassigned",
+    "reviewPanels": {
+      "before": 10,
+      "after": 9
+    },
+    "reviewTextBlocks": {
+      "before": 35,
+      "after": 32
+    }
+  },
+  "mobile": {
+    "controls": 20,
+    "baselineControls": 21,
+    "redirected": "/documents?processing=unassigned",
+    "reviewPanels": {
+      "before": 10,
+      "after": 9
+    },
+    "reviewTextBlocks": {
+      "before": 35,
+      "after": 32
+    }
+  }
+}

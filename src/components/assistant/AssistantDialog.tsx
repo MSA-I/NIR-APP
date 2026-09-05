@@ -2,7 +2,7 @@ import { useT } from '../../lib/i18n/LocaleProvider';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useLocation } from 'react-router';
-import { Loader2, RotateCcw, Send, Sparkles, Trash2, X } from 'lucide-react';
+import { Loader2, Plus, Send, Sparkles, Trash2, X } from 'lucide-react';
 import {
   ASSISTANT_FLAG_KEYS,
   ASSISTANT_QUESTION_MAX_CHARS,
@@ -23,7 +23,16 @@ import { APP_ROUTE_POLICY, appRouteAllowsRole } from '../../lib/routePolicy';
 import { ConfirmDialog, ErrorNote, ICON, Note, Skeleton, useDialogLayer } from '../ui';
 import AnswerView from './AnswerView';
 import CollapsibleAnswer from './CollapsibleAnswer';
-import { ROLE_EXAMPLE_KEYS } from './roleExamples';
+import type { TKey } from '../../lib/i18n/t';
+/* MERGE, 05.09.2026 -- `ROLE_EXAMPLE_KEYS` from './roleExamples' used to be read here. The
+   other campaign replaced it with the two maps below, which do what ASSIST-04 asked for and
+   MORE THOROUGHLY: every entry is checked against the `requiredRoles` of the tool that would
+   answer it, which is why the accountant's list CHANGES rather than only grows.
+   BUT NOTE, AND IT IS RECORDED RATHER THAN QUIETLY LEFT: `roleSuggestionsAreAnswerable.spec.tsx`
+   -- ASSIST-04's own oracle, verified red-to-green on 05.09 -- still reads `roleExamples.ts`,
+   which this screen no longer renders. So that guard now protects a module nobody draws. It
+   passes, and it would keep passing while these maps drifted. Pointing it at
+   `assistantExampleKeysFor` is authoring, not merging, so it is written down instead. */
 
 /**
  * Refusals with a working deterministic alternative. For these the panel does not stop at the
@@ -47,29 +56,6 @@ const FALLBACK_CODES = [
 
 const ASSISTANT_DESKTOP_QUERY = '(min-width: 64rem)';
 
-/**
- * The motes that rise through the card, as a FIXED table rather than `Math.random()` per render.
- *
- * The reference scatters them randomly, and copying that literally would re-roll every position on
- * every keystroke in the composer — the whole field would twitch while a person types. A constant
- * looks identical, costs nothing, and is the difference between atmosphere and a rendering bug.
- * They are decoration and carry no information: `aria-hidden`, gone under reduced motion, gone on
- * phones (`index.css`).
- */
-const ASSISTANT_MOTES = [
-  { left: '8%', delay: '0s', duration: '17s' },
-  { left: '19%', delay: '4s', duration: '21s' },
-  { left: '27%', delay: '9s', duration: '15s' },
-  { left: '35%', delay: '2s', duration: '23s' },
-  { left: '44%', delay: '12s', duration: '18s' },
-  { left: '52%', delay: '6s', duration: '20s' },
-  { left: '61%', delay: '15s', duration: '16s' },
-  { left: '69%', delay: '3s', duration: '22s' },
-  { left: '77%', delay: '10s', duration: '19s' },
-  { left: '86%', delay: '7s', duration: '24s' },
-  { left: '93%', delay: '13s', duration: '17s' },
-] as const;
-
 function useAssistantDesktopMode(): boolean {
   const [desktop, setDesktop] = useState(() =>
     typeof window !== 'undefined' && typeof window.matchMedia === 'function'
@@ -85,6 +71,89 @@ function useAssistantDesktopMode(): boolean {
   }, []);
 
   return desktop;
+}
+
+/**
+ * The openings each role is offered. The "השאלות המוצעות בעוזר" ruling in
+ * `docs/UX-REMEDIATION-DECISIONS-20260904.md` replaces a fixed count with two useful sets:
+ * usage guidance while the business has no working data, and data questions once it does.
+ *
+ * EVERY ENTRY IS CHECKED AGAINST THE TOOL THAT WOULD ANSWER IT, and against that tool's
+ * `requiredRoles` in `supabase/functions/assistant/tools/`. That check is the reason the
+ * accountant's list changes rather than only growing: it used to offer "כמה כסף ממתין לזיכוי?",
+ * which is `get_open_credits`, and that tool is `["owner", "office"]`. The panel was handing the
+ * accountant a question the server would refuse — a suggested dead end, which is worse than no
+ * suggestion, because the person reasonably reads the refusal as the assistant being broken.
+ *
+ * The mapping, so the next edit can be checked the same way:
+ *   get_open_alerts, get_purchase_metrics, explain_invoice_block, find_entity, get_product_help,
+ *   compare_order_receipt_invoice   -> all three roles
+ *   get_business_summary, get_open_credits, get_monthly_price_rises, get_payment_exposure,
+ *   get_supplier_performance, get_inventory_risk, get_orders_awaiting_confirmation,
+ *   get_purchase_comparison, get_dashboard_snapshot, draft_supplier_reminder -> owner + office
+ *   get_unmatched_bank_transactions -> owner + accountant
+ */
+/**
+ * The example questions, as KEYS rather than sentences — and the reason is not tidiness.
+ *
+ * Clicking one SENDS it: the example becomes the question the assistant is asked. Since
+ * `OPEN-DECISIONS #283` the assistant answers in the reader's language, so an English reader
+ * clicking a Hebrew example would be asking in a language they did not choose and reading the
+ * answer in one they did. The example has to be in their language before it is sent, not after.
+ */
+const ROLE_DATA_EXAMPLE_KEYS: Record<'owner' | 'office' | 'accountant', readonly TKey[]> = {
+  owner: [
+    'assistantDialog.exampleWhatNeedsAttention',
+    'assistantDialog.exampleBusinessPicture',
+    'assistantDialog.exampleCreditsPending',
+    'assistantDialog.examplePriceRises',
+    'assistantDialog.examplePaymentExposure',
+    'assistantDialog.exampleUnmatchedBank',
+  ],
+  office: [
+    'assistantDialog.exampleWhatNeedsAttention',
+    'assistantDialog.exampleInvoiceBlocked',
+    'assistantDialog.exampleOrdersUnconfirmed',
+    'assistantDialog.examplePriceRises',
+    'assistantDialog.exampleLateSuppliers',
+    'assistantDialog.exampleInventoryRisk',
+  ],
+  accountant: [
+    'assistantDialog.exampleUnmatchedBank',
+    'assistantDialog.exampleWhatNeedsAttention',
+    'assistantDialog.exampleInvoiceBlocked',
+    'assistantDialog.exampleInvoicesLastWeek',
+    'assistantDialog.exampleThreeWayMatch',
+    'assistantDialog.exampleWhereApprovals',
+  ],
+};
+
+const ROLE_USAGE_EXAMPLE_KEYS: Record<'owner' | 'office' | 'accountant', readonly TKey[]> = {
+  owner: [
+    'assistantDialog.exampleHowToStart',
+    'assistantDialog.exampleHowToAddSupplier',
+    'assistantDialog.exampleHowToUploadDocument',
+    'assistantDialog.exampleHowToCreateOrder',
+  ],
+  office: [
+    'assistantDialog.exampleHowToUploadDocument',
+    'assistantDialog.exampleHowToAddSupplier',
+    'assistantDialog.exampleHowToCreateOrder',
+    'assistantDialog.exampleHowToReceiveGoods',
+  ],
+  accountant: [
+    'assistantDialog.exampleHowToFindInvoices',
+    'assistantDialog.exampleHowToMatchBank',
+    'assistantDialog.exampleHowToExportReport',
+    'assistantDialog.exampleHowToFindApprovals',
+  ],
+};
+
+export function assistantExampleKeysFor(
+  role: 'owner' | 'office' | 'accountant',
+  hasBusinessData: boolean,
+): readonly TKey[] {
+  return hasBusinessData ? ROLE_DATA_EXAMPLE_KEYS[role] : ROLE_USAGE_EXAMPLE_KEYS[role];
 }
 
 function needsFallback(rawError: string): boolean {
@@ -205,8 +274,9 @@ function ConversationHistory({ authorizationFingerprint, onOpen }: {
   );
 }
 
-export default function AssistantDialog({ session, onClose, onMobileSourceNavigate }: {
+export default function AssistantDialog({ session, hasBusinessData, onClose, onMobileSourceNavigate }: {
   session: AssistantRunSession;
+  hasBusinessData: boolean;
   onClose: () => void;
   onMobileSourceNavigate: () => void;
 }) {
@@ -300,7 +370,7 @@ export default function AssistantDialog({ session, onClose, onMobileSourceNaviga
   const role = profile && isActiveRole(profile.role) ? profile.role : null;
   const canOpenAlerts = role !== null && appRouteAllowsRole('alerts', role);
   const canOpenDashboard = role !== null && appRouteAllowsRole('dashboard', role);
-  const examples = role ? ROLE_EXAMPLE_KEYS[role] : [];
+  const examples = role ? assistantExampleKeysFor(role, hasBusinessData) : [];
   const closeForProductNavigation = () => {
     if (!desktop) onMobileSourceNavigate();
   };
@@ -327,23 +397,6 @@ export default function AssistantDialog({ session, onClose, onMobileSourceNaviga
       tabIndex={-1}
       className="assistant-surface assistant-frame page-fade phone-safe-dialog z-50 overflow-hidden focus:outline-none no-print"
     >
-      {/* The lit background and the motes, beneath everything and reachable by nobody. Owner
-          ruling 01.09.2026 — the reference's dark card, kept in the product's own Onyx. */}
-      <div className="assistant-gradient pointer-events-none absolute inset-0" aria-hidden="true" />
-      <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
-        {ASSISTANT_MOTES.map((mote) => (
-          <span
-            key={mote.left}
-            className="assistant-mote"
-            style={{
-              insetInlineStart: mote.left,
-              ['--assistant-mote-delay' as string]: mote.delay,
-              ['--assistant-mote-duration' as string]: mote.duration,
-            }}
-          />
-        ))}
-      </div>
-
       <div className="assistant-inner relative z-10 flex h-full flex-col overflow-hidden rounded-xl">
         {/* Band 1 of 3 — the titled header. A plain <div> and not <header>: the panel root is a
             `div` carrying an ARIA role rather than a sectioning element, so a nested <header>
@@ -358,14 +411,14 @@ export default function AssistantDialog({ session, onClose, onMobileSourceNaviga
               <Sparkles size={ICON.lg} />
             </span>
             <h2 id={titleId} className="min-w-0 flex-1 truncate font-semibold text-shell-ink">{t('assistantDialog.heading', { app: APP_NAME })}</h2>
-            {(result || conversationId) && (
+            {(result || conversationId || errorText) && (
               <button
                 type="button"
                 className="assistant-focus btn-sm inline-flex items-center gap-1.5 rounded-lg px-2 font-medium text-shell-ink-soft transition-colors hover:bg-assistant-bubble hover:text-shell-ink focus-visible:outline-none disabled:opacity-50"
                 disabled={pending}
                 onClick={resetConversation}
               >
-                <RotateCcw size={ICON.xs} aria-hidden="true" /> {t('assistantDialog.newCheck')}
+                <Plus size={ICON.xs} aria-hidden="true" /> {t('assistantDialog.newCheck')}
               </button>
             )}
             <button
