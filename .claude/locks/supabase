@@ -10,6 +10,20 @@ QUEUE (coordinator grants in this order, one at a time, by SendMessage):
   3. PR 15    MON-06                  migration 0321, suite p114
   4. PR 11    MON-04                  migration 0322, suite p115
   5. PR 13    PERM-02                 migration 0323, suite p116
+     *** READY FOR THE STACK, 05.09.2026. Branch worktree-agent-a74b31599b1611772, commit
+     4e3c1008. Everything off-stack is done and committed: the production measurement (the
+     accountant reads 2 rows and is the subject of 0), migration 0323 as an ANCHORED
+     `alter policy` that wraps the qual read live from pg_policy and refuses a drifted one,
+     and suite p116. The agent that wrote it has exited; a continuation agent runs its script.
+     Three steps, in order:
+       1. RED on the genuinely unfixed tree -- move 0323 OUT of supabase/migrations,
+          `supabase db reset`, docker cp the suite, run it. Expect the accountant reading a
+          row it must not.
+       2. GREEN -- move 0323 back, `supabase db reset`, run the SAME suite unchanged.
+       3. `npm run demo:restore` -- the stack is reset twice, so it is restored and PROVED
+          before handoff. Project rule, not a courtesy.
+     Then write PR13-PERM-02-RED.txt / -GREEN.txt, set the GATES row, amend 4e3c1008.
+     LAND IT LAST of this campaign's migrations: 0323 is our highest number.
 
 WHAT COUNTS AS TOUCHING THE STACK:
   docker exec ... psql on supabase_db_supplyflow-p0
