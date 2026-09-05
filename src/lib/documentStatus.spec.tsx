@@ -7,7 +7,6 @@ import { DocumentStatusBadge } from '../components/DocumentStatusBadge';
 import {
   DOCUMENT_STUCK_ATTEMPT_COUNT,
   documentMatchesStatusFilter,
-  documentMatchesFilingFilter,
   documentProcessingFailureKey,
   documentProcessingStuckKey,
   documentStatusElapsed,
@@ -36,6 +35,7 @@ describe('documentUiStatus precedence', () => {
   it('maps every persisted pipeline stage into one canonical UI state', () => {
     const states = [
       documentUiStatus({ status: 'unprocessed', document: inbox, evaluatedAt: NOW }).state,
+      documentUiStatus({ status: 'awaiting_scan', document: inbox, evaluatedAt: NOW }).state,
       documentUiStatus({ status: 'queued', document: inbox, evaluatedAt: NOW }).state,
       documentUiStatus({ status: 'processing', document: inbox, evaluatedAt: NOW }).state,
       documentUiStatus({ status: 'extracted', document: inbox, evaluatedAt: NOW }).state,
@@ -44,7 +44,7 @@ describe('documentUiStatus precedence', () => {
       documentUiStatus({ status: 'failed', document: inbox, evaluatedAt: NOW }).state,
     ];
     expect(states).toEqual([
-      'unassigned', 'processing', 'processing', 'processing', 'review', 'unassigned', 'failed',
+      'unassigned', 'processing', 'processing', 'processing', 'processing', 'review', 'unassigned', 'failed',
     ]);
   });
 
@@ -73,12 +73,26 @@ describe('documentUiStatus precedence', () => {
     }).progress).toBeNull();
   });
 
-  it('shows the page counter on the badge itself', () => {
-    render(<DocumentStatusBadge status={documentUiStatus({
+  it('keeps row badges compact even when the server reports page progress', () => {
+    const { container } = render(<DocumentStatusBadge status={documentUiStatus({
       job: job('leased', { progress_done: 4, progress_total: 12 }),
       document: inbox, evaluatedAt: NOW,
     })} />);
-    expect(screen.getByText('· עמוד 4 מתוך 12')).toBeInTheDocument();
+    expect(container.querySelector('[data-document-status-progress]')).toBeNull();
+    expect(screen.getByText('בעיבוד')).toBeInTheDocument();
+  });
+
+  it('surfaces a batched supplier-unresolved review state in the folder badge', () => {
+    const status = documentUiStatus({
+      status: 'review',
+      reviewState: 'supplier_unresolved',
+      document: inbox,
+      evaluatedAt: NOW,
+    });
+
+    expect(status.state).toBe('supplier_unresolved');
+    expect(say(status.labelKey)).toBe('ספק לא מזוהה');
+    expect(status.loading).toBe(false);
   });
 
   it('keeps never-enqueued and actively queued documents distinct', () => {
@@ -95,7 +109,6 @@ describe('documentUiStatus precedence', () => {
     expect(status.state).toBe('processing');
     expect(status.loading).toBe(true);
     expect(status.countsAsUnassigned).toBe(false);
-    expect(documentMatchesFilingFilter(status, 'unfiled')).toBe(false);
     expect(status.elapsedSeconds).toBe(300);
   });
 
@@ -103,7 +116,6 @@ describe('documentUiStatus precedence', () => {
     const status = documentUiStatus({ status: null, document: inbox, evaluatedAt: NOW });
     expect(status.state).toBe('unavailable');
     expect(status.countsAsUnassigned).toBe(false);
-    expect(documentMatchesFilingFilter(status, 'unfiled')).toBe(false);
   });
 
   it('review + inbox is only human review', () => {
@@ -127,7 +139,7 @@ describe('documentUiStatus precedence', () => {
     expect(say(status.labelKey)).not.toContain('שויך');
   });
 
-  it('names both supported business assignment targets', () => {
+  it('keeps both supported business assignment targets under one compact list label', () => {
     const invoice = documentUiStatus({
       status: 'completed',
       document: { entity_type: 'invoice', entity_id: 'invoice-1' },
@@ -138,8 +150,8 @@ describe('documentUiStatus precedence', () => {
       document: { entity_type: 'goods_receipt', entity_id: 'receipt-1' },
       evaluatedAt: NOW,
     });
-    expect(say(invoice.labelKey)).toBe('שויך לחשבונית');
-    expect(say(receipt.labelKey)).toBe('שויך לקבלת סחורה');
+    expect(say(invoice.labelKey)).toBe('משויך');
+    expect(say(receipt.labelKey)).toBe('משויך');
   });
 
   it('archive is a completed no-target decision and never claims a business assignment', () => {
@@ -289,24 +301,23 @@ describe('documentUiStatus precedence', () => {
   });
 });
 
-describe('document status filtering and filing contracts', () => {
-  it('accepts only canonical filter tokens and rejects legacy, empty and prototype keys', () => {
+describe('document status filtering contracts', () => {
+  it('maps the legacy unfiled link to the canonical unassigned filter and rejects ambiguous tokens', () => {
     expect(documentStatusFilterFromParam('stuck')).toBe('stuck');
     expect(documentStatusFilterFromParam('assigned')).toBe('assigned');
-    for (const value of ['queued', 'completed', 'banana', '', 'toString', '__proto__']) {
+    expect(documentStatusFilterFromParam('unfiled')).toBe('unassigned');
+    for (const value of ['linked', 'queued', 'completed', 'banana', '', 'toString', '__proto__']) {
       expect(documentStatusFilterFromParam(value)).toBeNull();
     }
     expect(documentStatusFilterFromParam(null)).toBeNull();
   });
 
-  it('never includes archived documents in either active filing bucket', () => {
+  it('never includes archived documents in either assignment bucket', () => {
     const archived = documentUiStatus({
       status: 'completed',
       document: { entity_type: 'archive', entity_id: null },
       evaluatedAt: NOW,
     });
-    expect(documentMatchesFilingFilter(archived, 'unfiled')).toBe(false);
-    expect(documentMatchesFilingFilter(archived, 'linked')).toBe(false);
     expect(documentMatchesStatusFilter(archived, 'unassigned')).toBe(false);
     expect(documentMatchesStatusFilter(archived, 'assigned')).toBe(false);
   });
@@ -380,7 +391,8 @@ describe('DocumentStatusBadge loading contract', () => {
     expect(spinner).toHaveClass('animate-spin', 'motion-reduce:animate-none');
     expect(screen.getByRole('status')).toHaveTextContent('ממתין לעיבוד');
     expect(screen.getByRole('status')).toHaveAttribute('aria-busy', 'true');
-    expect(screen.getByText(/5 דק׳/)).toHaveAttribute('data-document-status-age');
+    expect(container.querySelector('[data-document-status-progress]')).toBeNull();
+    expect(container.querySelector('[data-document-status-age]')).toBeNull();
 
     const review = documentUiStatus({ job: job('review'), document: inbox, evaluatedAt: NOW });
     rerender(<DocumentStatusBadge status={review} />);
@@ -388,5 +400,17 @@ describe('DocumentStatusBadge loading contract', () => {
     expect(screen.queryByRole('status')).toBeNull();
     expect(container.querySelector('[aria-busy]')).toBeNull();
     expect(container.querySelector('[data-document-status-age]')).toBeNull();
+  });
+
+  it('keeps a stuck job identifiable without row-level page and age telemetry', () => {
+    const stuck = documentUiStatus({
+      job: { ...job('queued'), is_stuck: true, stuck_reason: 'queue_age' },
+      document: inbox,
+      evaluatedAt: NOW,
+    });
+    const { container } = render(<DocumentStatusBadge status={stuck} />);
+    expect(screen.getByText('עיבוד תקוע')).toBeInTheDocument();
+    expect(container.querySelector('.lucide-triangle-alert')).not.toBeNull();
+    expect(container.querySelector('[data-document-status-progress],[data-document-status-age]')).toBeNull();
   });
 });

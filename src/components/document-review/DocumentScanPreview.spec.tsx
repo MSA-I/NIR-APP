@@ -52,7 +52,7 @@ describe('DocumentScanPreview', () => {
     />);
 
     expect(screen.getByRole('status')).toHaveTextContent('החילוץ יתחיל רק לאחר אישור');
-    expect(screen.queryByRole('button', { name: 'אישור והמשך לחילוץ' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'אישור הסריקה' })).not.toBeInTheDocument();
   });
 
   it('shows original and enhanced previews before explicit acceptance', async () => {
@@ -74,8 +74,8 @@ describe('DocumentScanPreview', () => {
 
     expect(await screen.findByAltText('המסמך המקורי invoice.jpg')).toBeInTheDocument();
     expect(screen.getByAltText('סריקה משופרת של invoice.jpg')).toBeInTheDocument();
-    expect(screen.getByText(/עדיין לא חולצו מהמסמך ספק, מספר, תאריך/)).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'אישור והמשך לחילוץ' }));
+    expect(screen.getByText(/בדוק שהדף שלם וקריא/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'אישור הסריקה' }));
 
     await waitFor(() => expect(mocks.rpc).toHaveBeenCalledWith('accept_document_scan', {
       p_scan_output_id: state.output_id,
@@ -215,7 +215,7 @@ describe('DocumentScanPreview', () => {
       onChanged={vi.fn()}
     />);
 
-    expect(await screen.findByRole('button', { name: 'אישור והמשך לחילוץ' })).toBeDisabled();
+    expect(await screen.findByRole('button', { name: 'אישור הסריקה' })).toBeDisabled();
     expect(screen.getByText(/אפשר לצפות בסריקה, אך אי אפשר לאשר/)).toBeInTheDocument();
 
     rerender(<DocumentScanPreview
@@ -269,7 +269,7 @@ describe('בטלפון — אישור הסריקה מגיע לאגודל, ערי
     rotation_degrees: 0,
   };
 
-  it('מציג את "אישור והמשך לחילוץ" פעם אחת, אחרי התמונות, ולבדו באזור ההכרעה', async () => {
+  it('מציג את "אישור הסריקה" פעם אחת, אחרי התמונות, ולבדו באזור ההכרעה', async () => {
     render(<DocumentScanPreview
       state={readyState}
       originalStoragePath="org/inbox/source.jpg"
@@ -278,8 +278,8 @@ describe('בטלפון — אישור הסריקה מגיע לאגודל, ערי
       onChanged={vi.fn().mockResolvedValue(true)}
     />);
 
-    const cta = await screen.findByRole('button', { name: 'אישור והמשך לחילוץ' });
-    expect(screen.getAllByRole('button', { name: 'אישור והמשך לחילוץ' })).toHaveLength(1);
+    const cta = await screen.findByRole('button', { name: 'אישור הסריקה' });
+    expect(screen.getAllByRole('button', { name: 'אישור הסריקה' })).toHaveLength(1);
     const decision = screen.getByTestId('primary-decision');
     expect(decision).toContainElement(cta);
     // One control in the decision. The exception path stays beside the images it is about — and on
@@ -346,7 +346,7 @@ describe('ארגון בקריאה בלבד — הכפתור המת נשאר לי
       onChanged={vi.fn().mockResolvedValue(true)}
     />);
 
-    const cta = await screen.findByRole('button', { name: 'אישור והמשך לחילוץ' });
+    const cta = await screen.findByRole('button', { name: 'אישור הסריקה' });
     expect(cta).toBeDisabled();
     // Nothing is fixed to the phone's bottom edge on this screen any more, pressable or not: the
     // button and the sentence that explains it are one block, in the flow, together.

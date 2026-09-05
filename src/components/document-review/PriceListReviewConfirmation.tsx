@@ -10,7 +10,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { ConfirmDialog, ICON, MonthPicker, Note, SubPanel } from '../ui';
 import { PrimaryDecision } from './PrimaryDecision';
 import { FILING_REASON_KEYS, type ReviewSnapshot } from './model';
-import { bidiIsolate, formatUnit, normalizeUnitInput } from '../../lib/format';
+import { bidiIsolate, fmtMonth, formatUnit, normalizeUnitInput } from '../../lib/format';
 
 interface PriceListReviewConfirmationProps {
   snapshot: ReviewSnapshot;
@@ -57,6 +57,30 @@ interface SubmissionReceipt {
 
 function valueText(value: string | number | null, t: (key: TKey) => string): string {
   return value === null ? t('priceListReview.valueNotRecognised') : String(value);
+}
+
+const SOURCE_LINE_LABELS: Readonly<Record<string, TKey>> = {
+  description: 'priceListReview.sourceDescription',
+  product_name: 'priceListReview.sourceDescription',
+  sku: 'priceListReview.sourceSku',
+  barcode: 'priceListReview.sourceBarcode',
+  quantity: 'priceListReview.sourceQuantity',
+  unit: 'priceListReview.sourceUnit',
+  unit_price: 'priceListReview.sourceUnitPrice',
+  discount_amount: 'priceListReview.sourceDiscount',
+  vat_rate: 'priceListReview.sourceVat',
+  line_total: 'priceListReview.sourceLineTotal',
+};
+
+function sourceLineSummary(
+  values: Record<string, string | number | null>,
+  t: (key: TKey) => string,
+) {
+  return Object.entries(values).map(([key, value]) => ({
+    key,
+    label: t(SOURCE_LINE_LABELS[key] ?? 'priceListReview.sourceAdditionalValue'),
+    value: valueText(value, t),
+  }));
 }
 
 /** Best-effort name prefill for a new product, taken from the line's own extracted values. */
@@ -178,7 +202,6 @@ function parseReceipt(value: unknown, t: (key: TKey) => string): SubmissionRecei
       || typeof row.rejected_count !== 'number'
       || typeof row.unchanged_count !== 'number'
       || typeof row.idempotent !== 'boolean') {
-  const { t } = useT();
     throw new Error(t('priceListReview.receiptMalformed'));
   }
   return row as unknown as SubmissionReceipt;
@@ -891,7 +914,7 @@ export function PriceListReviewConfirmation({
       {attemptedPayload && !receipt && (
         <Note tone="await" className="mt-4 flex-wrap">
           <span className="min-w-0 flex-1">
-            {t('priceListReview.lockedAfterFirst')}<span className="num">{attemptedPayload.approvedRows.length}</span> {t('priceListReview.slice')} <span className="num">{attemptedPayload.targetMonth.slice(0, 7)}</span>{t('priceListReview.replayNoChanges')}
+            {t('priceListReview.lockedAfterFirst')}<span className="num">{attemptedPayload.approvedRows.length}</span> {t('priceListReview.slice')} <span className="num">{fmtMonth(attemptedPayload.targetMonth, locale)}</span>{t('priceListReview.replayNoChanges')}
           </span>
           {canReplay && (
             <button type="button" className="btn-secondary" disabled={busy} onClick={() => void submitPayload(attemptedPayload)}>
@@ -1064,14 +1087,13 @@ export function PriceListReviewConfirmation({
                 </div>
               </div>
               <SubPanel className="mt-3">
-                  <dl className="grid gap-2 sm:grid-cols-2">
-                    {Object.entries(item.values).map(([key, value]) => (
-                      <div key={key} className="min-w-0 rounded-lg bg-surface-sunken p-2">
-                        <dt className="text-xs font-medium text-ink-muted">{key}</dt>
-                        <dd className="mt-1 break-words text-sm text-ink-body">{valueText(value, t)}</dd>
-                      </div>
+                  <ul className="flex flex-wrap gap-x-4 gap-y-1 text-sm" aria-label={t('priceListReview.sourceLineSummary')}>
+                    {sourceLineSummary(item.values, t).map(({ key, label, value }) => (
+                      <li key={key} className="min-w-0 break-words text-ink-body">
+                        <span className="font-medium text-ink-muted">{label}:</span>{' '}{value}
+                      </li>
                     ))}
-                  </dl>
+                  </ul>
 
                   {autoLine?.reason_code && (
                     <Note tone="await" className="mt-3">
@@ -1175,15 +1197,11 @@ export function PriceListReviewConfirmation({
       {refreshWarning && <Note tone="alert" role="alert" className="mt-4">{refreshWarning}</Note>}
       {receipt && (
         <div className="mt-4 rounded-lg border border-done-line bg-done-wash p-4" aria-live="polite">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="font-semibold text-ink-body">{t('priceListReview.text_61')}</h3>
-            <span className={receipt.idempotent ? 'badge-info' : 'badge-done'}>{receipt.idempotent ? t('priceListReview.text_62') : t('priceListReview.text_63')}</span>
-          </div>
+          <h3 className="font-semibold text-ink-body">{t('priceListReview.text_61')}</h3>
           <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
-            <div><dt className="inline font-medium">גרסה: </dt><dd className="inline num">{receipt.revision}</dd></div>
-            <div><dt className="inline font-medium">שורות שהתקבלו: </dt><dd className="inline num">{receipt.accepted_count}</dd></div>
-            <div><dt className="inline font-medium">שורות שנדחו: </dt><dd className="inline num">{receipt.rejected_count}</dd></div>
-            <div><dt className="inline font-medium">שורות ללא שינוי: </dt><dd className="inline num">{receipt.unchanged_count}</dd></div>
+            <div><dt className="inline font-medium">{t('priceListReview.text_66')} </dt><dd className="inline num">{receipt.accepted_count}</dd></div>
+            <div><dt className="inline font-medium">{t('priceListReview.text_67')} </dt><dd className="inline num">{receipt.rejected_count}</dd></div>
+            <div><dt className="inline font-medium">{t('priceListReview.text_68')} </dt><dd className="inline num">{receipt.unchanged_count}</dd></div>
           </dl>
           <div className="mt-4">
             <Link className="btn-secondary" to={returnPath}>{t('priceListReview.text_69')}</Link>

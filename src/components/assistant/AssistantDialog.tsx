@@ -3,7 +3,7 @@ import type { TKey } from '../../lib/i18n/t.ts';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useLocation } from 'react-router';
-import { Loader2, RotateCcw, Send, Sparkles, Trash2, X } from 'lucide-react';
+import { Loader2, Plus, Send, Sparkles, Trash2, X } from 'lucide-react';
 import {
   ASSISTANT_FLAG_KEYS,
   ASSISTANT_QUESTION_MAX_CHARS,
@@ -47,29 +47,6 @@ const FALLBACK_CODES = [
 
 const ASSISTANT_DESKTOP_QUERY = '(min-width: 64rem)';
 
-/**
- * The motes that rise through the card, as a FIXED table rather than `Math.random()` per render.
- *
- * The reference scatters them randomly, and copying that literally would re-roll every position on
- * every keystroke in the composer — the whole field would twitch while a person types. A constant
- * looks identical, costs nothing, and is the difference between atmosphere and a rendering bug.
- * They are decoration and carry no information: `aria-hidden`, gone under reduced motion, gone on
- * phones (`index.css`).
- */
-const ASSISTANT_MOTES = [
-  { left: '8%', delay: '0s', duration: '17s' },
-  { left: '19%', delay: '4s', duration: '21s' },
-  { left: '27%', delay: '9s', duration: '15s' },
-  { left: '35%', delay: '2s', duration: '23s' },
-  { left: '44%', delay: '12s', duration: '18s' },
-  { left: '52%', delay: '6s', duration: '20s' },
-  { left: '61%', delay: '15s', duration: '16s' },
-  { left: '69%', delay: '3s', duration: '22s' },
-  { left: '77%', delay: '10s', duration: '19s' },
-  { left: '86%', delay: '7s', duration: '24s' },
-  { left: '93%', delay: '13s', duration: '17s' },
-] as const;
-
 function useAssistantDesktopMode(): boolean {
   const [desktop, setDesktop] = useState(() =>
     typeof window !== 'undefined' && typeof window.matchMedia === 'function'
@@ -88,9 +65,9 @@ function useAssistantDesktopMode(): boolean {
 }
 
 /**
- * The openings each role is offered — six per role since 26.08.2026 (owner: "צריך להוסיף יותר
- * הצעות מבחינת השאלות"). Two was not a menu, it was a pair of samples, and a person who wanted
- * neither of them was left facing an empty box with no idea what this surface can be asked.
+ * The openings each role is offered. The "השאלות המוצעות בעוזר" ruling in
+ * `docs/UX-REMEDIATION-DECISIONS-20260904.md` replaces a fixed count with two useful sets:
+ * usage guidance while the business has no working data, and data questions once it does.
  *
  * EVERY ENTRY IS CHECKED AGAINST THE TOOL THAT WOULD ANSWER IT, and against that tool's
  * `requiredRoles` in `supabase/functions/assistant/tools/`. That check is the reason the
@@ -115,7 +92,7 @@ function useAssistantDesktopMode(): boolean {
  * clicking a Hebrew example would be asking in a language they did not choose and reading the
  * answer in one they did. The example has to be in their language before it is sent, not after.
  */
-const ROLE_EXAMPLE_KEYS: Record<'owner' | 'office' | 'accountant', readonly TKey[]> = {
+const ROLE_DATA_EXAMPLE_KEYS: Record<'owner' | 'office' | 'accountant', readonly TKey[]> = {
   owner: [
     'assistantDialog.exampleWhatNeedsAttention',
     'assistantDialog.exampleBusinessPicture',
@@ -141,6 +118,34 @@ const ROLE_EXAMPLE_KEYS: Record<'owner' | 'office' | 'accountant', readonly TKey
     'assistantDialog.exampleWhereApprovals',
   ],
 };
+
+const ROLE_USAGE_EXAMPLE_KEYS: Record<'owner' | 'office' | 'accountant', readonly TKey[]> = {
+  owner: [
+    'assistantDialog.exampleHowToStart',
+    'assistantDialog.exampleHowToAddSupplier',
+    'assistantDialog.exampleHowToUploadDocument',
+    'assistantDialog.exampleHowToCreateOrder',
+  ],
+  office: [
+    'assistantDialog.exampleHowToUploadDocument',
+    'assistantDialog.exampleHowToAddSupplier',
+    'assistantDialog.exampleHowToCreateOrder',
+    'assistantDialog.exampleHowToReceiveGoods',
+  ],
+  accountant: [
+    'assistantDialog.exampleHowToFindInvoices',
+    'assistantDialog.exampleHowToMatchBank',
+    'assistantDialog.exampleHowToExportReport',
+    'assistantDialog.exampleHowToFindApprovals',
+  ],
+};
+
+export function assistantExampleKeysFor(
+  role: 'owner' | 'office' | 'accountant',
+  hasBusinessData: boolean,
+): readonly TKey[] {
+  return hasBusinessData ? ROLE_DATA_EXAMPLE_KEYS[role] : ROLE_USAGE_EXAMPLE_KEYS[role];
+}
 
 function needsFallback(rawError: string): boolean {
   return FALLBACK_CODES.some((code) => rawError.includes(code));
@@ -260,8 +265,9 @@ function ConversationHistory({ authorizationFingerprint, onOpen }: {
   );
 }
 
-export default function AssistantDialog({ session, onClose, onMobileSourceNavigate }: {
+export default function AssistantDialog({ session, hasBusinessData, onClose, onMobileSourceNavigate }: {
   session: AssistantRunSession;
+  hasBusinessData: boolean;
   onClose: () => void;
   onMobileSourceNavigate: () => void;
 }) {
@@ -355,7 +361,7 @@ export default function AssistantDialog({ session, onClose, onMobileSourceNaviga
   const role = profile && isActiveRole(profile.role) ? profile.role : null;
   const canOpenAlerts = role !== null && appRouteAllowsRole('alerts', role);
   const canOpenDashboard = role !== null && appRouteAllowsRole('dashboard', role);
-  const examples = role ? ROLE_EXAMPLE_KEYS[role] : [];
+  const examples = role ? assistantExampleKeysFor(role, hasBusinessData) : [];
   const closeForProductNavigation = () => {
     if (!desktop) onMobileSourceNavigate();
   };
@@ -382,23 +388,6 @@ export default function AssistantDialog({ session, onClose, onMobileSourceNaviga
       tabIndex={-1}
       className="assistant-surface assistant-frame page-fade phone-safe-dialog z-50 overflow-hidden focus:outline-none no-print"
     >
-      {/* The lit background and the motes, beneath everything and reachable by nobody. Owner
-          ruling 01.09.2026 — the reference's dark card, kept in the product's own Onyx. */}
-      <div className="assistant-gradient pointer-events-none absolute inset-0" aria-hidden="true" />
-      <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
-        {ASSISTANT_MOTES.map((mote) => (
-          <span
-            key={mote.left}
-            className="assistant-mote"
-            style={{
-              insetInlineStart: mote.left,
-              ['--assistant-mote-delay' as string]: mote.delay,
-              ['--assistant-mote-duration' as string]: mote.duration,
-            }}
-          />
-        ))}
-      </div>
-
       <div className="assistant-inner relative z-10 flex h-full flex-col overflow-hidden rounded-xl">
         {/* Band 1 of 3 — the titled header. A plain <div> and not <header>: the panel root is a
             `div` carrying an ARIA role rather than a sectioning element, so a nested <header>
@@ -413,14 +402,14 @@ export default function AssistantDialog({ session, onClose, onMobileSourceNaviga
               <Sparkles size={ICON.lg} />
             </span>
             <h2 id={titleId} className="min-w-0 flex-1 truncate font-semibold text-shell-ink">{t('assistantDialog.heading', { app: APP_NAME })}</h2>
-            {(result || conversationId) && (
+            {(result || conversationId || errorText) && (
               <button
                 type="button"
                 className="assistant-focus btn-sm inline-flex items-center gap-1.5 rounded-lg px-2 font-medium text-shell-ink-soft transition-colors hover:bg-assistant-bubble hover:text-shell-ink focus-visible:outline-none disabled:opacity-50"
                 disabled={pending}
                 onClick={resetConversation}
               >
-                <RotateCcw size={ICON.xs} aria-hidden="true" /> {t('assistantDialog.newCheck')}
+                <Plus size={ICON.xs} aria-hidden="true" /> {t('assistantDialog.newCheck')}
               </button>
             )}
             <button

@@ -1,6 +1,6 @@
 {
   "note": "Keys with no PRODUCTION call site. Names, not a count: four pull requests in one wave can wire one key and strand another while the total stands still. `specOnly` is the subset a test still names, which a count-based guard reads as healthy.",
-  "considered": 5457,
+  "considered": 5472,
   "orphans": [
     "answerView.text_6",
     "bank.find",
@@ -51,9 +51,6 @@
     "planCard.emphasisPremium",
     "priceListReview.text_64",
     "priceListReview.text_65",
-    "priceListReview.text_66",
-    "priceListReview.text_67",
-    "priceListReview.text_68",
     "priceLists.setAvailable",
     "priceLists.setDate",
     "priceLists.setDocumentOpen",

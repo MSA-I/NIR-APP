@@ -363,7 +363,7 @@ export default function App() {
             prop instead and this route is the only thing that turns it on. */}
         <Route path="/documents/archive" element={<Guard roles={STAFF}><DocumentsGallery archive /></Guard>} />
         <Route path="/documents/:documentId/review" element={<Guard roles={DOCUMENT_REVIEWERS}><DocumentReview /></Guard>} />
-        <Route path="/inbox" element={<Navigate to="/documents?filing=unfiled" replace />} />
+        <Route path="/inbox" element={<Navigate to="/documents?processing=unassigned" replace />} />
 
         <Route path={APP_ROUTE_POLICY.credits.path} element={<Guard roles={APP_ROUTE_POLICY.credits.roles}><Credits /></Guard>} />
         <Route path={APP_ROUTE_POLICY.paymentRequests.path} element={<Guard roles={APP_ROUTE_POLICY.paymentRequests.roles}><PaymentRequests /></Guard>} />

@@ -98,7 +98,7 @@ export const getProductHelp: AssistantTool = {
     // instead of Hebrew, and the reader’s language is a fact the server holds rather than a
     // guess the model makes.
     const locale = parsed.locale ?? ctx.locale ?? PRODUCT_HELP_BASE_LOCALE;
-    const asOf = ctx.now().toISOString();
+    const requestAsOf = ctx.now().toISOString();
     const filters = {
       question: sanitizeText(question, 200),
       entry_id: entry_id || null,
@@ -137,6 +137,9 @@ export const getProductHelp: AssistantTool = {
 
     for (const entry of matches) {
       const path = productHelpPath(entry);
+      // Registry dates are date-only source metadata. Facts require a datetime with an offset, so
+      // normalize the source's own date instead of stamping static guidance with request time.
+      const entryAsOf = `${entry.updated_at}T00:00:00Z`;
       rows.push({
         id: entry.id,
         locale: entry.locale,
@@ -157,7 +160,7 @@ export const getProductHelp: AssistantTool = {
         value: path,
         unit: "text",
         tool: getProductHelp.name,
-        as_of: asOf,
+        as_of: entryAsOf,
         classification: "public_product_metadata",
       }));
       // One fact per step, on the same path. `data` never crosses the provider boundary, so a
@@ -174,7 +177,7 @@ export const getProductHelp: AssistantTool = {
           value: path,
           unit: "text",
           tool: getProductHelp.name,
-          as_of: asOf,
+          as_of: entryAsOf,
           classification: "public_product_metadata",
         }));
       });
@@ -211,7 +214,7 @@ export const getProductHelp: AssistantTool = {
       complete: true,
       failures: [],
       filters,
-      as_of: asOf,
+      as_of: requestAsOf,
       result_count: rows.length,
       has_more: !entry_id && matches.length === PRODUCT_HELP_MATCH_LIMIT,
       facts,

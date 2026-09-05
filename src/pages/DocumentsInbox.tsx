@@ -11,7 +11,7 @@ import { ConfirmDialog, DataTable, ErrorNote, ICON, Modal, Note, PageHeader, Ske
 import { PlanLimitNote } from '../components/PlanLimitNote';
 import { DocumentRemovalDialog } from '../components/DocumentRemovalDialog';
 import { ok } from '../lib/errors';
-import { bidiIsolate, fmtDate, fmtDateTime, todayISO } from '../lib/format';
+import { bidiIsolate, fmtDate, fmtDateTime } from '../lib/format';
 import type { DocumentRow } from '../lib/types';
 import {
   DOCUMENT_KIND_OPTIONS,
@@ -30,7 +30,6 @@ import { DocumentStatusBadge } from '../components/DocumentStatusBadge';
 import { UploadCenter } from '../components/UploadCenter';
 import {
   DOCUMENT_STATUS_FILTERS,
-  documentMatchesFilingFilter,
   documentMatchesStatusFilter,
   documentStatusFilterFromParam,
   documentUiStatus,
@@ -45,6 +44,11 @@ import {
 type RefileTarget = 'invoice' | 'goods_receipt';
 type SupplierOption = { id: string; name: string };
 type GalleryDocument = DocumentRow & { supplier: SupplierOption | null };
+type FolderReviewState = {
+  document_id: string;
+  state: 'supplier_unresolved' | 'blocked' | 'ready_for_approval';
+  suggested_supplier_name: string | null;
+};
 
 /** One row of `document_auto_actions` (0077): a financial record a machine wrote with no human.
  *
@@ -294,7 +298,7 @@ function UploadModal({ suppliers, onClose, onDone }: {
   const toast = useToast();
   const [files, setFiles] = useState<File[]>([]);
   const [supplierId, setSupplierId] = useState('');
-  const [documentDate, setDocumentDate] = useState(todayISO());
+  const [documentDate, setDocumentDate] = useState('');
   const [busy, setBusy] = useState(false);
   const [uploadSummary, setUploadSummary] = useState<UploadBatchSummary | null>(null);
 
@@ -350,6 +354,7 @@ function UploadModal({ suppliers, onClose, onDone }: {
       <div className="space-y-3">
         <label className="block">
           <span className="label">{t('documents.text_20')}</span>
+          <span className="mb-2 block text-xs text-ink-muted">{t('documents.uploadLimitHint')}</span>
           <input type="file" className="input" multiple
             accept={DOCUMENT_UPLOAD_ACCEPT}
             disabled={busy || !!uploadSummary?.failed.length}
@@ -409,7 +414,7 @@ function UploadModal({ suppliers, onClose, onDone }: {
 }
 
 /** One register for every active document, served at two routes. `/documents` is all of it, and
- *  `/inbox` redirects here with `filing=unfiled` — capture and register are two views of one
+ *  `/inbox` redirects here with `processing=unassigned` — capture and register are two views of one
  *  source of truth. `/documents/archive` sets `archive` and narrows the same query to
  *  `entity_type='archive'`: the documents interpretation could not place, which no one files by
  *  hand. One component either way, so "what is a document row" has a single answer. */
@@ -420,16 +425,12 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
   const toast = useToast();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
-  const filingParam = params.get('filing');
-  // The archive ignores the filing filter outright, not merely hides its control: `/inbox`
-  // redirects to `?filing=unfiled` and that param survives navigation, so an archive reached
-  // with it still attached would silently narrow a list whose only control for widening it
-  // again is no longer on screen.
-  const filing = !archive && (filingParam === 'linked' || filingParam === 'unfiled') ? filingParam : 'all';
   // The filter uses the exact same precedence result as the badge. Old raw-stage links are mapped
   // only when their meaning remains exact; ambiguous aggregate links fall back to "all" rather
   // than showing a control that says one thing over rows that say another.
-  const requestedProcessingFilter = documentStatusFilterFromParam(params.get('processing'));
+  const requestedProcessingFilter = documentStatusFilterFromParam(
+    params.get('processing') ?? params.get('filing'),
+  );
   const processingFilter: DocumentStatusFilter | 'all' = archive
     && (requestedProcessingFilter === 'unassigned' || requestedProcessingFilter === 'assigned')
     ? 'all'
@@ -504,7 +505,17 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
     return { docs, suppliers };
   }, [archive]);
   const documentIds = useMemo(() => data?.docs.map((doc) => doc.id) ?? [], [data]);
+  const documentIdsKey = documentIds.join(',');
   const processing = useDocumentProcessing(documentIds);
+
+  /** One server read for the visible folder, never one assessment RPC per row. */
+  const { data: folderReviewStates } = useQuery<Record<string, FolderReviewState>>(async () => {
+    if (!documentIds.length) return {};
+    const rows = unwrap(await supabase.rpc('get_document_folder_review_states', {
+      p_document_ids: documentIds,
+    })) as FolderReviewState[];
+    return Object.fromEntries(rows.map((row) => [row.document_id, row]));
+  }, [documentIdsKey]);
 
   /** The autonomy ledger, read in its OWN query rather than joined into the list above, and the
    *  separation is a product decision: a document register that refuses to render because the
@@ -513,7 +524,6 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
    *  honest degradation, because offering an undo we cannot describe would be worse than none.
    *  Keyed on a joined string, the `useDocumentProcessing` idiom, so a re-render with an
    *  identical id list does not re-fetch. */
-  const documentIdsKey = documentIds.join(',');
   const { data: autoActions, refetch: refetchAutoActions } = useQuery<Record<string, AutoActionRow>>(
     async () => {
       if (!documentIds.length) return {};
@@ -532,6 +542,7 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
       status: processing.data === null ? null : processing.snapshots[doc.id]?.stage ?? 'unprocessed',
       job: processing.snapshots[doc.id]?.job,
       document: doc,
+      reviewState: folderReviewStates?.[doc.id]?.state ?? null,
       autoAssigned: autoAction !== null,
       autoAssignmentDescriptionKey: autoAction ? 'documentStatus.autoAssignedByMachine' : null,
       autoAssignmentDescriptionVars: autoAction
@@ -634,24 +645,17 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
       return (!needle || doc.file_name.toLowerCase().includes(needle))
         && (!supplierId || (supplierId === 'none' ? !doc.supplier_id : doc.supplier_id === supplierId))
         && (!kind || doc.document_kind === kind)
-        && documentMatchesFilingFilter(uiStatus, filing)
         // An unread processing query resolves to `unavailable`, which matches no named filter.
         // The banner above the table explains the gap without assigning it a false state.
         && documentMatchesStatusFilter(uiStatus, processingFilter)
         && (!from || date >= from)
         && (!to || date <= to);
     });
-  }, [data, q, supplierId, kind, filing, processingFilter, processing.data, processing.snapshots, from, to, autoActions]);
-
-  function setFiling(value: string) {
-    const next = new URLSearchParams(params);
-    if (value === 'all') next.delete('filing');
-    else next.set('filing', value);
-    setParams(next, { replace: true });
-  }
+  }, [data, q, supplierId, kind, processingFilter, processing.data, processing.snapshots, from, to, autoActions]);
 
   function setProcessing(value: string) {
     const next = new URLSearchParams(params);
+    next.delete('filing');
     if (value === 'all') next.delete('processing');
     else next.set('processing', value);
     setParams(next, { replace: true });
@@ -844,8 +848,8 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
     },
   ] as Array<Column<GalleryDocument> | null>).filter((column): column is Column<GalleryDocument> => column !== null);
 
-  const hasFilters = !!(q || supplierId || kind || from || to || filing !== 'all' || processingFilter !== 'all');
-  const advancedFilterCount = [supplierId, kind, from, to, !archive && filing !== 'all' ? filing : ''].filter(Boolean).length;
+  const hasFilters = !!(q || supplierId || kind || from || to || processingFilter !== 'all');
+  const advancedFilterCount = [supplierId, kind, from, to].filter(Boolean).length;
   const revertAction = revertDoc ? autoActionFor(revertDoc) : null;
   const revertConfidence = revertAction
     ? autoActionConfidence(revertAction) ?? t('documentsInboxTail.unknownConfidence')
@@ -875,7 +879,6 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
             audit row — it simply has no control on this screen, because the intended filer is
             the interpretation layer (task C2, not yet written). */}
       <PageHeader title={<span className="flex items-center gap-2"><HeadingIcon size={ICON.xl} aria-hidden="true" /> {archive ? t('documents.text_41') : t('documents.text_42')}</span>}
-        meta={!archive ? t('documents.text_43') : undefined}
         actions={<>
           {canUpload && !archive && (
             <button type="button" data-tour-anchor="documents-upload" className="btn-primary" onClick={() => setUploadOpen(true)}>
@@ -938,16 +941,6 @@ export default function DocumentsGallery({ archive = false }: { archive?: boolea
                 {DOCUMENT_KIND_OPTIONS.map((option) => <option key={option.value} value={option.value}>{t(option.labelKey)}</option>)}
               </select>
             </label>
-            {!archive && (
-              <label>
-                <span className="label">{t('documents.text_53')}</span>
-                <select className="input" value={filing} onChange={(event) => setFiling(event.target.value)}>
-                  <option value="all">{t('documents.text_54')}</option>
-                  <option value="unfiled">{t('documents.text_55')}</option>
-                  <option value="linked">{t('documents.text_56')}</option>
-                </select>
-              </label>
-            )}
             <label><span className="label">{t('documents.setFrom')}</span><input type="date" className="input num" value={from} onChange={(event) => setFrom(event.target.value)} /></label>
             <label><span className="label">{t('documents.setTo')}</span><input type="date" className="input num" value={to} onChange={(event) => setTo(event.target.value)} /></label>
             <div className="flex items-end"><button type="button" className="btn-ghost min-h-11" disabled={!hasFilters} onClick={resetFilters}><X size={ICON.sm} /> {t('documents.text_57')}</button></div>

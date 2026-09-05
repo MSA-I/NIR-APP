@@ -1,18 +1,27 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { isRouteFamilyActive } from '../lib/quickActions';
 
 const state = vi.hoisted(() => ({
   role: 'owner' as 'owner' | 'office' | 'accountant' | 'kitchen',
   organizationAccess: { mode: 'active' as 'active' | 'read_only' | 'offboarding', canWrite: true },
+  captureBusy: false,
+  captureRetryCount: 0,
+  openCapture: vi.fn(),
 }));
 
 vi.mock('../auth/AuthContext', () => ({
   useAuth: () => ({ profile: { role: state.role }, organizationAccess: state.organizationAccess }),
 }));
 vi.mock('./QuickCapture', () => ({
-  useQuickCapture: () => ({ openCapture: vi.fn(), element: null, busy: false, retryCount: 0 }),
+  useQuickCapture: () => ({
+    openCapture: state.openCapture,
+    element: null,
+    busy: state.captureBusy,
+    retryCount: state.captureRetryCount,
+  }),
 }));
 
 import Fab from './Fab';
@@ -28,6 +37,9 @@ beforeAll(() => {
 beforeEach(() => {
   state.role = 'owner';
   state.organizationAccess = { mode: 'active', canWrite: true };
+  state.captureBusy = false;
+  state.captureRetryCount = 0;
+  state.openCapture.mockClear();
 });
 
 function renderAt(path: string, props: { inboxCount?: number | null } = {}) {
@@ -77,6 +89,19 @@ describe('סרגל פעולות מהירות תחתון', () => {
     expect(screen.queryByRole('navigation', { name: 'ניווט ראשי בנייד' })).toBeNull();
     expect(items()).toHaveLength(5);
     expect(screen.getByRole('button', { name: 'צילום מסמך' })).toBeInTheDocument();
+  });
+
+  it('כשהצילום הפך לניסיון חוזר גם הכיתוב והאייקון אומרים זאת בגלוי', async () => {
+    state.role = 'office';
+    state.captureRetryCount = 2;
+    renderAt('/documents');
+
+    const retry = screen.getByRole('button', { name: 'ניסיון חוזר להעלאת 2 מסמכים' });
+    expect(retry).toHaveTextContent('ניסיון חוזר (2)');
+    expect(retry.querySelector('.lucide-rotate-ccw')).not.toBeNull();
+    expect(retry.querySelector('.lucide-camera')).toBeNull();
+    await userEvent.click(retry);
+    expect(state.openCapture).toHaveBeenCalledTimes(1);
   });
 
   it('אינו מציג סרגל לתפקיד שפרש', () => {

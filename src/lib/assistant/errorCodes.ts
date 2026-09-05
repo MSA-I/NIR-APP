@@ -37,3 +37,41 @@ export const ASSISTANT_ERROR_CODES = [
   'assistant_persistence_failed',
 ] as const;
 export type AssistantErrorCode = (typeof ASSISTANT_ERROR_CODES)[number];
+
+export type AssistantErrorRecovery =
+  | 'retry'
+  | 'edit'
+  | 'sign_in'
+  | 'use_screens'
+  | 'new_check'
+  | 'none';
+
+/**
+ * One explicit way forward for every canonical failure.
+ *
+ * This is presentation guidance, not authorization. The Edge function still decides whether a
+ * run or proposal is allowed; the panel uses this closed matrix only to avoid a red sentence with
+ * no next action. Messages that already name the action still carry the same classification here
+ * so a new code cannot arrive without somebody deciding its recovery contract.
+ */
+export const ASSISTANT_ERROR_RECOVERY = {
+  assistant_unauthenticated: 'sign_in',
+  assistant_disabled: 'use_screens',
+  assistant_not_entitled: 'use_screens',
+  assistant_limit_reached: 'use_screens',
+  assistant_limit_unknown: 'use_screens',
+  assistant_rate_limited: 'retry',
+  assistant_question_too_long: 'edit',
+  assistant_input_restricted: 'edit',
+  assistant_provider_unavailable: 'retry',
+  assistant_provider_timeout: 'retry',
+  assistant_unsupported_answer: 'new_check',
+  assistant_tool_failed: 'retry',
+  assistant_history_unavailable: 'retry',
+  assistant_proposal_unavailable: 'new_check',
+  assistant_proposal_expired: 'new_check',
+  assistant_proposal_state: 'retry',
+  assistant_read_only_organization: 'none',
+  assistant_invalid_request: 'edit',
+  assistant_persistence_failed: 'retry',
+} as const satisfies Record<AssistantErrorCode, AssistantErrorRecovery>;

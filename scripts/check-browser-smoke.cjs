@@ -2548,7 +2548,9 @@ async function documentOcrAcceptance(browser) {
     await review.locator('[data-testid="document-review-proposals"]').waitFor();
     assert.equal(await review.getByRole('button', { name: 'אישור הסוג המוצע' }).count(), 0,
       'document review still requires manual type approval');
-    await review.getByText('המערכת מסווגת את המסמך אוטומטית. אין צורך באישור ידני.').waitFor();
+    const typeRow = review.locator('[data-testid="document-review-proposals"]');
+    await typeRow.getByRole('heading', { name: 'סוג המסמך' }).waitFor();
+    await typeRow.getByText('סווג אוטומטית', { exact: true }).waitFor();
     // The per-block keyboard list, the bbox overlay and the grades left this screen with the
     // owner's second pass over it ("בפירוש אין צורך לראות את הקווים הכחולים הללו"). Asserted as an
     // absence, in a real browser, because that is the claim now: the viewer shows the document.
@@ -2697,7 +2699,7 @@ async function automaticPriceListAcceptance(browser) {
 
     const panel = page.locator('[data-testid="price-list-review-confirmation"]');
     await panel.waitFor({ timeout: 25_000 });
-    await panel.getByRole('heading', { name: 'קבלת קליטת מחירון' }).waitFor({ timeout: 25_000 });
+    await panel.getByRole('heading', { name: 'תוצאת קליטת המחירון' }).waitFor({ timeout: 25_000 });
     assert.equal(await page.locator('[data-testid="document-review-proposals"]').count(), 0,
       'the generic interpretation panels still precede the price-list result');
     assert.equal(await page.locator('[data-testid="document-export-preview"]').count(), 0,
@@ -2743,8 +2745,8 @@ async function automaticPriceListAcceptance(browser) {
       panel.boundingBox(),
       page.locator('[data-testid="document-source-viewer"]').boundingBox(),
     ]);
-    assert(mobileResultBox && mobileSourceBox && mobileResultBox.y < mobileSourceBox.y,
-      'the original document still appears before the latest price-list result on mobile');
+    assert(mobileResultBox && mobileSourceBox && mobileSourceBox.y < mobileResultBox.y,
+      'the latest price-list result still appears before the original document on mobile');
     await auditAccessibility(page, 'ocr-price-list/390');
     await page.screenshot({ path: path.join(outDir, 'ocr-price-list-collapsed-390.png'), fullPage: true });
     report.screenshots.push('ocr-price-list-collapsed-390.png');
@@ -3252,7 +3254,7 @@ async function priceListSupplierDoor(browser) {
  *  one precedence ladder here, so an active inbox document never renders a second "לא משויך" badge. */
 const DOCUMENT_HUMAN_STATE_LABELS = [
   'עיבוד תקוע', 'העיבוד נכשל', 'ממתין לעיבוד', 'בעיבוד', 'נדרשת בדיקה', 'לא משויך',
-  'שויך אוטומטית', 'משויך', 'שויך לחשבונית', 'שויך לקבלת סחורה',
+  'ספק לא מזוהה', 'שויך אוטומטית', 'משויך', 'שויך לחשבונית', 'שויך לקבלת סחורה',
 ];
 
 /** Pipeline-only labels that still must not leak into the everyday document surface. Labels such
@@ -3317,9 +3319,8 @@ async function documentVocabulary(browser) {
       assert.equal(gallery.includes(label), false,
         `the documents folder still shows the pipeline label «${label}»`);
     }
-    // The precondition, stated so the percentage scan below cannot quietly become vacuous or
-    // spuriously fail: a filing the MACHINE performed does name its confidence, on purpose
-    // (FilingBadge / autoActionDescription), and has its own scenario. This fixture contains none.
+    // This fixture contains no machine filing. The dedicated scenario below proves that a machine
+    // filing remains visibly supervised without exposing a raw confidence percentage.
     assert.equal(await page.getByText('שויך אוטומטית').count(), 0,
       'the fixture now contains an auto-applied document; this scenario measures the reading vocabulary only');
     assert.equal(/\d\s*%/.test(gallery), false,
@@ -3385,7 +3386,7 @@ const AUTO_ACTION_REASON = 'בדיקת שער: החשבונית שנוצרה א�
  * fixture writes one: an auto-applied row requires a real interpretation, a real invoice and the
  * autonomy flag on, and seeding that would mean a browser scenario manufacturing a financial
  * record. What is under test here is the SCREEN — that a machine-authored filing is
- * distinguishable from a colleague's, that it says at what confidence it acted, that the undo is
+ * distinguishable from a colleague's, that it says where the identification level is recorded, that the undo is
  * offered, that it cannot be confirmed without a reason, that the reason reaches the server, and
  * that the row stops claiming to be filed afterwards. The server's own refusals (role, second
  * reversal, allocated money) are `p14_apply_interpretation.sql`'s subject, not a browser's.
@@ -3444,8 +3445,10 @@ async function machineFiledDocument(browser) {
     // record a model wrote from one a colleague typed.
     assert(gallery.includes('ללא אישור אדם'),
       'the machine-filed row never says that no person approved it');
-    assert(gallery.includes('ברמת ביטחון 94%'),
-      'the machine-filed row does not name the confidence the machine acted on');
+    assert(gallery.includes('רמת הזיהוי נשמרת ביומן הביקורת'),
+      'the machine-filed row does not say where its identification level remains');
+    assert.equal(gallery.includes('ברמת ביטחון 94%'), false,
+      'the machine-filed row still exposes a raw confidence percentage');
     await page.screenshot({ path: path.join(outDir, 'document-auto-filed-1440.png'), fullPage: true });
     report.screenshots.push('document-auto-filed-1440.png');
 
@@ -3465,10 +3468,12 @@ async function machineFiledDocument(browser) {
     await dialog.waitFor();
     const dialogText = await dialog.evaluate((node) => node.textContent || '');
     // The four things the dialog owes a person before it offers the button: what the machine did,
-    // at what confidence, what the undo changes, and what survives it.
-    for (const sentence of ['ללא אישור אדם', 'ברמת ביטחון 94%', 'הרשומה נשמרת לביקורת', 'יומן הביקורת']) {
+    // where its identification level remains, what the undo changes, and what survives it.
+    for (const sentence of ['ללא אישור אדם', 'רמת הזיהוי נשמרת ביומן הביקורת', 'הרשומה נשמרת לביקורת', 'יומן הביקורת']) {
       assert(dialogText.includes(sentence), `the reversal dialog does not say «${sentence}»`);
     }
+    assert.equal(/ברמת ביטחון \d/.test(dialogText), false,
+      'the reversal dialog still exposes a raw confidence percentage');
     const confirm = dialog.getByRole('button', { name: 'ביטול השיוך', exact: true });
     // The reason box stopped gating the button on 11.08.2026 (owner: nobody reads these notes).
     // What is asserted below instead is the half that still matters: whatever a person types

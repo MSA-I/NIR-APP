@@ -75,17 +75,27 @@ function sentence(): string {
 const sweepingBar = () => document.querySelector('.processing-track');
 
 describe('רצועת שלבי העיבוד', () => {
-  it('מפרידה המתנה בתור מקריאה בפועל', () => {
+  it('מפרידה המתנה לתחילת הקריאה מקריאה בפועל', () => {
     render(<DocumentProcessingProgress
       snapshot={snapshot({ status: 'queued', queue_age_seconds: 523 })}
       now={NOW}
     />);
     expect(screen.getByTestId('document-processing-progress')).toHaveAttribute('data-step', 'queued');
-    expect(sentence()).toContain('ממתין בתור');
+    expect(sentence()).toContain('ממתין לתחילת הקריאה');
     // The measured wait, and nothing about the worker pool it is waiting on: "לעובד פנוי" named a
     // process the reader cannot see, next to a step already labelled "ממתין בתור".
     expect(sentence()).toContain('ממתין 8 דק׳. העבודה תתחיל מעצמה.');
     expect(document.body.textContent).not.toContain('עובד פנוי');
+    expect(document.body.textContent).not.toContain('תור');
+  });
+
+  it('מציגה המתנה לאישור סריקה כמצב נפרד', () => {
+    render(<DocumentProcessingProgress
+      snapshot={snapshot({ status: 'awaiting_scan', attempt_count: 1 })}
+      now={NOW}
+    />);
+    expect(screen.getByTestId('document-processing-progress')).toHaveAttribute('data-step', 'scan');
+    expect(sentence()).toContain('ממתין לאישור הסריקה');
   });
 
   /**
@@ -163,6 +173,16 @@ describe('רצועת שלבי העיבוד', () => {
     expect(sentence()).toContain('מקטע 2 מתוך 4');
   });
 
+  it('מפרידה בין קריאה שהסתיימה לפירוש שהתחיל', () => {
+    render(<DocumentProcessingProgress
+      snapshot={snapshot({ status: 'extracted', attempt_count: 1 })}
+      now={NOW}
+    />);
+    expect(screen.getByTestId('document-processing-progress')).toHaveAttribute('data-step', 'preparing');
+    expect(sentence()).toContain('הקריאה הסתיימה');
+    expect(sentence()).toContain('מכין את הנתונים לבדיקה');
+  });
+
   it('לא ממציאה מונה פירוש כשהשרת לא דיווח מקטעים', () => {
     render(<DocumentProcessingProgress
       snapshot={snapshot({ status: 'interpreting', attempt_count: 1, progress_done: null, progress_total: null })}
@@ -171,7 +191,8 @@ describe('רצועת שלבי העיבוד', () => {
     expect(sentence()).toContain('פירוש הנתונים');
     // The detail may not be the step label again. "הנתונים מתפרשים לשדות ולשורות" was
     // "פירוש הנתונים" a second time; the missing segment count is the fact it did not carry.
-    expect(sentence()).toContain('מספר המקטעים עדיין לא ידוע.');
+    expect(sentence()).toContain('המערכת בודקת את הנתונים שנקראו.');
+    expect(sentence()).not.toContain('מקטעים');
     expect(document.body.textContent).not.toContain('מתפרשים לשדות ולשורות');
   });
 

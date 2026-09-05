@@ -293,7 +293,7 @@ describe('בטלפון — הפעולה נשארת במקומה בזרימה, ו
     expect(screen.queryByTestId('sticky-primary-action-clearance')).toBeNull();
   });
 
-  it('לוקח את משפט "השרת יבדוק שוב" יחד עם הכפתור, ומשאיר אותו פעיל', async () => {
+  it('לוקח את משפט הבדיקה המעודכנת יחד עם הכפתור, ומשאיר אותו פעיל', async () => {
     await renderPanel(reviewRead({
       state: 'blocked',
       assessment: {
@@ -306,9 +306,9 @@ describe('בטלפון — הפעולה נשארת במקומה בזרימה, ו
 
     const cta = screen.getByRole('button', { name: 'אישור המסמך' });
     expect(cta).toBeEnabled();
-    const reason = screen.getByText(/השרת יבדוק שוב ויסביר בדיוק מה מונע/);
+    const reason = screen.getByText(/אפשר ללחוץ על אישור כדי לקבל פירוט מעודכן/);
     // One copy, beside the button and BEFORE it: a reason read after the press is not a reason.
-    expect(screen.getAllByText(/השרת יבדוק שוב ויסביר בדיוק מה מונע/)).toHaveLength(1);
+    expect(screen.getAllByText(/אפשר ללחוץ על אישור כדי לקבל פירוט מעודכן/)).toHaveLength(1);
     expect(screen.getByTestId('primary-decision')).toContainElement(reason);
     expect(reason.compareDocumentPosition(cta) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     // The blocking finding itself never moved into the bar or into a fold.

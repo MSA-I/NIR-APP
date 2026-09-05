@@ -11,7 +11,7 @@ import { MemoryRouter } from 'react-router';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { http, HttpResponse } from 'msw';
 import { server } from '../test/msw/server';
-import { rest, SUPABASE_URL } from '../test/msw/handlers';
+import { SUPABASE_URL } from '../test/msw/handlers';
 import { createAppQueryClient } from '../lib/query/client';
 import { DOCUMENT_PROCESSING_CHANGED_EVENT } from '../lib/useDocumentProcessing';
 
@@ -134,8 +134,22 @@ describe('runUploadBatch — signature compatibility through the Center queue', 
 });
 
 describe('state machine and progressbar aria', () => {
+  it('shows the file name and state without non-actionable byte telemetry', async () => {
+    server.use(jobsRpc([]));
+    renderCenter();
+    await act(async () => {
+      await enqueueUploadCenterBatch([file('measured.pdf', 2048)], async (_item, context) => {
+        context.markRegistered('doc-measured');
+      });
+    });
+
+    const section = uploadCenter();
+    expect(within(section).getByText('measured.pdf')).toBeInTheDocument();
+    expect(within(section).queryByText('2 KB')).toBeNull();
+  });
+
   it('renders the queue, announcements and default failure in English without Hebrew leakage', async () => {
-    server.use(rest('document_processing_jobs', []));
+    server.use(jobsRpc([]));
     renderCenter('en');
     await act(async () => {
       await enqueueUploadCenterBatchRaw(
@@ -150,12 +164,12 @@ describe('state machine and progressbar aria', () => {
 
     const section = screen.getByRole('region', { name: 'Upload center' });
     expect(within(section).getByText(/Partially completed batch/)).toBeInTheDocument();
-    expect(within(section).getByText(/server refused the upload/i)).toBeInTheDocument();
+    expect(within(section).getByText(/file could not be uploaded/i)).toBeInTheDocument();
     expect(section.textContent).not.toMatch(/[֐-׿]/);
   });
 
   it('walks queued → uploading → registered, with aria-valuenow following and spaced announcements', async () => {
-    server.use(rest('document_processing_jobs', []));
+    server.use(jobsRpc([]));
     renderCenter();
     const gate = deferred();
     let taskContext: UploadCenterTaskContext | null = null;
@@ -170,7 +184,7 @@ describe('state machine and progressbar aria', () => {
     });
     await waitFor(() => expect(taskContext).not.toBeNull());
     expect(entries()[0].status).toBe('uploading');
-    expect(screen.getByText('מעלה')).toBeInTheDocument();
+    expect(screen.getByText('מעלה את הקובץ')).toBeInTheDocument();
     expect(screen.getByText('חשבונית')).toBeInTheDocument();
 
     const bar = screen.getByRole('progressbar', { name: /doc\.pdf/ });
@@ -201,7 +215,7 @@ describe('state machine and progressbar aria', () => {
       await batch;
     });
     expect(entries()[0]).toMatchObject({ status: 'registered', documentId: 'doc-5', percent: 100 });
-    await waitFor(() => expect(screen.getByText('נרשם')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('המסמך נרשם במערכת')).toBeInTheDocument());
     expect(live.textContent).toContain('ההעלאה הושלמה');
   });
 
@@ -235,7 +249,7 @@ describe('state machine and progressbar aria', () => {
 
 describe('the money rule — stored-not-registered never invites a re-upload', () => {
   it('shows the stored state, offers ONLY a complete-registration retry, and the retry redoes only the failed step', async () => {
-    server.use(rest('document_processing_jobs', []));
+    server.use(jobsRpc([]));
     renderCenter();
     const uploadStep = vi.fn();
     const registerStep = vi.fn();
@@ -270,7 +284,7 @@ describe('the money rule — stored-not-registered never invites a re-upload', (
     expect(entry).toMatchObject({ status: 'stored', storedSafely: true, documentId: 'doc-7', canRetry: true });
 
     const section = screen.getByRole('region', { name: 'מרכז ההעלאות' });
-    expect(within(section).getByText('הועלה אך לא נרשם')).toBeInTheDocument();
+    expect(within(section).getByText('הקובץ נשמר, אך עדיין אין מסמך במערכת')).toBeInTheDocument();
     expect(within(section).getByText(/קובץ המקור נשמר בבטחה/)).toBeInTheDocument();
     expect(within(section).getByText('ספק בדיקה', { exact: false })).toBeInTheDocument();
     // The ONLY action offered is completing the registration — no re-upload invitation,
@@ -283,7 +297,7 @@ describe('the money rule — stored-not-registered never invites a re-upload', (
     // The retry redid ONLY the failed step: one upload, two registration attempts.
     expect(uploadStep).toHaveBeenCalledTimes(1);
     expect(registerStep).toHaveBeenCalledTimes(2);
-    await waitFor(() => expect(within(section).getByText('נרשם')).toBeInTheDocument());
+    await waitFor(() => expect(within(section).getByText('המסמך נרשם במערכת')).toBeInTheDocument());
   });
 
   it('keeps a terminal registration failure visibly stored but disables blind retry', async () => {
@@ -307,13 +321,13 @@ describe('the money rule — stored-not-registered never invites a re-upload', (
     const entry = entries()[0];
     expect(entry).toMatchObject({ status: 'stored', storedSafely: true, canRetry: false });
     const section = screen.getByRole('region', { name: 'מרכז ההעלאות' });
-    expect(within(section).getByText('הועלה אך לא נרשם')).toBeInTheDocument();
+    expect(within(section).getByText('הקובץ נשמר, אך עדיין אין מסמך במערכת')).toBeInTheDocument();
     expect(within(section).getByText(he.errors.document_registration_failed)).toBeInTheDocument();
     expect(within(section).queryByRole('button', { name: /ניסיון חוזר|השלמת רישום|שליחה מחדש לעיבוד/ })).toBeNull();
   });
 
   it('labels a retryable post-registration failure as processing-only and never uploads again', async () => {
-    server.use(rest('document_processing_jobs', []));
+    server.use(jobsRpc([]));
     renderCenter();
     const uploadStep = vi.fn();
     const registrationStep = vi.fn();
@@ -341,14 +355,14 @@ describe('the money rule — stored-not-registered never invites a re-upload', (
     });
 
     const section = screen.getByRole('region', { name: 'מרכז ההעלאות' });
-    const retry = within(section).getByRole('button', { name: 'שליחה מחדש לעיבוד' });
-    expect(within(section).getByText('נרשם — העיבוד לא החל')).toBeInTheDocument();
+    const retry = within(section).getByRole('button', { name: 'שליחה לעיבוד' });
+    expect(within(section).getByText('המסמך נרשם; אין להעלות שוב. הקריאה עוד לא התחילה.')).toBeInTheDocument();
     await userEvent.click(retry);
     await waitFor(() => expect(enqueueStep).toHaveBeenCalledTimes(2));
     expect(uploadStep).toHaveBeenCalledTimes(1);
     expect(registrationStep).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(within(section).queryByRole('button', {
-      name: 'שליחה מחדש לעיבוד',
+      name: 'שליחה לעיבוד',
     })).toBeNull());
   });
 
@@ -375,7 +389,7 @@ describe('the money rule — stored-not-registered never invites a re-upload', (
     expect(entry).toMatchObject({ status: 'registered', documentId: 'doc-3', storedSafely: true, canRetry: false });
 
     const section = screen.getByRole('region', { name: 'מרכז ההעלאות' });
-    expect(within(section).getByText('נרשם — העיבוד לא החל')).toBeInTheDocument();
+    expect(within(section).getByText('המסמך נרשם; אין להעלות שוב. הקריאה עוד לא התחילה.')).toBeInTheDocument();
     const link = within(section).getByRole('link', { name: 'מעבר למסמך הרשום' });
     expect(link).toHaveAttribute('href', '/documents/doc-3/review');
     // No retry button (a blind retry could re-upload) — the registered document is the answer.
@@ -412,7 +426,7 @@ describe('the money rule — stored-not-registered never invites a re-upload', (
     });
 
     // The server knows of no job for this document, so nothing is withdrawn.
-    expect(within(uploadCenter()).getByText('הועלה אך לא נרשם')).toBeInTheDocument();
+    expect(within(uploadCenter()).getByText('הקובץ נשמר, אך עדיין אין מסמך במערכת')).toBeInTheDocument();
     expect(within(uploadCenter()).getByText(/אין להעלות אותו שוב/)).toBeInTheDocument();
     expect(entries()[0].status).toBe('stored');
 
@@ -425,7 +439,7 @@ describe('the money rule — stored-not-registered never invites a re-upload', (
 
     await waitFor(() => expect(within(uploadCenter()).getByText('ממתין לעיבוד')).toBeInTheDocument());
     expect(entries()[0].status).toBe('registered');
-    expect(within(uploadCenter()).queryByText('הועלה אך לא נרשם')).toBeNull();
+    expect(within(uploadCenter()).queryByText('הקובץ נשמר, אך עדיין אין מסמך במערכת')).toBeNull();
     expect(within(uploadCenter()).queryByText(/אין להעלות אותו שוב/)).toBeNull();
   });
 
@@ -452,14 +466,14 @@ describe('the money rule — stored-not-registered never invites a re-upload', (
 
     const section = uploadCenter();
     expect(entries()[0]).toMatchObject({ status: 'registered', documentId: null });
-    expect(within(section).queryByText('נרשם — העיבוד לא החל')).toBeNull();
+    expect(within(section).queryByText('המסמך נרשם; אין להעלות שוב. הקריאה עוד לא התחילה.')).toBeNull();
     // What is certainly true, plus the report of what went wrong — as a report, not as a status.
-    expect(within(section).getByText('נרשם')).toBeInTheDocument();
+    expect(within(section).getByText('המסמך נרשם במערכת')).toBeInTheDocument();
     expect(within(section).getByText(/תשובת התור לא התקבלה/)).toBeInTheDocument();
   });
 
   it('marks a mixed finished batch as partially completed', async () => {
-    server.use(rest('document_processing_jobs', []));
+    server.use(jobsRpc([]));
     renderCenter();
     await act(async () => {
       await enqueueUploadCenterBatch([file('ok.pdf'), file('fails.pdf')], async (item, ctx) => {

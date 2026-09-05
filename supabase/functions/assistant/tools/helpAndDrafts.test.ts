@@ -116,8 +116,32 @@ Deno.test("product help answers from the registry, and every fact points at a re
     assert.equal(fact.classification, "public_product_metadata");
     assert.equal(fact.subject, null);
   }
-  assert.equal(envelope.facts[0].label, "רשומת עזרה — השוואת מחירי ספקים");
+  assert.equal(envelope.facts[0].label, "מדריך שימוש — השוואת מחירי ספקים");
   assert.ok(envelope.facts[1].label.startsWith("1. "));
+  const updatedAt = (envelope.data as { updated_at: string }[])[0].updated_at;
+  for (const fact of envelope.facts) {
+    assert.equal(fact.as_of, `${updatedAt}T00:00:00Z`);
+    assert.equal(Number.isNaN(Date.parse(fact.as_of)), false);
+  }
+});
+
+Deno.test("an unresolved supplier question returns a staff-authorized link to Documents", async () => {
+  for (const role of ["owner", "office"] as const) {
+    const envelope = await getProductHelp.run(ctxWith(fakeDb(), role), {
+      question: "המסמך לא מצא ספק, מה עושים?",
+      locale: "he",
+    });
+    assert.equal(envelope.result_count, 1, role);
+    assert.equal((envelope.data as { id: string }[])[0].id, "resolve_document_supplier", role);
+    assert.equal(envelope.sources.length, 1, role);
+    assert.equal(envelope.sources[0].route, "/documents", role);
+    assert.equal(assistantSourceRouteDecision(envelope.sources[0], role), "allowed", role);
+  }
+  const accountant = await getProductHelp.run(ctxWith(fakeDb(), "accountant"), {
+    question: "המסמך לא מצא ספק, מה עושים?",
+    locale: "he",
+  });
+  assert.equal(accountant.result_count, 0);
 });
 
 Deno.test("a product-help source is issued only where routeAccess already allowlists the screen", async () => {
@@ -167,7 +191,7 @@ Deno.test("an English reader gets the English entry without the model having to 
   // tool had hard-coded, and the test pinned that as correct. Measured live the same day, an
   // English run came back with 8 Hebrew fact labels and 4 Hebrew screen names; this was one of
   // the 178 strings that moved into the dictionaries.
-  assert.equal(envelope.facts[0].label, "Help entry — Comparing supplier prices");
+  assert.equal(envelope.facts[0].label, "Usage guide — Comparing supplier prices");
 
   // The source label is the SCREEN’s name, and `routePresentationTitle` returns a dictionary
   // key since the interface was extracted. Unresolved it would put `nav.routeTitle_prices` in

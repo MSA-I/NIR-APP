@@ -19,9 +19,11 @@ import { fmtMoneyExact } from '../../lib/format';
 let flags: Set<string>;
 let currentRole: 'owner' | 'office' | 'accountant';
 let desktopMode: boolean;
+let onboardingCompleted: boolean;
 const ask = vi.fn();
 const feedback = vi.fn();
 const loadConversation = vi.fn();
+const listConversations = vi.fn();
 let historyRows: { id: string; title: string; updated_at: string }[];
 
 function deferred<T>() {
@@ -35,7 +37,10 @@ function deferred<T>() {
 }
 
 vi.mock('../../auth/AuthContext', () => ({
-  useAuth: () => ({ profile: { role: currentRole } }),
+  useAuth: () => ({
+    profile: { role: currentRole },
+    org: { onboarding_completed_at: onboardingCompleted ? '2026-08-20T08:00:00Z' : null },
+  }),
 }));
 
 vi.mock('../../lib/flags', () => ({
@@ -52,6 +57,7 @@ vi.mock('../../lib/assistant/client', () => ({
   askAssistant: (...args: unknown[]) => ask(...args),
   sendAssistantFeedback: (...args: unknown[]) => feedback(...args),
   loadAssistantConversation: (...args: unknown[]) => loadConversation(...args),
+  listAssistantConversations: (...args: unknown[]) => listConversations(...args),
   deleteAssistantConversation: vi.fn(),
   useAssistantConversations: () => ({
     data: historyRows,
@@ -170,10 +176,13 @@ beforeEach(() => {
   flags = new Set(['assistant.ui']);
   currentRole = 'owner';
   desktopMode = false;
+  onboardingCompleted = true;
   ask.mockReset();
   feedback.mockReset();
   loadConversation.mockReset();
+  listConversations.mockReset();
   historyRows = [];
+  listConversations.mockImplementation(async () => historyRows);
   vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
     matches: desktopMode && query.includes('min-width: 64rem'),
     media: query,
@@ -437,6 +446,9 @@ describe('העוזר של InPlace — הפאנל', () => {
     await askQuestion();
     await screen.findByText('היתרה הפתוחה לספק ירקות השדה גבוהה מהרגיל.');
 
+    const scopeToggle = screen.getByText('היקף הבדיקה').closest('summary');
+    expect(scopeToggle).not.toBeNull();
+    expect(scopeToggle?.querySelector('.badge-idle')).toBeNull();
     fireEvent.click(screen.getByText('היקף הבדיקה'));
     expect(screen.getByText('זיכויים פתוחים')).toBeInTheDocument();
     expect(screen.queryByText('get_open_credits')).toBeNull();
@@ -656,7 +668,7 @@ describe('העוזר של InPlace — הפאנל', () => {
     expect(screen.getByRole('link', { name: 'מרכז הבקרה' })).toHaveAttribute('href', '/dashboard');
   });
 
-  it('undefined_business_rule אומר שהמוצר לא הגדיר את הכלל — לא שאין נתונים', async () => {
+  it('undefined_business_rule אומר שאין כלל שעונה כרגע — לא שאין נתונים', async () => {
     ask.mockResolvedValue(makeResult({
       answer: {
         blocks: [{ type: 'text', text: 'אין תשובה לשאלה הזו.' }],
@@ -669,7 +681,7 @@ describe('העוזר של InPlace — הפאנל', () => {
     renderPanel();
     await openDialog();
     await askQuestion();
-    expect(await screen.findByText(/טרם הגדיר את הכלל העסקי/)).toBeInTheDocument();
+    expect(await screen.findByText(/אין כרגע כלל עסקי שמאפשר לענות/)).toBeInTheDocument();
     expect(screen.queryByText(/אין נתונים במערכת/)).toBeNull();
   });
 
@@ -685,7 +697,7 @@ describe('העוזר של InPlace — הפאנל', () => {
 
   it('משוב נשלח עם מזהה הריצה שהשרת הנפיק, והאישור מוצג במקום הכפתורים', async () => {
     ask.mockResolvedValue(makeResult());
-    feedback.mockResolvedValue(undefined);
+    feedback.mockResolvedValue({ helpful: true, note: null });
     renderPanel();
     await openDialog();
     await askQuestion();
@@ -693,6 +705,56 @@ describe('העוזר של InPlace — הפאנל', () => {
     fireEvent.click(screen.getByRole('button', { name: 'מועיל' }));
     expect(await screen.findByText(/המשוב נרשם/)).toBeInTheDocument();
     expect(feedback).toHaveBeenCalledWith('run-1', true);
+  });
+
+  it('משחזר אוטומטית שיחה טרייה עד עשר דקות', async () => {
+    flags = new Set(['assistant.ui', 'assistant.history']);
+    historyRows = [{
+      id: '22222222-2222-4222-8222-222222222222',
+      title: 'מה מצב הספקים?',
+      updated_at: new Date(Date.now() - 9 * 60 * 1000).toISOString(),
+    }];
+    loadConversation.mockResolvedValue([{
+      question: 'מה מצב הספקים?',
+      result: { ...makeResult(), conversation_id: historyRows[0].id },
+    }]);
+    renderPanel();
+    await openDialog();
+    expect(await screen.findByText('היתרה הפתוחה לספק ירקות השדה גבוהה מהרגיל.')).toBeInTheDocument();
+    expect(loadConversation).toHaveBeenCalledWith(historyRows[0].id);
+  });
+
+  it('שיחה ישנה מעשר דקות נשארת בהיסטוריה אך אינה נפתחת מעצמה', async () => {
+    flags = new Set(['assistant.ui', 'assistant.history']);
+    historyRows = [{
+      id: '22222222-2222-4222-8222-222222222222',
+      title: 'מה מצב הספקים?',
+      updated_at: new Date(Date.now() - 10 * 60 * 1000 - 1).toISOString(),
+    }];
+    renderPanel();
+    await openDialog();
+    expect(await screen.findByText('מה תרצה לבדוק?')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /פתיחת הבדיקה מה מצב הספקים/ })).toBeInTheDocument();
+    expect(loadConversation).not.toHaveBeenCalled();
+  });
+
+  it('משוב לא מועיל שומר הערה ומציג את הערך שנקרא חזרה', async () => {
+    ask.mockResolvedValue(makeResult());
+    feedback.mockResolvedValue({ helpful: false, note: 'היתרה המוצגת אינה תואמת למסמך' });
+    renderPanel();
+    await openDialog();
+    await askQuestion();
+    await screen.findByText('היתרה הפתוחה לספק ירקות השדה גבוהה מהרגיל.');
+
+    await userEvent.click(screen.getByRole('button', { name: 'לא מועיל' }));
+    const note = await screen.findByRole('textbox', { name: 'הערה למשוב' });
+    await userEvent.type(note, 'היתרה המוצגת אינה תואמת למסמך');
+    await userEvent.click(screen.getByRole('button', { name: 'שמירת משוב' }));
+
+    expect(feedback).toHaveBeenCalledWith(
+      'run-1', false, 'היתרה המוצגת אינה תואמת למסמך',
+    );
+    expect(await screen.findByText('היתרה המוצגת אינה תואמת למסמך')).toBeInTheDocument();
   });
   it('בלוק טיוטה מוצג עם התווית הקבועה של המוצר ועם פעולת העתקה בלבד', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);

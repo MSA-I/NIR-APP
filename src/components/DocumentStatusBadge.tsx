@@ -1,13 +1,13 @@
 import { AlertTriangle, LoaderCircle } from 'lucide-react';
 import { useT } from '../lib/i18n/LocaleProvider';
-import { documentStatusElapsed, type DocumentUiStatus } from '../lib/documentStatus';
+import type { DocumentUiStatus } from '../lib/documentStatus';
 import { ICON } from './ui';
 
 export function DocumentStatusBadge({ status, ...attributes }: {
   status: DocumentUiStatus;
 } & Omit<React.ComponentPropsWithoutRef<'span'>, 'children'>) {
   const { t } = useT();
-  const elapsedParts = documentStatusElapsed(status.elapsedSeconds);
+  if (!status.badgeVisible) return null;
   // The badge is where a status stops being a decision and becomes words, so it is where the keys
   // resolve. `documentStatus.ts` decides WHICH state this is; it no longer decides in what
   // language, which is what let the same module be read by a screen, a spec and a spreadsheet.
@@ -27,15 +27,6 @@ export function DocumentStatusBadge({ status, ...attributes }: {
         {status.state === 'stuck' && <AlertTriangle size={ICON.xs} className="shrink-0" aria-hidden="true" />}
         {t(status.labelKey)}
       </span>
-      {/* The page counter, wherever the badge is. The lifecycle strip that shows it lives on the
-          review screen only, so somebody watching an upload from the inbox or the upload centre saw
-          "בעיבוד · 4 דק׳" and had no way to tell a busy queue from a stalled read. */}
-      {status.progress && (
-        <span className="num text-xs text-ink-muted" data-document-status-progress>· {t('documentStatus.pageProgress', status.progress)}</span>
-      )}
-      {elapsedParts && (status.loading || status.state === 'stuck') && (
-        <span className="num text-xs text-ink-muted" data-document-status-age>· {t(elapsedParts.key, elapsedParts.vars)}</span>
-      )}
       {/* Only when there is a second fact to carry. A state whose description merely repeated the
           badge shipped that repetition to every screen-reader user, on every row. */}
       {description ? <span className="sr-only">{description}</span> : null}

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
+import { readFileSync } from 'node:fs';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import type { DocumentProcessingSnapshot, PriceListPredictedLine } from '../../lib/useDocumentProcessing';
@@ -146,6 +147,23 @@ function snapshot(
 }
 
 describe('אישור מחירון', () => {
+  it('parses a malformed receipt with the caller translation and never calls a hook from the parser', () => {
+    const source = readFileSync('src/components/document-review/PriceListReviewConfirmation.tsx', 'utf8');
+    const parser = source.slice(source.indexOf('function parseReceipt'), source.indexOf('async function recoverStoredReceipt'));
+    expect(parser).not.toContain('useT()');
+    expect(parser).toContain("throw new Error(t('priceListReview.receiptMalformed'))");
+  });
+
+  it('keeps receipt outcome counts but removes revision and idempotency implementation details', () => {
+    const source = readFileSync('src/components/document-review/PriceListReviewConfirmation.tsx', 'utf8');
+    const receipt = source.slice(source.indexOf('{receipt && ('), source.indexOf('<ConfirmDialog'));
+    expect(receipt).not.toContain('receipt.revision');
+    expect(receipt).not.toContain('receipt.idempotent');
+    expect(receipt).toContain('receipt.accepted_count');
+    expect(receipt).toContain('receipt.rejected_count');
+    expect(receipt).toContain('receipt.unchanged_count');
+  });
+
   it('קולט את השורות שזוהו בלחיצה אחת ומשאיר את הרשת הידנית מקופלת', async () => {
     render(
       <MemoryRouter>
@@ -192,6 +210,22 @@ describe('אישור מחירון', () => {
 
     await userEvent.click(screen.getByTestId('price-list-unmatched-filter'));
     expect(screen.getAllByText(/אני מאשר שורה זו לקליטה/)).toHaveLength(LINE_COUNT);
+  });
+
+  it('מציג את ראיית שורת המקור בסיכום עברי קומפקטי בלי שמות שדות גולמיים', async () => {
+    render(
+      <MemoryRouter>
+        <PriceListReviewConfirmation snapshot={snapshot(predictions())} actorId="owner-1" onRefetch={async () => true} />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(screen.getByTestId('price-list-intake-confirm')).toBeEnabled());
+    await userEvent.click(screen.getByTestId('price-list-show-unmatched'));
+    const cards = screen.getAllByRole('article');
+    expect(cards[0]).toHaveTextContent('תיאור:');
+    expect(cards[0]).toHaveTextContent('מחיר ליחידה:');
+    expect(cards[0]).not.toHaveTextContent('description');
+    expect(cards[0]).not.toHaveTextContent('unit_price');
   });
 
   it('מחלק רשימה ארוכה לעמודים ומסמן עמוד שלם בסימון אחד', async () => {

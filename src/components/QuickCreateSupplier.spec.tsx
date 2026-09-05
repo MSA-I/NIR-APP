@@ -27,19 +27,20 @@ vi.mock('../auth/AuthContext', () => ({
   useAuth: () => ({ profile: { id: 'user-1', org_id: 'org-test', role: 'office' } }),
 }));
 
-import { QuickCreateSupplier, quickSupplierRow } from './QuickCreateSupplier';
+import { QuickCreateSupplier } from './QuickCreateSupplier';
 // Vite's `?raw` rather than fs + a path: the repo lives under a Hebrew path with a space, and the
 // source text itself is what the boundary assertions below are about.
 import componentSource from './QuickCreateSupplier.tsx?raw';
 
 const SUPPLIERS_ENDPOINT = `${SUPABASE_URL}/rest/v1/suppliers`;
+const CREATE_SUPPLIER_ENDPOINT = `${SUPABASE_URL}/rest/v1/rpc/create_supplier_from_document`;
 
 /** Records every insert body so a test can assert both what was sent and that nothing was. */
 function useInsertEndpoint(
   respond: (body: Record<string, unknown>) => Response | Promise<Response>,
 ) {
   const bodies: Record<string, unknown>[] = [];
-  server.use(http.post(SUPPLIERS_ENDPOINT, async ({ request }) => {
+  server.use(http.post(CREATE_SUPPLIER_ENDPOINT, async ({ request }) => {
     const parsed = (await request.json()) as Record<string, unknown> | Record<string, unknown>[];
     const body = Array.isArray(parsed) ? parsed[0] : parsed;
     bodies.push(body);
@@ -49,7 +50,7 @@ function useInsertEndpoint(
 }
 
 const created = (body: Record<string, unknown>) =>
-  HttpResponse.json({ id: 'supplier-new', name: body.name });
+  HttpResponse.json({ supplier_id: 'supplier-new', name: body.p_name, idempotent: false });
 
 /**
  * The duplicate-name lookup the dialog runs before every insert (owner decision: warn, never
@@ -130,7 +131,13 @@ describe('QuickCreateSupplier — the shared door', () => {
     await waitFor(() => expect(onCreated).toHaveBeenCalledWith({ id: 'supplier-new', name: 'ירקות השדה בע״מ' }));
     expect(bodies).toHaveLength(1);
     // Trimmed at the boundary: the stored name is what the user meant, not what they typed.
-    expect(bodies[0]).toEqual({ org_id: 'org-test', name: 'ירקות השדה בע״מ', tax_id: '514123456' });
+    expect(bodies[0]).toEqual({
+      p_document_id: null,
+      p_name: 'ירקות השדה בע״מ',
+      p_tax_id: '514123456',
+      p_idempotency_key: expect.any(String),
+      p_reason: 'יצירת ספק חדש מהשדה שדרש אותו',
+    });
     // Closing is the caller's move (SupplierForm's onSaved contract) — the dialog never closes itself.
     expect(onClose).not.toHaveBeenCalled();
   });
@@ -144,7 +151,7 @@ describe('QuickCreateSupplier — the shared door', () => {
     await user.click(saveButton());
 
     await waitFor(() => expect(bodies).toHaveLength(1));
-    expect(bodies[0]).toEqual({ org_id: 'org-test', name: 'ספק ללא ח.פ', tax_id: null });
+    expect(bodies[0]).toMatchObject({ p_document_id: null, p_name: 'ספק ללא ח.פ', p_tax_id: null });
   });
 
   it('warns on a name collision and creates nothing', async () => {
@@ -180,7 +187,7 @@ describe('QuickCreateSupplier — the shared door', () => {
 
     await waitFor(() => expect(onCreated).toHaveBeenCalledTimes(1));
     expect(bodies).toHaveLength(1);
-    expect(bodies[0]).toEqual({ org_id: 'org-test', name: 'ACME בע״מ', tax_id: null });
+    expect(bodies[0]).toMatchObject({ p_document_id: null, p_name: 'ACME בע״מ', p_tax_id: null });
   });
 
   it('says nothing and creates straight through when no name collides', async () => {
@@ -285,7 +292,7 @@ describe('QuickCreateSupplier — the shared door', () => {
 
   it('maps a network failure to the connection sentence — a third, different sentence', async () => {
     const user = userEvent.setup();
-    server.use(http.post(SUPPLIERS_ENDPOINT, () => HttpResponse.error()));
+    server.use(http.post(CREATE_SUPPLIER_ENDPOINT, () => HttpResponse.error()));
     const { onCreated } = await renderDialog();
 
     await user.type(nameField(), 'ספק אופליין');
@@ -351,21 +358,9 @@ describe('bank_details must never appear in this component', () => {
     expect(source).toMatch(/DEBT-REGISTER/);
   });
 
-  it('performs exactly one write, and it is the closed row builder', () => {
-    // A second `.update({[key]: …})` after the insert was one of the edits that passed review
-    // untouched. One write, and its argument pinned, is what closes that door.
-    expect(code.match(/\.(insert|update|upsert|delete|rpc)\(/g)).toEqual(['.insert(']);
-    expect(code).toMatch(/\.insert\(quickSupplierRow\(profile\.org_id, name, taxId\)\)/);
-  });
-
-  it('pins the builder body, so it cannot be rewritten to answer differently in the app', () => {
-    // The `let` check below catches one shape of this; a module-level `const state = {}` mutated
-    // at runtime defeats it. Pinning the whole one-line body closes the family: any rewrite of the
-    // builder — reading module state, spreading a caller object, anything — fails here, while the
-    // call site stays byte-identical and axis 3 stays green.
-    expect(code).toMatch(
-      /export function quickSupplierRow\(orgId: string, name: string, taxId: string\): QuickSupplierColumns \{\s*return \{ org_id: orgId, name: name\.trim\(\), tax_id: taxId\.trim\(\) \|\| null \};\s*\}/,
-    );
+  it('performs exactly one write, through the protected supplier command', () => {
+    expect(code.match(/\.(insert|update|upsert|delete|rpc)\(/g)).toEqual(['.rpc(']);
+    expect(code).toMatch(/\.rpc\('create_supplier_from_document'/);
   });
 
   it('holds no module-level mutable state for the builder to read', () => {
@@ -373,13 +368,6 @@ describe('bank_details must never appear in this component', () => {
     // fourth column in the app while the call site stays byte-identical and axis 3 — which only
     // ever drives the default state — stays green.
     expect(code).not.toMatch(/^(let|var) /m);
-  });
-
-  it('builds exactly three columns for any input, not just the one a UI test drives', () => {
-    expect(Object.keys(quickSupplierRow('org', 'name', 'tax')).sort()).toEqual(['name', 'org_id', 'tax_id']);
-    expect(quickSupplierRow('org-test', '  ACME  ', '   ')).toEqual({
-      org_id: 'org-test', name: 'ACME', tax_id: null,
-    });
   });
 
   it('renders exactly two controls, counting the ones a role query cannot see', async () => {
@@ -401,6 +389,8 @@ describe('bank_details must never appear in this component', () => {
     await user.click(saveButton());
 
     await waitFor(() => expect(bodies).toHaveLength(1));
-    expect(Object.keys(bodies[0]).sort()).toEqual(['name', 'org_id', 'tax_id']);
+    expect(Object.keys(bodies[0]).sort()).toEqual([
+      'p_document_id', 'p_idempotency_key', 'p_name', 'p_reason', 'p_tax_id',
+    ]);
   });
 });

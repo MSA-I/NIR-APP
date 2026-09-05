@@ -91,10 +91,10 @@ describe('what the dialog says', () => {
 });
 
 describe('the three refusal states, which are not one state', () => {
-  it('a warning leaves the confirm LIVE and says the server checks again', async () => {
+  it('a warning leaves the confirm LIVE and says the current state is checked again', async () => {
     show({ impact: impact({ warnings: [{ kind: 'stale_prices', description: 'Two prices changed today' }] }) });
     expect(await screen.findByText('Two prices changed today')).toBeInTheDocument();
-    expect(screen.getByText(/The server checks again/)).toBeInTheDocument();
+    expect(screen.getByText(/The current state is checked again/)).toBeInTheDocument();
     expect(confirmButton()).toBeEnabled();
   });
 
