@@ -41,7 +41,17 @@ RESERVED for the qa-sweep-20260904 campaign. No agent may draw a number. Ask the
   SQL suite     p116  -- PR 13's suite.
   migration     0324  -- next free; unassigned
   SQL suite     p117  -- next free; unassigned
-  owner ruling  #358  -- next free; unassigned
+  owner ruling  #358  -- bank: confirming a match CLEARS the suggestions left on that line.
+                         Owner ruling 05.09.2026. WRITTEN.
+  owner ruling  #359  -- /alerts: the screen EXPANDS to cover everything, rather than narrowing
+                         its promise. Owner ruling 05.09.2026. WRITTEN.
+  owner ruling  #360  -- next free; unassigned
+
+  TWO OWNER ANSWERS THAT DELIBERATELY DREW NO NUMBER, because they are actions on data and not
+  rules: this tenant KEEPS 17.5% VAT (the 18% rule stands and is untouched), and the 150.00 credit
+  WAS in fact already offset, so an allocation is recorded for it. Both are recorded where the
+  action lives -- the GATES row and DEBT section -- not as rulings, because a ruling that says
+  "this one row is like this" is a citation that teaches nothing.
 
   WATCH: PR 14's brief wrote "p115" once before correcting itself to p113 in the same sentence.
   p115 belongs to PR 11. If PR 14 arrives carrying p115, renumber it to p113 BEFORE cherry-picking
