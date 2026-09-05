@@ -2,7 +2,7 @@ import { useT } from '../lib/i18n/LocaleProvider';
 import { RefreshCw } from 'lucide-react';
 import { BackAction } from '../components/BackAction';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useParams, useSearchParams } from 'react-router';
+import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { useAuth } from '../auth/AuthContext';
 import { DocumentReviewWorkspace } from '../components/document-review/DocumentReviewWorkspace';
 import { DocumentScanPreview } from '../components/document-review/DocumentScanPreview';
@@ -12,6 +12,7 @@ import { isActiveRole } from '../lib/types';
 import { useDocumentScanning } from '../lib/useDocumentScanning';
 import { DOCUMENT_PROCESSING_CHANGED_EVENT, useDocumentProcessing } from '../lib/useDocumentProcessing';
 import type { TKey } from '../lib/i18n/t';
+import { uploadDocument } from '../components/FileUpload';
 
 const INTERPRET_ERROR_KEY = {
   unauthenticated: 'documentReviewPage.interpretUnauthenticated',
@@ -42,6 +43,13 @@ interface InterpretFailure {
   fallbackError: unknown | null;
 }
 
+interface FailedDocumentReplacementAttempt {
+  failedDocumentId: string;
+  file: File;
+  idempotencyKey: string;
+  replacementDocumentId: string | null;
+}
+
 async function interpretFailure(error: unknown): Promise<InterpretFailure> {
   const context = (error as { context?: Response } | null)?.context;
   if (context && typeof context.json === 'function') {
@@ -59,6 +67,7 @@ async function interpretFailure(error: unknown): Promise<InterpretFailure> {
 
 export default function DocumentReview() {
   const { errorText, t } = useT();
+  const navigate = useNavigate();
   const { documentId } = useParams<{ documentId: string }>();
   const [params] = useSearchParams();
   const { profile, organizationAccess } = useAuth();
@@ -94,6 +103,9 @@ export default function DocumentReview() {
    *  waiting to be read — clearing it on pipeline movement would erase the only report a person
    *  gets that their button did nothing. */
   const [reprocessError, setReprocessError] = useState<unknown | null>(null);
+  const [replaceError, setReplaceError] = useState<unknown | null>(null);
+  const [replacing, setReplacing] = useState(false);
+  const replacementAttempt = useRef<FailedDocumentReplacementAttempt | null>(null);
   const { refetch } = processing;
 
   const enqueue = useCallback(async () => {
@@ -130,6 +142,44 @@ export default function DocumentReview() {
       setReprocessing(false);
     }
   }, [canWrite, documentId, refetch]);
+
+  const replaceFailedDocument = useCallback(async (file?: File) => {
+    if (!snapshot?.document || !profile) return;
+    let attempt = replacementAttempt.current;
+    if (file) {
+      attempt = {
+        failedDocumentId: snapshot.document.id,
+        file,
+        idempotencyKey: crypto.randomUUID(),
+        replacementDocumentId: null,
+      };
+      replacementAttempt.current = attempt;
+    }
+    if (!attempt || attempt.failedDocumentId !== snapshot.document.id) return;
+    setReplaceError(null);
+    setReplacing(true);
+    try {
+      if (!attempt.replacementDocumentId) {
+        const replacement = await uploadDocument(profile.org_id, 'inbox', null, attempt.file, {
+          documentKind: snapshot.document.document_kind,
+        });
+        attempt.replacementDocumentId = replacement.documentId;
+      }
+      const result = await supabase.rpc('supersede_failed_document', {
+        p_failed_document_id: attempt.failedDocumentId,
+        p_replacement_document_id: attempt.replacementDocumentId,
+        p_idempotency_key: attempt.idempotencyKey,
+        p_reason: t('documentReviewPage.replacementReason'),
+      });
+      if (result.error) throw result.error;
+      replacementAttempt.current = null;
+      navigate(`/documents/${attempt.replacementDocumentId}/review`, { replace: true });
+    } catch (failure) {
+      setReplaceError(failure);
+    } finally {
+      setReplacing(false);
+    }
+  }, [navigate, profile, snapshot?.document, t]);
 
   const interpret = useCallback(async (id: string) => {
     setInterpreting(true);
@@ -257,6 +307,18 @@ export default function DocumentReview() {
       )}
 
       {reprocessError != null && <Note tone="alert" role="alert">{errorText(reprocessError)}</Note>}
+      {replaceError != null && (
+        <Note tone="alert" role="alert" className="flex-wrap">
+          <span className="min-w-0 flex-1">{errorText(replaceError)}</span>
+          {replacementAttempt.current && (
+            <button type="button" className="btn-secondary" disabled={replacing}
+              onClick={() => void replaceFailedDocument()}>
+              <RefreshCw className={replacing ? 'animate-spin ' : ''} size={ICON.md} aria-hidden="true" />
+              {t('documentReviewPage.text_10')}
+            </button>
+          )}
+        </Note>
+      )}
 
       {interpretError && !interpreting && (
         <Note tone="alert" role="alert" className="flex flex-wrap items-center gap-2">
@@ -285,6 +347,8 @@ export default function DocumentReview() {
             await Promise.all([scanning.refetch(), processing.refetch()]);
             return true;
           }}
+          onRetry={() => reprocess()}
+          onReplace={(file) => replaceFailedDocument(file)}
         />
       )}
 

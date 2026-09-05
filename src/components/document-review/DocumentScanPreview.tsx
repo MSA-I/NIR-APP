@@ -1,8 +1,9 @@
 import { useT } from '../../lib/i18n/LocaleProvider';
 import type { TKey } from '../../lib/i18n/t';
 import { useEffect, useRef, useState } from 'react';
-import { Check, CornerDownLeft, Loader2, Pencil, ScanLine } from 'lucide-react';
+import { Check, CornerDownLeft, Loader2, Pencil, RefreshCw, ScanLine, Upload } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { DOCUMENT_UPLOAD_ACCEPT } from '../FileUpload';
 import {
   acceptDocumentScan,
   recoverDocumentScan,
@@ -28,6 +29,8 @@ interface Props {
   fileName: string;
   onChanged: () => Promise<unknown>;
   readOnly: boolean;
+  onRetry?: () => void | Promise<unknown>;
+  onReplace?: (file: File) => void | Promise<unknown>;
 }
 
 const SCAN_FAILURE_KEYS: Record<string, TKey> = {
@@ -37,10 +40,32 @@ const SCAN_FAILURE_KEYS: Record<string, TKey> = {
   processing_resource_failure: 'scanPreview.failureResourceLimit',
   processing_timeout: 'scanPreview.failureTimeout',
   scan_image_too_small: 'scanPreview.failureImageTooSmall',
+  claim_attempt_limit_exceeded: 'scanPreview.failureAttemptLimit',
+  document_deleted: 'scanPreview.failureDocumentDeleted',
 };
 
 function scanFailureKey(code: string | null): TKey {
   return (code && SCAN_FAILURE_KEYS[code]) || 'scanPreview.failureUnknown';
+}
+
+export type ScanFailureAction = {
+  action: 'retry' | 'replace' | 'none';
+  labelKey: TKey | null;
+};
+
+const SCAN_FAILURE_ACTIONS: Readonly<Record<string, ScanFailureAction>> = {
+  corrupt_document: { action: 'replace', labelKey: 'scanPreview.replaceCorrupt' },
+  decompressed_size_limit: { action: 'replace', labelKey: 'scanPreview.replaceTooLarge' },
+  file_size_limit: { action: 'replace', labelKey: 'scanPreview.replaceTooLarge' },
+  processing_resource_failure: { action: 'retry', labelKey: 'scanPreview.retry' },
+  processing_timeout: { action: 'retry', labelKey: 'scanPreview.retry' },
+  scan_image_too_small: { action: 'replace', labelKey: 'scanPreview.replaceTooSmall' },
+  claim_attempt_limit_exceeded: { action: 'retry', labelKey: 'scanPreview.retry' },
+  document_deleted: { action: 'none', labelKey: null },
+};
+
+export function scanFailureAction(code: string | null): ScanFailureAction {
+  return (code && SCAN_FAILURE_ACTIONS[code]) || { action: 'none', labelKey: null };
 }
 
 function ScanCornerEditor({ sourceUrl, state, fileName, onChanged, readOnly, recovery = false }: {
@@ -141,13 +166,16 @@ function ScanCornerEditor({ sourceUrl, state, fileName, onChanged, readOnly, rec
   );
 }
 
-export function DocumentScanPreview({ state, originalStoragePath, fileName, onChanged, readOnly }: Props) {
+export function DocumentScanPreview({
+  state, originalStoragePath, fileName, onChanged, readOnly, onRetry, onReplace,
+}: Props) {
   const { errorText, t } = useT();
   const [originalUrl, setOriginalUrl] = useState<string | null>(null);
   const [scanUrl, setScanUrl] = useState<string | null>(null);
   const [urlError, setUrlError] = useState<string | null>(null);
   const [accepting, setAccepting] = useState(false);
-  const [editingCorners, setEditingCorners] = useState(state.status === 'failed');
+  const [editingCorners, setEditingCorners] = useState(false);
+  const [recovering, setRecovering] = useState(false);
   const toast = useToast();
 
   useEffect(() => {
@@ -186,6 +214,20 @@ export function DocumentScanPreview({ state, originalStoragePath, fileName, onCh
     }
   }
 
+  const failedAction = scanFailureAction(state.last_error_code);
+
+  async function retry() {
+    if (!onRetry || readOnly) return;
+    setRecovering(true);
+    try { await onRetry(); } finally { setRecovering(false); }
+  }
+
+  async function replace(file: File | undefined) {
+    if (!file || !onReplace || readOnly) return;
+    setRecovering(true);
+    try { await onReplace(file); } finally { setRecovering(false); }
+  }
+
   return (
     <section className="card card-pad space-y-4" data-testid="document-scan-preview" aria-labelledby="document-scan-title">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -213,16 +255,39 @@ export function DocumentScanPreview({ state, originalStoragePath, fileName, onCh
         </Note>
       )}
       {state.status === 'failed' && (
-        <Note tone="alert" role="alert"><span className="min-w-0 flex-1">{t('scanPreview.scanFailed')} {t(scanFailureKey(state.last_error_code))}</span></Note>
+        <>
+          <Note tone="alert" role="alert"><span className="min-w-0 flex-1">{t('scanPreview.scanFailed')} {t(scanFailureKey(state.last_error_code))}</span></Note>
+          {failedAction.action === 'retry' && onRetry && (
+            <button type="button" className="btn-secondary" disabled={recovering || readOnly}
+              onClick={() => void retry()}>
+              {recovering ? <Loader2 className="animate-spin" size={ICON.md} aria-hidden="true" />
+                : <RefreshCw size={ICON.md} aria-hidden="true" />}
+              {t('scanPreview.retry')}
+            </button>
+          )}
+          {failedAction.action === 'replace' && onReplace && failedAction.labelKey && (
+            <label className={`btn-secondary w-fit ${recovering || readOnly ? 'pointer-events-none opacity-50' : ''}`}>
+              {recovering ? <Loader2 className="animate-spin" size={ICON.md} aria-hidden="true" />
+                : <Upload size={ICON.md} aria-hidden="true" />}
+              {t(failedAction.labelKey)}
+              <input type="file" className="sr-only" accept={DOCUMENT_UPLOAD_ACCEPT}
+                disabled={recovering || readOnly}
+                onChange={(event) => void replace(event.target.files?.[0])} />
+            </label>
+          )}
+          {failedAction.action === 'none' && (
+            <Note tone="idle">{t('scanPreview.noSafeRecovery')}</Note>
+          )}
+        </>
       )}
-      {(state.status === 'needs_corners' || state.status === 'failed' || (state.status === 'ready' && editingCorners)) && originalUrl && (
+      {(state.status === 'needs_corners' || (state.status === 'ready' && editingCorners)) && originalUrl && (
         <ScanCornerEditor
           sourceUrl={originalUrl}
           state={state}
           fileName={fileName}
           onChanged={onChanged}
           readOnly={readOnly}
-          recovery={state.status === 'ready' || state.status === 'failed'}
+          recovery={state.status === 'ready'}
         />
       )}
       {(state.status === 'ready' || state.status === 'accepted') && !editingCorners && originalUrl && scanUrl && (
@@ -251,8 +316,7 @@ export function DocumentScanPreview({ state, originalStoragePath, fileName, onCh
               the two images say what was approved. Where the document actually is now is the
               lifecycle strip's answer, one card below, and it stays the only one. */}
           {state.status === 'ready' && (
-            <div className="space-y-3 border-t border-line pt-4">
-              <Note tone="info">{t('scanPreview.text_19')}</Note>
+            <div className="border-t border-line pt-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="text-sm text-ink-muted">
                 {readOnly

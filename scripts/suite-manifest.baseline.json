@@ -800,96 +800,103 @@
   {
     "ordinal": 114,
     "kind": "suite",
+    "path": "supabase/tests/p111_failed_document_supersede.sql",
+    "label": "A terminally failed scan can be superseded by owner or office through one tenant- and unit-scoped command: the latest scan state must still be failed, the old document is soft-deleted while its immutable Storage object remains, the replacement stays active, exact replay converges, changed keys and reused replacements conflict, every role, tenant, scope, reason and shape denial writes nothing, the audit carries actor and reason, and browser roles hold no direct private-table DML",
+    "role": "postgres"
+  },
+  {
+    "ordinal": 115,
+    "kind": "suite",
     "path": "supabase/tests/payment_credit_override.sql",
     "label": "Payment approval with legal-entity scoped open-credit override",
     "role": "postgres"
   },
   {
-    "ordinal": 115,
+    "ordinal": 116,
     "kind": "suite",
     "path": "supabase/tests/monthly_report_snapshots.sql",
     "label": "Immutable legal-entity monthly accountant snapshots",
     "role": "postgres"
   },
   {
-    "ordinal": 116,
+    "ordinal": 117,
     "kind": "preflight",
     "path": "supabase/tests/p1_preflight.sql",
     "label": "P1 preflight",
     "role": null
   },
   {
-    "ordinal": 117,
+    "ordinal": 118,
     "kind": "suite",
     "path": "supabase/tests/p1_financial_commands.sql",
     "label": "P1 financial commands, rollback and idempotency",
     "role": "postgres"
   },
   {
-    "ordinal": 118,
+    "ordinal": 119,
     "kind": "suite",
     "path": "supabase/tests/p1_price_submissions.sql",
     "label": "Owner and office price-list reservation, registration, intake, review and evidence",
     "role": "postgres"
   },
   {
-    "ordinal": 119,
+    "ordinal": 120,
     "kind": "suite",
     "path": "supabase/tests/p1_price_submissions_concurrency.sql",
     "label": "Concurrent owner and office price-list submission and idempotency",
     "role": "supabase_admin"
   },
   {
-    "ordinal": 120,
+    "ordinal": 121,
     "kind": "reset",
     "path": null,
     "label": "supabase db reset",
     "role": null
   },
   {
-    "ordinal": 121,
+    "ordinal": 122,
     "kind": "suite",
     "path": "supabase/tests/p2_data_reliability.sql",
     "label": "P2 retry, alerts, pagination and reliability",
     "role": "postgres"
   },
   {
-    "ordinal": 122,
+    "ordinal": 123,
     "kind": "suite",
     "path": "supabase/tests/server_list_contracts.sql",
     "label": "Server list predicates, duplicate key across pages and tenant scope",
     "role": "postgres"
   },
   {
-    "ordinal": 123,
+    "ordinal": 124,
     "kind": "suite",
     "path": "supabase/tests/roadmap_db_contracts.sql",
     "label": "Roadmap supplier, inventory, savings and WhatsApp contracts",
     "role": "postgres"
   },
   {
-    "ordinal": 124,
+    "ordinal": 125,
     "kind": "suite",
     "path": "supabase/tests/p1_concurrency.sql",
     "label": "P1 real concurrent sessions",
     "role": "supabase_admin"
   },
   {
-    "ordinal": 125,
+    "ordinal": 126,
     "kind": "suite",
     "path": "supabase/tests/payment_credit_override_concurrency.sql",
     "label": "Concurrent payment replay, approval, execution and credit creation",
     "role": "supabase_admin"
   },
   {
-    "ordinal": 126,
+    "ordinal": 127,
     "kind": "suite",
     "path": "supabase/tests/monthly_report_snapshots_concurrency.sql",
     "label": "Concurrent immutable monthly snapshot version allocation",
     "role": "supabase_admin"
   },
   {
-    "ordinal": 127,
+    "ordinal": 128,
     "kind": "suite",
     "path": "supabase/tests/p63_financial_credit_concurrency.sql",
     "label": "Two accountants racing for one credit remainder: one payment, one named refusal, no double allocation",
