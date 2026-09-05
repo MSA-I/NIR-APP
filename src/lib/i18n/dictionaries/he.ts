@@ -4691,6 +4691,10 @@ export const he = {
     text_4: 'בדיקה',
     text_5: 'תשלום',
     splice: 'יתרה',
+    // FIN-07: the accountant's list is only the approved invoices, so the column a reader totals
+    // says so. The owner keeps `splice` — their population is the whole payable ledger and a
+    // qualifier there would be the same false statement pointing the other way.
+    spliceApprovedScope: 'יתרה (מאושרות)',
     push: 'רו״ח',
     text_6: 'מתעדכן…',
     title: 'חשבוניות',
@@ -5364,7 +5368,10 @@ export const he = {
 
   accountantDashboard: {
     fmtMoneyRounded: 'שולם החודש',
-    fmtMoneyRounded_2: 'יתרת חשבוניות פתוחות',
+    // FIN-07: the same words stood over 790 here and over 11,582 on the owner's screen. The
+    // populations differ because 0218 stops the accountant's balance read at approved invoices,
+    // and widening it to agree would be a privilege leak — so the label says what it counted.
+    fmtMoneyRounded_2: 'יתרת חשבוניות פתוחות — מאושרות בלבד',
     fmtNum: 'תנועות בנק לא מותאמות',
     fmtNum_2: 'התאמות שממתינות לאישור',
     fmtNum_3: 'זיכויים שטרם קוזזו',

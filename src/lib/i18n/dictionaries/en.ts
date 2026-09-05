@@ -4652,6 +4652,8 @@ export const en: Dictionary = {
     text_4: 'Review',
     text_5: 'Payment',
     splice: 'Balance',
+    // FIN-07: the accountant's list holds only approved invoices, so the column says so.
+    spliceApprovedScope: 'Balance (approved)',
     push: 'Accountant',
     text_6: 'Updating…',
     title: 'Invoices',
@@ -5323,7 +5325,8 @@ export const en: Dictionary = {
 
   accountantDashboard: {
     fmtMoneyRounded: 'Paid this month',
-    fmtMoneyRounded_2: 'Balance of open invoices',
+    // FIN-07: the same words stood over 790 here and over 11,582 on the owner's screen.
+    fmtMoneyRounded_2: 'Balance of open invoices — approved only',
     fmtNum: 'Unmatched bank transactions',
     fmtNum_2: 'Matches waiting for approval',
     fmtNum_3: 'Credits not yet offset',

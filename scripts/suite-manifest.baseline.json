@@ -887,5 +887,12 @@
     "path": "supabase/tests/p108_one_balance_one_approval.sql",
     "label": "One balance, one approval: an invoice of 640 already holding 300 approved refuses a second approval of the whole balance BY NAME while still ALLOWING the second request to be typed, splitting a payment across two approvals of 250 and 390 still passes, two sessions approving on the same locked invoice leave exactly one winner and one named refusal, and the writer that could not see a partially consumed credit stops admitting 900 where the reader prints 780 -- every refusal measured as an authenticated owner rather than as the superuser, so the financial guard and the role checks are actually in the path",
     "role": "supabase_admin"
+  },
+  {
+    "ordinal": 127,
+    "kind": "suite",
+    "path": "supabase/tests/p113_a_currency_this_role_cannot_value.sql",
+    "label": "A currency this role cannot value gets no row rather than a zero: the accountant sees the shekel debt it may value and NOTHING at all where the supplier owes 300 dollars on an unapproved invoice, so the card draws an em dash instead of the sentence that supplier owes nothing here, a supplier it can value nothing of returns nothing at all, a currency it CAN value is still reported in full, a measured zero that was paid off stays a zero rather than becoming an em dash, the owner's six rows are byte-for-byte what they were, and 150 shekels and 300 dollars are never one row of 450 -- every reading taken as an authenticated owner and an authenticated accountant rather than as the superuser, so RLS, the view grants and the role arms are actually in the path",
+    "role": "postgres"
   }
 ]

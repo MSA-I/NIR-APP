@@ -326,7 +326,15 @@ export function InvoicesList() {
        settled", and printing it as `—` made "paid in full" and "could not be read" the same glyph.
        `fmtMoneyExact` already draws `—` for `null` and a figure for a number, so the rule lives in
        one place instead of being re-decided here; only the tone is chosen at this call site. */
-    columns.splice(4, 0, { key: 'balance', header: t('invoiceList.splice'), className: 'num', render: (r) => <span className={r.balance != null && r.balance > 0 ? 'text-await-fg' : 'text-done-fg'}>{fmtMoneyExact(r.balance ?? null, r.currency)}</span> });
+    /* `FIN-07`: the accountant totals this column and reaches a different number than the owner
+       reaches under the identical word, because `0218` stops that role's invoice scope at approved.
+       The column is not widened — that would be a privilege leak — so the HEADER states which
+       population it can be added up over. The owner's scope is the whole payable ledger and keeps
+       the plain word: a qualifier there would be the same false statement pointing the other way. */
+    const balanceHeader = profile?.role === 'accountant'
+      ? t('invoiceList.spliceApprovedScope')
+      : t('invoiceList.splice');
+    columns.splice(4, 0, { key: 'balance', header: balanceHeader, className: 'num', render: (r) => <span className={r.balance != null && r.balance > 0 ? 'text-await-fg' : 'text-done-fg'}>{fmtMoneyExact(r.balance ?? null, r.currency)}</span> });
   }
   if (canViewExport) {
     /* `priority: 2`, and the change is a data one rather than a layout one. Priority 3 means
