@@ -1,0 +1,391 @@
+G13 CROSS-VERIFICATION — the money rows (MON-*, FIN-*, REQ-*), CLIENT HALVES ONLY
+=================================================================================
+Verifier: G13 "money". Wrote none of the fixes below.
+Date: 05.09.2026.
+Campaign tree verified: worktree-qa-sweep-20260904 @ 5a56770c
+  "chore(qa-sweep): the cross-verification wave opens, and MET is defined by the red
+   rather than the green"
+
+Rows taken: 22 (every MON-/FIN-/REQ- row at status FIXED).
+Reached MET: 17.  Stayed FIXED: 5, each with the reason written out below.
+
+
+0. HOW THIS RUN WAS SET UP, AND WHY IT IS NOT THE ASSIGNED WORKTREE
+-------------------------------------------------------------------
+The assigned worktree agent-a48934cfa761603cb sits at b48a0b36, which is NOT an ancestor
+of the campaign branch (merge-base eb1cc718, 80 commits behind). Both bootstrap routes were
+REFUSED by this session's auto-mode classifier:
+
+    git reset --hard worktree-qa-sweep-20260904        -> refused
+    git checkout worktree-qa-sweep-20260904 -- .       -> refused
+
+agent-brief.md section 1 covers exactly this. Rather than work on the wrong lineage, and
+rather than mutate the shared campaign worktree that other verifiers are reading, this run
+used a THROW-AWAY SANDBOX built with a read-only git operation:
+
+    git archive worktree-qa-sweep-20260904 | tar -x -C "<repo-parent>/NIR-APP-g13-verify"
+    (2,166 files)  +  a node_modules junction to the main checkout
+
+No git worktree was written to at any point during measurement. All red/green runs happened
+in that sandbox. Two helper scripts were used, both refusing to act ambiguously:
+  * g13-swap.mjs        - writes a file's bytes from the git object store into the sandbox
+                          (execFileSync with encoding:'buffer', so Hebrew is byte-exact),
+                          printing size and sha256 for every write.
+  * g13-anchor-edit.mjs - anchored single-occurrence edit; REFUSES unless the anchor matches
+                          exactly once, so a silent double-edit is impossible.
+
+The same anchored-script route was used for the deliverable itself: the Edit/Write tools in
+this session are isolation-locked to the assigned worktree and refuse the campaign worktree's
+paths, so this file and every GATES row below were written by a Node script that refuses
+unless its anchor matches exactly one place in the file. Said here because the brief asks
+for it to be said.
+
+RED ROUTE - the "Best" route from verify-brief.md, taken for every row: for each fixing
+commit C, the product files C touched were restored to C^ (the genuinely unfixed tree) while
+the ORACLE was kept at campaign head. No oracle was edited at any point, for any reason.
+
+Two commits added an `export` keyword purely as a TEST SEAM - no behaviour attached. A
+whole-file revert therefore broke the import and produced a red that was a broken harness
+rather than the finding. Both were re-run with the seam restored by an anchored
+one-occurrence edit, and ONLY the seam:
+    src/pages/PaymentRequests.tsx   function CreatePaymentRequest(  ->  export function ...
+    src/pages/Bank.tsx              function UnmatchModal(          ->  export function ...
+The first attempt (6/6 fail, "Element type is invalid ... got: undefined") is discarded and
+is NOT the red recorded below; the corrected run is.
+
+RESTORE was verified, not assumed: every product file was written back from
+worktree-qa-sweep-20260904 and the sha256 read back matched the pre-red value
+(e.g. PaymentRequests.tsx e95616ee7510d714, checks.ts ec4655f1a4ff2481,
+errors.ts 63f559aa83be7402, he.ts c1057b814aed2163, en.ts ada3a05d41c29a06).
+
+BASELINE GREEN, all 16 oracles in one run, before any revert:
+    Test Files  16 passed (16)      Tests  79 passed (79)
+GREEN AFTER EVERY REVERT WAS UNDONE, same 16 files, same command:
+    Test Files  16 passed (16)      Tests  79 passed (79)
+Per-file test totals sum to exactly 79, so every file is green in full, not on aggregate.
+
+NOT RUN, AND WHY: `npm run verify` whole and `npm run quality` (forbidden by the brief).
+The local Supabase stack was NOT touched - `.claude/locks/supabase` names the G13 "SQL"
+verifier as holder. No `supabase db reset`, no `docker exec ... psql`, no `demo:restore`, no
+`ci-sql-suites.mjs`. No production write. No screenshots: this is a red-to-green
+reproduction of component oracles, and the original agents' screen reads stand unchallenged
+rather than restated.
+
+
+1. RED AND GREEN, PER ORACLE
+-----------------------------
+Command in every case, from the sandbox root:
+    node ./node_modules/vitest/vitest.mjs run <spec ...>        (CI=1)
+
+  oracle                                    RED (failed/passed)   GREEN   rows
+  ----------------------------------------  --------------------  ------  ----------------------
+  paymentRequestApprovalDependency.spec.tsx   2 / 1 control        3 / 3   REQ-02
+  paymentRequestCreateBounds.spec.tsx         3 / 3 controls       6 / 6   REQ-03, REQ-05
+  allocationBalanceChecks.spec.ts             8 / 0                8 / 8   REQ-03
+  paymentRequestApprovalClosed.spec.tsx       5 / 1 control        6 / 6   REQ-01
+  payQueueSettledBalance.spec.tsx             5 / 1 control        6 / 6   FIN-03, FIN-10, MON-05
+  payQueueBalanceArithmetic.spec.ts           6 / 0                6 / 6   FIN-03
+  payQueueCreditScope.spec.tsx                3 / 2 controls       5 / 5   MON-06
+  bankStatementLineAllocation.spec.tsx        6 / 0                6 / 6   MON-04 (client half)
+  consolidatedAwaitingScan.spec.tsx           2 / 1 control        3 / 3   MON-07
+  scopedBalanceLabels.spec.tsx                2 / 1 control        3 / 3   FIN-07
+  invoiceBalanceZero.spec.tsx                 1 / 0                1 / 1   FIN-09, MON-09
+  ordersProposalQueue.spec.tsx                3 / 2 controls       5 / 5   REQ-04
+  receiptOutstandingCredit.spec.tsx           3 / 2 controls       5 / 5   REQ-06
+  hebrewNumberAgreement.spec.tsx              2 / 6 controls       8 / 8   FIN-05
+  bankI18n.spec.ts                            1 / 3 controls       4 / 4   FIN-08, MON-08
+  creditRequestCurrencyLabel.spec.tsx         3 / 1 control        4 / 4   MON-10
+
+The red produced by each revert, with the commit whose parent was used:
+
+REQ-02  (74bd43ab^ : PaymentRequests.tsx, checks.ts, checkSummary.ts, errors.ts, he.ts, en.ts)
+   FAIL names the invoice the approval is waiting for
+        Unable to find text /ממתינה לאישור החשבונית LIVE-E2E-6430D260 לתשלום/
+   FAIL names every one of them when a request is waiting on more than one
+        Unable to find text /ממתינה לאישור 2 חשבוניות לתשלום: 3377, 7702/
+   PASS CONTROL "says nothing when every linked invoice is approved for payment" - green in BOTH runs
+
+REQ-03  (same revert)
+   FAIL closes both submits and states the bound when the allocation goes above the printed balance
+        Unable to find text /הסכום שהוקצה לחשבונית 3377 גבוה מהיתרה הפתוחה שלה/
+   FAIL fires one agora over the balance, where the tolerance signal said the amount matched
+        - same missing sentence
+   plus allocationBalanceChecks.spec.ts, all 8 cases:
+        TypeError: allocationBalanceChecks is not a function
+   PASS CONTROLS green in both runs: "opens with the printed balance, both submits live",
+        "reopens both submits as soon as the amount comes back inside the balance"
+
+REQ-05  (same revert)
+   FAIL promises approval, not a quarantine, when the critical is an unapproved invoice
+        AssertionError: expected 'שמירה (יסומן כחשד לכפילות)' to contain 'שליחה לאישור'
+        - character-for-character the red PR 7 recorded.
+   PASS CONTROL green in both runs: "promises the duplicate flag only when the duplicate signal
+        is the one that fired" - the converse, which is what stops the fix from simply deleting
+        the duplicate wording.
+
+REQ-01  (292959dd^ : PaymentRequests.tsx, errors.ts, he.ts, en.ts)
+   FAIL closes the approve button and carries the reason as its accessible name
+   FAIL does not offer the exceptional credit route as a way past it
+   FAIL does not claim a payment or a balance change that did not happen
+   FAIL does not send the reader to refresh, which changes nothing
+   FAIL names the approval dependency and the step that clears it
+   5 failed / 1 passed - the same shape PR 10 recorded.
+
+FIN-03  (d9aa45f3^ : AccountantPaymentQueue.tsx, he.ts, en.ts)
+   FAIL marks a queued request whose invoices are already settled
+        Unable to find text: החשבוניות כבר נפרעו
+   FAIL shows the invoice live balance beside the approved amount in the dialog
+        Unable to find text: יתרה לתשלום בחשבוניות
+   FAIL draws the em dash, not a zero, when the balance could not be read  - same missing label
+   FAIL surfaces the open duplicate-payment exception the product already holds
+        Unable to find text /חשד לדרישת תשלום כפולה — #12 · נקי וזוהר/
+   plus payQueueBalanceArithmetic.spec.ts, all 6 cases: paymentRequestBalance is not exported
+   PASS CONTROL green in both runs: "keeps the primary enabled - ruling #353 accepts the recording"
+   NOTE: PR 8 recorded 4 rendered assertions failing; this run shows 5, because MON-05's
+   assertion lives in the same file. Both counts are of the same file at different scopes.
+
+FIN-10 / MON-05  (same revert)
+   FAIL never claims the transfer cannot be performed
+        AssertionError: expected <span></span> to be null
+        - the refusal element is PRESENT on the unfixed tree, which is the finding exactly.
+   The same test also asserts the bank-details note SURVIVES
+   (getByText(/לא הוזנו פרטי בנק לספק זה/)), so the fix removes the contradiction and not
+   the true statement underneath it.
+
+MON-06  (30f99e3d^ : AccountantPaymentQueue.tsx, he.ts, en.ts)
+   FAIL does not claim the supplier has no open credits when the read returned nothing
+        AssertionError: expected <p ...(1)></p> to be null
+   FAIL says instead that this role cannot see the supplier credits
+        Unable to find text /חשבוניות מאושרות בלבד/
+   FAIL marks the quoted override figure as the approver view at approval
+        Unable to find text /נמדד ברגע האישור/
+   PASS 2 CONTROLS green in both runs - 3 failed / 2 passed, exactly PR 15's shape.
+
+MON-04, CLIENT HALF ONLY  (b6244d6b^ : Bank.tsx, errors.ts, he.ts, en.ts; UnmatchModal seam restored)
+   FAIL names the over-allocation, and by how much, when two confirmed rows exceed the line   (waitFor timeout)
+   FAIL says nothing alarming when the confirmed allocations add up to exactly the line       (waitFor timeout)
+   FAIL counts a confirmed match once when a suggestion of the same amount sits beside it     (waitFor timeout)
+   FAIL shows an em dash rather than a reassuring zero when the allocations could not be read
+   FAIL maps to its own key and not to the invoice-balance sentence
+        AssertionError: expected 'fallback' to be 'bank_allocation_exceeds_statement_line'
+   FAIL carries a sentence in both dictionaries
+        AssertionError: expected undefined to be truthy
+   6 failed / 0 passed. PR 11 recorded 6 failed / 4 passed from a LINE-LEVEL revert; the
+   tree-at-parent route also removes the confirmed-allocations read, so the dialog never
+   resolves and the three controls cannot report. Stated rather than smoothed over - see 3.5.
+
+MON-07  (7a5b1084^ : consolidatedInvoices.ts, ConsolidatedInvoices.tsx, he.ts, en.ts)
+   FAIL קורא למצב בשם הקנוני של המוצר ולא בשם פרטי של המסך הזה
+        Expected element to have text content: ממתין לאישור סריקה
+   FAIL אומר מה תקוע ומה לעשות, ולא רק באיזה מצב זה נמצא
+        Unable to find text: צריך לפתוח את המסמך ולאשר את הסריקה כדי שהקריאה תתחיל.
+   PASS CONTROL (queued) green in both runs.
+
+FIN-07  (a616943e^ : Invoices.tsx, he.ts, en.ts)
+   FAIL accountant control room: the open-balance KPI names its scope instead of the owner label
+        AssertionError: expected <div ...(1)></div> to be null
+        - i.e. the bare owner label 'יתרת חשבוניות פתוחות' is still over the accountant's figure
+   FAIL accountant invoice list: the balance column names the population it can be totalled over
+        Unable to find text: יתרה (מאושרות)
+   PASS CONTROL green in both runs: "owner invoice list: the header stays unqualified".
+   2 failed / 1 passing control - identical to the count PR 14 recorded.
+
+FIN-09 / MON-09  (6e5d0059^ : Invoices.tsx, Credits.tsx, FinancialSupplier.tsx, he.ts, en.ts)
+   FAIL prints 0.00 for an invoice measured at zero, and — only where no balance was returned
+        expected 'N-ZEROאריזות הדרום10.05.2026 900.00 ₪—מאושרתשולמה...' to contain '0.00 ₪'
+        - character-for-character the red PR 28 recorded.
+
+REQ-04  (e5665d69^ : Orders.tsx, ReceiptDetail.tsx, he.ts, en.ts)
+   FAIL offers a way into the decision from the list, not only from that one order
+        AssertionError: expected [] to include '/orders/proposals/d0000000-...'
+   FAIL names the order and the supplier the decision is owed on
+   FAIL marks the waiting order in the list itself
+        expected '#274חוות השדה...מוכנה לשליחה לספק' to contain 'ממתינה להחלטה'
+   PASS 2 CONTROLS green in both runs.
+
+REQ-06  (same revert)
+   FAIL prints the ordered quantity beside the one that arrived
+        expected 'מלפפוןכמות שהתקבלה: 5 קרטוניםהתקבל חלקית' to contain '12'
+   FAIL prints what the order is still owed        - same string, to contain '7'
+   FAIL names the credit the shortfall opened and offers a way to reach it
+        expected [ '/receiving', '/documents', ...(1) ] to include '/credits?id=81b63d4b-...'
+   PASS 2 CONTROLS green in both runs.
+
+FIN-05  (4803fd4f^ : Credits.tsx, Suppliers.tsx - the two files the row names)
+   FAIL prints «החזרת סחורה» in the table and in the credit card, never the key
+   FAIL has no door left that renders the map without resolving it
+        expected [ 'src\pages\Credits.tsx:67', ...(2) ] to deeply equal []
+   PASS 6 controls (the other findings sharing this file) green in both runs.
+
+FIN-08 / MON-08  (465b5fcb^ : Bank.tsx, he.ts, en.ts)
+   FAIL never marks the un-match reason box required, because nothing enforces it
+        expected source to contain 'htmlFor="bank-unmatch-reason">{t(OPTI...'
+   PASS 3 CONTROLS green in both runs.
+
+MON-10  (53337b2a^ : he.ts, en.ts - dictionaries only, which IS the fix)
+   FAIL states the dollar invoice's currency, and does not also say shekel
+        AssertionError: expected 'סכום (₪) (USD)' not to contain '₪'
+        - the finding verbatim, in the rendered DOM.
+   FAIL prints exactly one marker, on a dollar invoice     expected [ '₪', 'USD' ] to have length 1
+   FAIL prints exactly one marker on a shekel invoice too  expected [ '₪', 'ILS' ] to have length 1
+   PASS CONTROL green in both runs.
+   3 failed / 1 passed - identical to PR 45's recorded count.
+
+
+2. THE FIVE ROWS THAT STAY FIXED, AND WHY EACH ONE DOES
+--------------------------------------------------------
+MON-01 - its oracle is supabase/tests/p108_one_balance_one_approval.sql. The local stack is
+  held by the G13 "SQL" verifier and this verifier did not touch it. The client half named in
+  the row's files cell (the payment_request_invoice_reserved mapping and its two sentences)
+  was READ and is present - src/lib/errors.ts:245-246, he.ts:128, en.ts:124 - but there
+  is NO test anywhere in src/ that asserts it (see 3.1), so there is nothing to run red.
+  Not reproduced. The SQL half is the stack holder's.
+
+MON-03 - oracle p113_a_currency_this_role_cannot_value.sql. Stack held; not run. The suite
+  was READ statically and it is strong (see section 4). Not reproduced. Left to the stack holder.
+
+FIN-04 - same oracle, same migration, same reason as MON-03. Not reproduced.
+
+MON-04 - CLIENT HALF REPRODUCED, red 6 / green 6, above. The SQL half
+  (p115_a_statement_line_is_spent_once.sql, migration 0322) was NOT run - stack held. A row
+  whose oracle column names two oracles is not MET on one of them, so it stays FIXED with the
+  client half recorded here and the SQL half left to the verifier holding the lock.
+
+REQ-02 - CLIENT ORACLE REPRODUCED, red 2 / 1 control, green 3. Deliberately NOT raised to MET.
+  The row's oracle is a disjunction - "either every live request in a seeded tenant can be
+  worked, OR the screen names the invoice each stuck one is waiting for" - and only the second
+  disjunct is what paymentRequestApprovalDependency.spec.tsx asserts. The first was never
+  reached, because the tenant's own three-way-review guard refuses the approvals; the row says
+  so in its own words, and the fix does not claim otherwise. Marking it MET would let a reader
+  scanning statuses conclude the queue was made workable. It was not. The half that WAS proved
+  is recorded in the row.
+
+
+3. ORACLES THAT DO NOT ASSERT THEIR FINDING, OR CANNOT SHOW THAT THEY DO
+------------------------------------------------------------------------
+Not left empty out of politeness. Six entries, worst first. None of them was repaired - a
+verifier who edits becomes an author.
+
+3.1  MON-01 - THE CLIENT HALF HAS NO ORACLE AT ALL.
+     The row's files cell lists src/lib/errors.ts and both dictionaries as part of the fix,
+     with the reason spelled out: without its own sentence the new code falls through to the
+     generic one that says an invoice was paid - "which is exactly REQ-01's complaint". A grep
+     of the whole of src/ for payment_request_invoice_reserved returns three hits and all
+     three are the PRODUCT: errors.ts:245-246, he.ts:128, en.ts:124. No spec.
+     MON-04's structurally identical client change IS pinned, by two cases that assert
+     toErrorKey maps the code to itself, that its neighbour still maps to itself, and that
+     the sentence in each dictionary is neither fallback nor the neighbouring sentence.
+     MON-01 has none of that. Its client half can regress to the generic sentence - the very
+     defect REQ-01 was raised for - with every gate green. This is a MISSING oracle, not a
+     wrong one, and it is the most valuable thing in this file.
+
+3.2  FIN-08 / MON-08 - THE ORACLE IS A SOURCE-TEXT SCAN, NOT A RENDER.
+     bankI18n.spec.ts does readFileSync('src/pages/Bank.tsx') and asserts substrings of the
+     file. It never mounts the dialog, so it cannot see what a reader actually reads: a wrapper
+     that re-added the asterisk at render time would leave it green, and toContain is
+     satisfied by the string appearing inside a comment. What rescues it is the DICTIONARY half
+     of the same case - he.bank/en.bank no longer have text_12, he.reason.optionalLabel
+     contains רשות, and no setReason* value in either dictionary contains '*' - which is
+     behavioural and is what actually went red. The rendered label is evidenced only by the
+     original agent's 1440x900 screenshot, not by any test.
+
+3.3  REQ-03 - allocationBalanceChecks.spec.ts CANNOT HOST A CONTROL.
+     All eight cases import a function that did not exist before the fix, so on the unfixed
+     tree all eight fail identically with "TypeError: allocationBalanceChecks is not a
+     function". Four of them are WRITTEN as controls - "leaves a legitimate part-payment
+     alone", "accepts the exact balance", "does not report a float remainder as an
+     over-allocation", "measures a JPY allocation at its own scale" - and not one of them can
+     be green while the finding is red. A red on that file alone therefore cannot tell the
+     finding from a broken harness. The pair is rescued by the rendered oracle next door,
+     which does carry live controls; that is why REQ-03 still reaches MET.
+
+3.4  FIN-09 / MON-09 - THE WHOLE ORACLE IS ONE it().
+     Every assertion lives in a single test, including the two that must NOT move (N-OPEN
+     still prints money; N-UNKNOWN still shows the em dash and not 0.00). No control can be
+     green while the finding is red, so this file also cannot distinguish its red from a
+     harness failure. The assertions themselves are exactly right and are made per row by
+     invoice number, in BOTH directions - toContain(money(0)) AND not.toContain('—') for the
+     measured zero, toContain('—') AND not.toContain(money(0)) for the unknown - which is
+     the campaign's iron rule enforced rather than merely respected. It is the structure, not
+     the content, that is weak. Two ledger rows also rest on this one test.
+
+3.5  MON-04 - THE CLIENT ORACLE'S CONTROLS DO NOT SURVIVE THE HONEST RED.
+     Reverting Bank.tsx to the fixing commit's parent removes the confirmed-allocations read
+     as well as the sentence, so the dialog never resolves and all six cases fail, three of them
+     by waitFor timeout rather than by assertion. PR 11's recorded 6-failed/4-passed came from
+     a hand-made line-level revert. The assertions are among the best in this area - the
+     em-dash case asserts toContain('—') AND not.toContain(money(0)) on the ALLOCATED ROW
+     specifically, with a comment explaining that a dialog-wide match would pass for the wrong
+     reason on three of four cases - but they are only separable under a revert the verifier
+     hand-builds, not under the tree-at-parent route the brief prefers.
+
+3.6  REQ-02 - THE ORACLE IS A DISJUNCTION AND ONLY ONE DISJUNCT IS TESTABLE.
+     Nothing in the spec touches "every live request in a seeded tenant can be worked". The row
+     is honest about this in its own text, which is why this is a note and not an accusation -
+     but a row whose oracle can be satisfied by its weaker half should say so in the STATUS,
+     not only in the prose. It does now.
+
+MINOR, RECORDED RATHER THAN CLAIMED AS A DEFECT - readQueueInvoiceBalances
+     (AccountantPaymentQueue.tsx:338) selects 'invoice_id, balance_in_currency' from
+     invoice_balances_by_currency WITHOUT selecting or filtering currency, and keys the map
+     by invoice id alone, after which paymentRequestBalance sums across invoices against a
+     single minor_units. This is NOT reachable today: 0218 selects the currency from the
+     invoice, and an invoice carries one currency, so the view returns one row per invoice.
+     It is listed only because payQueueBalanceArithmetic.spec.ts never gives one invoice two
+     currency rows, so nothing in the suite would notice if that ever stopped being true - and
+     the campaign's rule about never summing across currencies is the one rule in this area
+     with no assertion behind it.
+
+
+4. WHAT THE ORACLES GET RIGHT, CHECKED BECAUSE THE BRIEF ASKED
+---------------------------------------------------------------
+"A measure with no data shows the em dash, never 0" - asserted in BOTH directions, not merely
+respected, in every place it applies:
+  * payQueueSettledBalance.spec.tsx - a measured zero must match /0\.00/; a request with no
+    balance row must toContain('—') AND must not show the settled banner.
+  * payQueueBalanceArithmetic.spec.ts - "reports null the moment ONE invoice has no measured
+    balance" pins null rather than a partial sum of 150, and "reports a measured zero as
+    zero" pins the mirror.
+  * invoiceBalanceZero.spec.tsx - see 3.4; per row, both directions.
+  * bankStatementLineAllocation.spec.tsx - toContain('—') AND not.toContain(money(0)), read
+    off the ALLOCATED row and not off the dialog.
+  * p113 (read, not run) - accountant_a_usd expects the literal 'no row', so a '0.000/0'
+    FAILS the suite, with the note "...0.000 here is the sentence 'this supplier owes nothing
+    in dollars', and it is false against a real $300". The mirror is a named control:
+    accountant_c_ils expects '0.000/0' - "a measured zero must not become an em dash".
+
+"The population is never widened to make two numbers agree" - both label rows are clean:
+  * FIN-07 (scopedBalanceLabels.spec.tsx) asserts the accountant's KPI reads
+    'יתרת חשבוניות פתוחות — מאושרות בלבד' and that the bare owner label is ABSENT; the third
+    case is an owner control asserting the owner header stays unqualified. Nothing anywhere in
+    the file compares the accountant's figure to the owner's, and no assertion would be
+    satisfied by making them equal.
+  * MON-06 (payQueueCreditScope.spec.tsx) asserts the SCOPE CLAUSE /נמדד ברגע האישור/ and the
+    reason /חשבוניות מאושרות בלבד/, and its CONTROL asserts that the frozen override figure
+    is STILL PRINTED - note.textContent contains '50.00' and 'הזיכוי ייושב מול הספק בנפרד'.
+    It asserts the audit fact SURVIVES. It does not assert the number changed. That is the
+    right way round: an oracle demanding the figure move would have been demanding the
+    approval-time audit record be destroyed.
+
+"Balances are per currency and never summed across currencies" - no oracle in this area
+asserts a merged total, and p113 goes further and asserts the ABSENCE of one: owner_a_merged
+counts rows where open_balance_in_currency = 450 (150 ILS + 300 USD) and expects '0', with
+the note "Nothing anywhere may add 150 shekels to 300 dollars."
+
+MON-06's frozen figure, checked specifically because the brief flagged it: the oracle asserts
+a label and preserves the number. See above.
+
+
+5. WHAT THIS VERIFICATION DOES NOT COVER
+-----------------------------------------
+  * Every SQL suite: p108 (MON-01), p113 (MON-03, FIN-04), p115 (MON-04's server half). Read,
+    not run. The stack was held throughout by another verifier and this verifier did not queue
+    for it, per its brief.
+  * Every screenshot. No visual claim in any row was re-measured; the original agents' screen
+    reads stand as written and are neither confirmed nor challenged here.
+  * MON-04's migration 0322, MON-03/FIN-04's 0320, MON-01's 0315: not applied, not run,
+    not reviewed for anchoring. check:anchored-replacements was not run.
+  * npm run verify and npm run quality: forbidden by the brief, not run.
+  * No vitest run in this file hit a 5000 ms fork timeout, so nothing here is being excused as
+    environmental. The only re-run was the seam correction described in section 0, and BOTH
+    sides were re-measured against the corrected tree, never one side against another.
