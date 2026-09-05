@@ -1,7 +1,26 @@
 resource=local-supabase-stack + SQL suites + npm run quality
 SINGLE OCCUPANCY. Read this file before ANY command that touches the local stack.
 
-HELD BY: PR 13 (PERM-02) — granted 05.09.2026 09:35 local.
+HELD BY: PR 17 (DOC-02/DOC-03/DOC-04/DOC-08) — granted 05.09.2026 12:50 local. LAST IN THE QUEUE.
+
+  PR 13 RELEASED IT, done and proved: RED 22/25 with 17 of 17 controls green in the SAME run and
+  the leak reproduced in a SECOND tenant; GREEN 25/25 with the same 17, same file hash read back
+  inside the container both times. It also re-ran `PERM-03`'s EXPLAIN on its own green stack rather
+  than reasoning that the plan "should not" change: same index scan, same index condition, the new
+  conjunct landing in the Filter -- and it stated the limit, that 17 local rows do not reproduce
+  production's 27,533. Landed at 5145ecac. `DEBT §121` written.
+  IT ALSO TESTED A HYPOTHESIS INSTEAD OF FILING IT. A `demo:restore` GoTrue 500 looked like p116's
+  own auth fixtures, which would have been a real residual since the gate runs p116 then restore.
+  It reproduced the sequence deliberately, restore succeeded, and the 500 turned out to be the
+  OTHER CAMPAIGN rebuilding the shared database mid-run. p116 does not break GoTrue.
+
+  THE OTHER CAMPAIGN CLOBBERED THE STACK A SECOND TIME, at 09:03 UTC, again leaving 0315 gone.
+  It did not corrupt PR 13's measurements only because PR 13 read the head out of
+  `schema_migrations` immediately before each side. THAT IS WHY THE RULE IS READ, NEVER ASSUME.
+
+  PR 17 WAS STOPPED AND IS BEING RE-DISPATCHED. It held this lock from the start of the wave and
+  produced, in EIGHT HOURS: no commit, no migration, no suite, and no file written in its worktree
+  after 04:54. It was not cancelled for being slow -- it was cancelled because it had stopped.
 
   PR 11 RELEASED IT, done and proved. The red printed exactly the five lines its author predicted
   and nothing else, with five controls green in the SAME run, and it read the money the aborted
