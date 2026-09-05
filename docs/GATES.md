@@ -4,6 +4,16 @@ One row per finding. A wave is not finished because its pull request merged; it 
 every row below it reads `MET`, with the evidence named. A row given up on reads `ABANDON:`
 followed by the reason — never a blank, and never a silent drop.
 
+**Seven rows render with extra columns, and it is cosmetic — do not "fix" it blindly.** `DOC-05`,
+`OWN-12`, `REQ-06`, `EXP-03`, `EXP-08`, `OWN-06` and `OWN-04` quote code containing a literal `|`
+inside their status cell. Markdown splits a table row on a bare pipe even inside backticks, so
+those rows draw wider than their neighbours. **No status is lost** — every tally in this campaign
+reads the first status keyword after a `|`, not a column index, so the counts are unaffected. A
+scripted repair was attempted on 05.09.2026 and **refused itself**: it could not tell a content
+pipe from a separator without guessing, and reported rather than half-fixing seven rows of the
+ledger. Escape them by hand (`\|`) if the rendering matters. `OWN-16` and `ASSIST-11` have four
+columns legitimately — they sit in a narrower table.
+
 **Status.** `PENDING` not started · `DIAGNOSED` cause read in the tree, files named, no fix yet ·
 `FIXED` change written, oracle not re-run · `MET` oracle re-run green, evidence path given ·
 `BLOCKED` waiting on a named owner decision · `ABANDON:` given up, with the reason ·
