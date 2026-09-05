@@ -78,7 +78,7 @@ export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialP
   }
 
   return (
-    <div className="min-w-0 space-y-5" data-testid="document-review-page">
+    <div className="min-w-0 space-y-4" data-testid="document-review-page">
       {/* A live process and a settled state answer different questions. The live strip names its
           own work and count; adding a "מצב המסמך" heading and badge above it repeats the same fact.
           Settled states need only one compact label/value row, not an otherwise empty card. */}
@@ -137,18 +137,12 @@ export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialP
           The strip above answers all four from the job the server actually reports, and it is the
           only surface on this screen that may claim work is in progress. */}
 
-      {/* Below `xl` the decision column comes first, for every document kind — not only for a price
-          list, which is how this started.
-          On a phone the two columns are one column, and the source viewer is a full-width page
-          image with no height cap: an invoice review opened onto ~750px of scan before the first
-          word about what the machine concluded. The findings, the supplier, the order and "מה יקרה
-          באישור" are what a reviewer reads first; the document is what they consult when one of
-          those makes them doubt, and it is still on the same screen, one scroll down.
-          DOM order is unchanged — only the visual order moves — so `order` is applied to the grid
-          children and the reading order a screen reader follows stays source-then-decision. */}
+      {/* The evidence precedes the decision on a phone. The old visual order asked for approval
+          before showing the document being approved. Desktop keeps the two columns side by side;
+          DOM and visual reading order now agree at every width. */}
       {extraction && (
         <div className="grid min-w-0 items-start gap-5 xl:grid-cols-[minmax(0,1.08fr)_minmax(24rem,0.92fr)]">
-          <div className="order-2 min-w-0 xl:order-1">
+          <div className="order-1 min-w-0 xl:order-1">
             <DocumentSourceViewer
               fileName={snapshot.document.file_name}
               mimeType={snapshot.document.mime_type}
@@ -162,7 +156,7 @@ export function DocumentReviewWorkspace({ snapshot, actorId, onRefetch, initialP
             />
           </div>
 
-          <div className="order-1 min-w-0 space-y-5 xl:order-2">
+          <div className="order-2 min-w-0 space-y-4 xl:order-2">
             {snapshot.packet ? (
               <DocumentPacketReview snapshot={snapshot} readOnly={readOnly} onRefetch={onRefetch} />
             ) : readOnly ? (

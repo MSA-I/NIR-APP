@@ -121,7 +121,7 @@ export function useQuickSupplier<T extends SupplierOption>(
   fetched: readonly T[] | null | undefined,
   onSelect: (supplierId: string) => void,
 ): QuickSupplierPicker & { suppliers: (T | QuickCreatedSupplier)[] } {
-  const { profile } = useAuth();
+  const profile = useAuth()?.profile;
   const [dialogOpen, setDialogOpen] = useState(false);
   const [created, setCreated] = useState<QuickCreatedSupplier[]>([]);
   // Synced in an effect, not during render. A render-phase ref write is harmless while every

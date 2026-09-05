@@ -354,23 +354,19 @@ describe('שחזור מסמך שנכשל', () => {
 /**
  * What a phone meets first on a review screen.
  *
- * Below `xl` the two columns collapse into one, and the source viewer is a full-width page image
- * with no height cap — roughly 750px of scan at 428px wide. Opening an invoice review used to mean
- * scrolling past all of it before the first word about what the machine concluded. The decision
- * column now comes first visually for every document kind, which is the treatment the price list
- * already had; DOM order is untouched, so the reading order a screen reader follows is unchanged
- * and the source is still one scroll away, on the same screen.
+ * Below `xl` the two columns collapse into one. The source is the evidence being approved, so it
+ * comes first on a phone; the decision follows it. Desktop keeps source and decision side by side.
  */
-describe('בצר — ההחלטה לפני הראיה', () => {
-  it('מסדר את עמודת ההחלטה ראשונה מתחת ל-xl ומחזיר את הסדר המקורי ברוחב מלא', () => {
+describe('בנייד — הראיה לפני ההחלטה', () => {
+  it('מסדר את עמודת המקור ראשונה מתחת ל-xl ושומר את שני הטורים ברוחב מלא', () => {
     renderWorkspace(0.94);
 
     const source = screen.getByTestId('document-source-viewer').parentElement!;
     const decision = screen.getByTestId('document-review-proposals').parentElement!;
 
-    expect(source.className).toContain('order-2');
+    expect(source.className.split(/\s+/)).toContain('order-1');
     expect(source.className).toContain('xl:order-1');
-    expect(decision.className).toContain('order-1');
+    expect(decision.className.split(/\s+/)).toContain('order-2');
     expect(decision.className).toContain('xl:order-2');
     // DOM order is the thing that did not move: source first, exactly as before.
     expect(source.compareDocumentPosition(decision) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();

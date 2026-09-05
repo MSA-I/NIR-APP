@@ -60,8 +60,9 @@ export function PrimaryDecision({ children, hint, label, className = '' }: {
       data-testid="primary-decision"
       // Stretch on a phone so the button is one full-width target; from `lg` — the width the app
       // shell itself switches at — it returns to its natural size at the logical end.
-      className={`flex flex-col items-stretch gap-2 lg:items-end ${className}`}
+      className={`flex flex-col items-stretch gap-2 rounded-xl border border-action-line bg-action-wash p-3 lg:items-end ${className}`}
     >
+      <h3 className="w-full text-sm font-semibold text-ink-body">{label}</h3>
       {hint != null && <p className="w-full text-sm text-ink-muted lg:text-end">{hint}</p>}
       {children}
     </div>

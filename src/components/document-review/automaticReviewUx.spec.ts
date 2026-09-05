@@ -13,10 +13,10 @@ const reprocessMigration = readFileSync(join(process.cwd(), 'supabase', 'migrati
 
 describe('automatic document review UX', () => {
   it('does not ask for type approval and puts price-list results before generic review panels', () => {
-    // The sentence moved to the dictionary, so the claim splits: the screen renders that key, and
-    // the key carries that wording. Either half alone would pass while the other was broken.
-    expect(proposals).toContain("t('docReview.text_2')");
-    expect(he.docReview.text_2).toContain('אין צורך באישור ידני');
+    // The default state is now one compact value row and a correction link, not a card explaining
+    // that it does not need approval.
+    expect(proposals).not.toContain("t('docReview.text_2')");
+    expect(proposals).toContain('className="link ms-auto min-h-11"');
     // These two stay whole-repo absence checks. They are about copy that must not EXIST anywhere,
     // so extraction does not weaken them — it only moves where the string could hide, and the
     // dictionary is now one of those places.
@@ -35,7 +35,7 @@ describe('automatic document review UX', () => {
     expect(priceListReview).toContain('data-testid="price-list-show-unmatched"');
     expect(priceListReview).not.toContain('data-testid="price-list-details-toggle"');
     expect(priceListReview).toContain('aria-controls="price-list-line-details"');
-    expect(priceListReview).toMatch(/detailsOpen && lineItems\.length > 0[\s\S]*?Object\.entries\(item\.values\)/);
+    expect(priceListReview).toMatch(/detailsOpen && lineItems\.length > 0[\s\S]*?pageIndexes\.map[\s\S]*?sourceLineSummary\(item\.values/);
     expect(priceListReview).not.toContain('<details');
   });
 

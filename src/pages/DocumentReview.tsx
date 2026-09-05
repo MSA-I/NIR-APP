@@ -181,6 +181,18 @@ export default function DocumentReview() {
   if (processing.error && !snapshot) return <ErrorNote message={processing.error} />;
   if (!snapshot) return <ErrorNote message={t('documentReviewPage.message_3')} />;
 
+  const workspace = (
+    <DocumentReviewWorkspace
+      snapshot={snapshot}
+      actorId={profile.id}
+      onRefetch={processing.refetch}
+      initialPanel={params.get('panel')}
+      readOnly={!canWrite}
+      reprocessing={reprocessing}
+      onReprocess={() => void reprocess()}
+    />
+  );
+
   return (
     <div className="min-w-0 space-y-4">
       {/* RecordHeader, not PageHeader: this screen is ONE document, and the file name is the
@@ -261,17 +273,7 @@ export default function DocumentReview() {
         </Note>
       )}
 
-      {showExtractedResultFirst && (
-        <DocumentReviewWorkspace
-          snapshot={snapshot}
-          actorId={profile.id}
-          onRefetch={processing.refetch}
-          initialPanel={params.get('panel')}
-          readOnly={!canWrite}
-          reprocessing={reprocessing}
-          onReprocess={() => void reprocess()}
-        />
-      )}
+      {showExtractedResultFirst && workspace}
 
       {scanState && snapshot.document && (
         <DocumentScanPreview
@@ -286,17 +288,7 @@ export default function DocumentReview() {
         />
       )}
 
-      {(!scanState || (scanState.accepted && !showExtractedResultFirst)) && (
-        <DocumentReviewWorkspace
-          snapshot={snapshot}
-          actorId={profile.id}
-          onRefetch={processing.refetch}
-          initialPanel={params.get('panel')}
-          readOnly={!canWrite}
-          reprocessing={reprocessing}
-          onReprocess={() => void reprocess()}
-        />
-      )}
+      {(!scanState || (scanState.accepted && !showExtractedResultFirst)) && workspace}
     </div>
   );
 }

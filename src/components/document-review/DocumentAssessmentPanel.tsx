@@ -351,14 +351,14 @@ export function DocumentAssessmentPanel({ documentId, onApplied }: DocumentAsses
   const editable = !read.data_approved && read.state !== 'awaiting_interpretation';
 
   return (
-    <section className="space-y-5" aria-label={t('docAssessment.aria_label')}>
+    <section className="space-y-4" aria-label={t('docAssessment.aria_label')}>
       {/* The two states, as two sentences with two icons. Never one word covering both. */}
-      <div className="card p-4">
+      <div className="card p-3">
         <p className="flex items-start gap-2 text-sm text-ink-body">
           <CircleCheck size={ICON.sm} aria-hidden="true" className="mt-0.5 shrink-0" />
           <span>{t(storedKey)}</span>
         </p>
-        <p className="mt-2 flex items-start gap-2 text-sm text-ink-body">
+        <p className="mt-1 flex items-start gap-2 text-sm text-ink-body">
           {read.data_approved
             ? <CircleCheck size={ICON.sm} aria-hidden="true" className="mt-0.5 shrink-0" />
             : <Info size={ICON.sm} aria-hidden="true" className="mt-0.5 shrink-0" />}

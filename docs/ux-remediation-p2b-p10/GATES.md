@@ -1,6 +1,6 @@
 # Gates: UX remediation P2b-P10
 
-OWNS: docs/UX-REMEDIATION-DOCUMENTS-20260904.md, docs/UX-REMEDIATION-REVIEW-LOG-20260904.md, docs/ux-remediation-p2b-p10/**, DESIGN.md, src/App.tsx, src/index.css, src/components/assistant/**, src/components/document-review/**, src/components/QuickCreateSupplier.tsx, src/components/QuickSupplierPicker.tsx, src/components/DocumentStatusBadge.tsx, src/components/FileUpload.tsx, src/components/UploadCenter.tsx, src/pages/DocumentsInbox.tsx, src/pages/DocumentReview.tsx, src/pages/PriceLists.tsx, src/lib/assistant/**, src/lib/documentStatus.ts, src/lib/documentStateRecovery.ts, src/lib/useDocumentProcessing.ts, src/lib/i18n/dictionaries/he.ts, src/lib/i18n/dictionaries/en.ts, src/**/*.spec.ts, src/**/*.spec.tsx, scripts/check-ux-remediation-p2b-p10-browser.cjs, scripts/check-ux-remediation-p3-browser.cjs, scripts/check-ux-remediation-p4-browser.cjs, scripts/check-ux-remediation-p5-browser.cjs, scripts/i18n-baseline.json, supabase/migrations/**, supabase/tests/**, supabase/functions/assistant/**, scripts/check-quality-gates.ps1, artifacts/ux-remediation-p2b-p10/**
+OWNS: docs/UX-REMEDIATION-DOCUMENTS-20260904.md, docs/UX-REMEDIATION-REVIEW-LOG-20260904.md, docs/ux-remediation-p2b-p10/**, DESIGN.md, src/App.tsx, src/index.css, src/components/assistant/**, src/components/document-review/**, src/components/QuickCreateSupplier.tsx, src/components/QuickSupplierPicker.tsx, src/components/DocumentStatusBadge.tsx, src/components/FileUpload.tsx, src/components/UploadCenter.tsx, src/pages/DocumentsInbox.tsx, src/pages/DocumentReview.tsx, src/pages/PriceLists.tsx, src/lib/assistant/**, src/lib/documentStatus.ts, src/lib/documentStateRecovery.ts, src/lib/useDocumentProcessing.ts, src/lib/i18n/dictionaries/he.ts, src/lib/i18n/dictionaries/en.ts, src/**/*.spec.ts, src/**/*.spec.tsx, scripts/check-ux-remediation-p2b-p10-browser.cjs, scripts/check-ux-remediation-p3-browser.cjs, scripts/check-ux-remediation-p4-browser.cjs, scripts/check-ux-remediation-p5-browser.cjs, scripts/check-ux-remediation-p6-browser.cjs, scripts/i18n-baseline.json, supabase/migrations/**, supabase/tests/**, supabase/functions/assistant/**, scripts/check-quality-gates.ps1, artifacts/ux-remediation-p2b-p10/**
 
 Scope: complete every authorized package from P2b through P10, excluding cancelled P7 and P4b, then prove local integration, CI, rollout and live behavior required by each changed surface.
 
@@ -42,13 +42,13 @@ Scope: complete every authorized package from P2b through P10, excluding cancell
 - [x] P5B: progress strip exposes more real processing states while list badges stay compact
   EVIDENCE: DocumentProcessingProgress passed 13/13 and browser captured queued, scan approval, reading, reading-complete/preparing and interpreting in both viewports. Compact list screenshots show two ordinary assignments as the same single-word badge, no loading/unavailable/superseded badges, and no queue jargon. Owner reversal #375 is therefore implemented as more watched-progress states, not fewer.
 
-- [ ] P6A: mobile source starts above y=1200, approval follows the source, and page height is at most 3.0 screens; desktop is at most 2.5 screens
+- [x] P6A: mobile source starts above y=1200, approval follows the source, and page height is at most 3.0 screens; desktop is at most 2.5 screens
   CHECK: npm.cmd run test -- src/components/document-review/documentReviewLayoutUx.spec.tsx
   EXPECT: passed
-  EVIDENCE: pending
+  EVIDENCE: p6 browser metrics measured mobile source y=270, source bottom=691.8, approval y=1366.3, height=2530/844=2.998 screens; desktop height=1826/900=2.029 screens. Desktop/mobile screenshots show source-first mobile order, side-by-side desktop order and a visibly titled primary-decision boundary. Focused layout/workspace/proposal/page tests passed 81/81.
 
-- [ ] P6B: storage and approval remain two sentences; reconciliation folds only when gap is known, in tolerance and has no missing rung
-  EVIDENCE: pending
+- [x] P6B: storage and approval remain two sentences; reconciliation folds only when gap is known, in tolerance and has no missing rung
+  EVIDENCE: browser counted exactly one stored sentence and one not-approved sentence. Reconciliation tests cover measured zero, in-tolerance nonzero, over-tolerance, unknown and missing-rung cases; only gapKnown && !overTolerance && missing_rungs.length===0 folds. DocumentReview source contains one workspace composition and document type is a compact value row with correction/draft links.
 
 - [ ] P8A: every failed scan code and unknown fallback has one action or explicit no-action and never shows the corner editor
   CHECK: npm.cmd run test -- src/components/document-review/documentScanRecovery.spec.tsx

@@ -140,9 +140,9 @@ export function ReconciliationStrip({ ladder, title, onGoToLines }: {
     .filter((finding) => finding.code in GAP_CLASSIFICATION && finding.line_index != null)
     .map((finding) => (finding.line_index as number) + 1);
 
-  return (
-    <div className="space-y-3">
-      <section className="card p-4" aria-labelledby="reconciliation-account">
+  const foldable = gapKnown && !overTolerance && missing.size === 0;
+  const section = (
+      <section className={foldable ? 'p-4 pt-0' : 'card p-4'} aria-labelledby="reconciliation-account">
         <div className="mb-2 flex items-baseline justify-between gap-3">
           <h3 id="reconciliation-account" className="text-sm font-semibold text-ink-body">
             {title ?? t('reconciliation.accountTitle')}
@@ -207,11 +207,25 @@ export function ReconciliationStrip({ ladder, title, onGoToLines }: {
           </Note>
         )}
 
-        {!overTolerance && gapKnown && (
+        {!foldable && !overTolerance && gapKnown && (
           <Note tone="idle" className="mt-3">{t('reconciliation.withinTolerance')}</Note>
         )}
       </section>
+  );
 
+  return (
+    <div className="space-y-3">
+      {foldable ? (
+        <details className="card group" data-testid="reconciliation-fold">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
+            <span className="text-sm font-semibold text-ink-body">
+              {title ?? t('reconciliation.accountTitle')}
+            </span>
+            <span className="badge-done">{t('reconciliation.withinTolerance')}</span>
+          </summary>
+          {section}
+        </details>
+      ) : section}
     </div>
   );
 }

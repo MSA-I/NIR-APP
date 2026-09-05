@@ -1,0 +1,24 @@
+{
+  "desktop": {
+    "sourceY": 271.5,
+    "sourceBottom": 1076.171875,
+    "approvalY": 862,
+    "bodyHeight": 1826,
+    "screenRatio": 2.028888888888889,
+    "decisionBackground": "oklch(0.966 0.011 195)",
+    "reconciliationFolded": true,
+    "storedSentences": 1,
+    "approvalSentences": 1
+  },
+  "mobile": {
+    "sourceY": 270,
+    "sourceBottom": 691.796875,
+    "approvalY": 1366.296875,
+    "bodyHeight": 2530,
+    "screenRatio": 2.9976303317535544,
+    "decisionBackground": "oklch(0.966 0.011 195)",
+    "reconciliationFolded": true,
+    "storedSentences": 1,
+    "approvalSentences": 1
+  }
+}

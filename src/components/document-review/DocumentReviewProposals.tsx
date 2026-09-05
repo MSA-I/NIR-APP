@@ -109,20 +109,17 @@ function TypeReviewControls({ snapshot, canDecide, onRefetch }: {
   }
 
   return (
-    <div className="card card-pad" aria-labelledby="document-type-review-title">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h3 id="document-type-review-title" className="section-title">{t('docReview.text')}</h3>
-          <p className="mt-1 text-sm text-ink-muted">{t('docReview.text_2')}</p>
-        </div>
+    <div className="border-y border-line-soft py-3" aria-labelledby="document-type-review-title">
+      <div className="flex min-h-11 flex-wrap items-center gap-3">
+        <h3 id="document-type-review-title" className="text-sm font-medium text-ink-soft">{t('docReview.text')}</h3>
+        <strong className="text-sm text-ink-body" aria-live="polite">{t(DOCUMENT_TYPE_KEYS[effectiveType])}</strong>
         <span className={manuallyCorrected ? 'badge-info' : 'badge-done'}>{manuallyCorrected ? t('docReview.text_3') : t('docReview.text_4')}</span>
+        {canMutate && !correcting && (
+          <button type="button" className="link ms-auto min-h-11" onClick={() => setCorrecting(true)}>
+            {t('docReview.setCorrecting')}
+          </button>
+        )}
       </div>
-
-      <dl className="mt-4 rounded-lg bg-surface-sunken p-3" aria-live="polite">
-        <dt className="text-sm font-medium text-ink-soft">{t('docReview.text_5')}</dt>
-        <dd className="mt-1 text-ink-body">{t(DOCUMENT_TYPE_KEYS[effectiveType])}</dd>
-        <dd className="mt-1 text-xs text-ink-muted">{t('docReview.autoDetection')} {confidenceLabel(currentInterpretation.payload.document_type_confidence, t)}</dd>
-      </dl>
 
       {latest && (
         <p className="mt-3 break-words text-xs text-ink-muted">
@@ -160,10 +157,6 @@ function TypeReviewControls({ snapshot, canDecide, onRefetch }: {
             </button>
           </div>
         </form>
-      ) : canMutate ? (
-        <div className="mt-3 flex justify-end">
-          <button type="button" className="btn-secondary" onClick={() => setCorrecting(true)}>{t('docReview.setCorrecting')}</button>
-        </div>
       ) : null}
 
       {canDecide && (
@@ -179,21 +172,18 @@ function TypeReviewControls({ snapshot, canDecide, onRefetch }: {
 
 const DRAFT_ACTIONS: Partial<Record<
   InterpretationContract['document_type'],
-  { blurbKey: TKey; labelKey: TKey }
+  { labelKey: TKey }
 >> = {
   invoice: {
-    blurbKey: 'docReview.draftInvoiceBlurb',
     labelKey: 'docReview.draftInvoiceLabel',
   },
   delivery_note: {
     // Deliberately does not promise the order is chosen for you. When the automatic path resolved
     // it, the document is already filed to its draft receipt and this panel is not what the
     // reviewer sees; when it did not, the honest sentence is the manual one.
-    blurbKey: 'docReview.draftReceiptBlurb',
     labelKey: 'docReview.draftReceiptLabel',
   },
   credit_note: {
-    blurbKey: 'docReview.draftCreditBlurb',
     labelKey: 'docReview.draftCreditLabel',
   },
 };
@@ -345,8 +335,7 @@ function DocumentDraftAction({ documentType, documentId, interpretation }: {
   }
 
   return (
-    <div className="mt-4 border-t border-line pt-4">
-      <p className="text-sm text-ink-soft">{t(action.blurbKey)}</p>
+    <div className="mt-2">
       {/* Secondary, not primary. This card renders on the same screen as `DocumentAssessmentPanel`,
           whose "אישור המסמך" already creates the supplier invoice or the draft receipt — with the
           reason, the ledger row and the audit entry. Two petrol buttons offering two routes to the
@@ -354,7 +343,7 @@ function DocumentDraftAction({ documentType, documentId, interpretation }: {
           not. */}
       <button
         type="button"
-        className="btn-secondary mt-3"
+        className="link min-h-11"
         disabled={busy}
         onClick={() => {
           if (documentType === 'invoice') navigate(`/invoices/new?document=${documentId}`);
@@ -535,7 +524,7 @@ export function DocumentReviewProposals({ snapshot, onRefetch }: DocumentReviewP
             <DocumentReviewFeedback
               documentId={snapshot.documentId}
               interpretationId={interpretation.id}
-              existing={snapshot.documentReviewFeedback[0] ?? null}
+              existing={snapshot.documentReviewFeedback?.[0] ?? null}
               onRefetch={onRefetch}
             />
           </div>
