@@ -1,0 +1,121 @@
+PR 17 — QA-sweep-20260904 — DOC-02, the client half
+ORACLE src/components/document-review/filingReason.spec.ts — RED then GREEN
+================================================================================
+
+RED   3 failed | 11 passed (14)
+GREEN 68 passed (68), across filingReason.spec.ts + assessment.spec.ts + model.spec.ts
+
+WHY THIS ORACLE EXISTS SEPARATELY FROM p111. The suite proves the SERVER now assigns
+`invoice_date_missing` where only the date is unreadable. It cannot prove what the person is then
+told: the sentence is chosen in the client, by `FILING_REASON_KEYS`, and one code with one
+sentence is exactly the defect. Both halves are needed, so both are measured.
+
+HOW THE RED WAS PRODUCED. The behavioural lines were reverted to the unfixed tree by
+`.tmp/clientred.mjs revert`, and restored by `... restore` — a script that REFUSES unless its
+anchor occurs exactly once in the file, so a silent double-edit is impossible, and that guard
+fired for real on the first attempt (the sources are CRLF and the anchors were written LF; it
+refused rather than half-editing, and the script was made line-ending aware). What was reverted:
+
+  * `src/components/document-review/model.ts` — the two new `FILING_REASON_KEYS` entries.
+  * `src/lib/i18n/dictionaries/he.ts` and `en.ts` — the two new sentences, and the reworded
+    `filing_invoice_identity_missing` put back to its original "number OR date" form.
+  * `supabase/migrations/0324_...sql` — moved out of the directory entirely, because this spec
+    SCANS the migrations for every `v_reason_code := '<code>'` the ladder can assign and checks
+    the client map against it in BOTH directions. Leaving 0324 in place would have produced a red
+    for the opposite reason (a SQL code with no client sentence) and proved the wrong thing.
+
+THE THREE FAILING TESTS ARE THE ORACLE. Nothing else moved:
+
+  names the DATE when the date is what could not be read, and does not accuse the number
+    expected 'המערכת עצרה ולא יצרה רשומה. ההכרעה אצלך.' to contain 'תאריך החשבונית'
+    — the unfixed tree has no key for `invoice_date_missing` at all, so the screen falls through
+      to the generic "the decision is yours" sentence and names no obstacle whatsoever.
+
+  names the NUMBER when the number is what could not be read, and does not accuse the date
+    expected 'המערכת עצרה ולא יצרה רשומה. ההכרעה אצלך.' to contain 'מספר החשבונית'
+
+  still names both when both are genuinely absent — the case the old sentence was true for
+    expected 'חסרים מספר חשבונית או תאריך, ולכן לא ניתן ליצור רשומה כספית.'
+             to contain 'גם מספר החשבונית וגם התאריך'
+    — a CASE and not a control, said plainly: the conjoined sentence is reworded from "or" to
+      "both ... and" so that the conjunction is a claim rather than a hedge.
+
+THE CONTROLS ARE THE ELEVEN TESTS THAT PASS IN THE SAME RUN, and they are the file's own
+pre-existing ones — 0324 touches none of them. Two matter most:
+  * `labels every code the SQL can assign` and `has no label for a code the ladder cannot
+    produce` — the bidirectional scan of the migration SQL against the client map. Green in the
+    red run (reverted tree, 0324 held out) and green in the green run (0324 present, map extended),
+    which is the only pair of states in which both directions can hold.
+  * `never prints a bare enum, even for an arm nobody labelled` — the fallback that made the red
+    legible rather than a crash.
+
+WHY THE MIGRATION SPELLS THE ASSIGNMENTS OUT IN FULL. `readLadderCodes()` matches
+`v_reason_code := '<code>'` in the migration text. An anchored replacement normally builds its
+replacement as a quoted plpgsql string, where every literal quote is doubled — and
+`v_reason_code := ''invoice_number_missing''` does not match that pattern, so the two new codes
+would have been invisible to the scan and the reverse check would have failed on the client map.
+0324 therefore writes those arms inside DOLLAR-QUOTED strings, so the migration file literally
+contains the assignment the database will run. That is the file telling the truth about itself,
+not a guard being worked around.
+
+--------------------------------------------------------------------------------
+RAW: RED (vitest, tail)
+--------------------------------------------------------------------------------
+
+    149|     expect(text).toContain('תאריך החשבונית');
+       |                  ^
+    150|     expect(text).not.toContain('מספר החשבונית');
+    151|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  src/components/document-review/filingReason.spec.ts > what the reviewer is told > names the NUMBER when the number is what could not be read, and does not accuse the date
+AssertionError: expected 'המערכת עצרה ולא יצרה רשומה. ההכרעה אצ…' to contain 'מספר החשבונית'
+
+Expected: "מספר החשבונית"
+Received: "המערכת עצרה ולא יצרה רשומה. ההכרעה אצלך."
+
+ ❯ src/components/document-review/filingReason.spec.ts:155:18
+    153|   it('names the NUMBER when the number is what could not be read, and …
+    154|     const text = filingReason(snapshotWith([filing({ reason_code: 'inv…
+    155|     expect(text).toContain('מספר החשבונית');
+       |                  ^
+    156|     expect(text).not.toContain('תאריך החשבונית');
+    157|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  src/components/document-review/filingReason.spec.ts > what the reviewer is told > still names both when both are genuinely absent — the case the old sentence was true for
+AssertionError: expected 'חסרים מספר חשבונית או תאריך, ולכן לא …' to contain 'גם מספר החשבונית וגם התאריך'
+
+Expected: "גם מספר החשבונית וגם התאריך"
+Received: "חסרים מספר חשבונית או תאריך, ולכן לא ניתן ליצור רשומה כספית."
+
+ ❯ src/components/document-review/filingReason.spec.ts:165:18
+    163|     // The controls for this run are the eight tests above it, none of…
+    164|     const text = filingReason(snapshotWith([filing({ reason_code: 'inv…
+    165|     expect(text).toContain('גם מספר החשבונית וגם התאריך');
+       |                  ^
+    166|   });
+    167|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 11 passed (14)
+   Start at  13:51:27
+   Duration  2.43s (transform 395ms, setup 512ms, import 448ms, tests 44ms, environment 1.13s)
+
+
+--------------------------------------------------------------------------------
+RAW: GREEN (vitest, tail) — restored tree, 0324 present
+--------------------------------------------------------------------------------
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a347838abc363f9f2
+
+
+ Test Files  3 passed (3)
+      Tests  68 passed (68)
+   Start at  13:51:44
+   Duration  2.68s (transform 1.06s, setup 1.89s, import 1.13s, tests 77ms, environment 3.96s)
+

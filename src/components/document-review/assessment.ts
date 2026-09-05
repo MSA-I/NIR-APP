@@ -33,6 +33,18 @@ export interface AssessmentLine {
   quantity: number | null;
   unit: string | null;
   unit_price: number | null;
+  /**
+   * Why `unit_price` is null, when it is — `private.parse_price`'s own refusal code (0298),
+   * carried onto the line by 0324. `null` here means the price was read.
+   *
+   * It exists because "no price is printed" and "a price is printed that we cannot read as money
+   * in this document's currency" are different facts with different next actions, and before 0324
+   * the line said neither: it was skipped in silence and a header comparison against a sum nobody
+   * measured spoke in its place.
+   */
+  unit_price_refusal?: string | null;
+  /** What the document actually prints in that cell, verbatim, so a refusal can quote it. */
+  unit_price_printed?: string | null;
   discount_amount: number | null;
   vat_rate: number | null;
   line_total: number | null;
@@ -79,7 +91,15 @@ export interface DocumentAssessment {
    * server was already answering a question nothing here could ask.
    */
   totals: {
+    /**
+     * The sum of the document's own line totals — `null`, never `0`, unless every line was
+     * counted. Before 0324 it was emitted as null only at ZERO rows, so a document whose 22 lines
+     * were all skipped for want of a readable unit price printed a measured `0.00` and was then
+     * blocked for disagreeing with its own header. `lines_counted` says how many it covered.
+     */
     lines_net: number | null;
+    /** How many of `lines.length` actually reached `lines_net`. Equal, or `lines_net` is null. */
+    lines_counted?: number;
     lines_discount: number | null;
     header_net: number | null;
     header_vat: number | null;
@@ -180,6 +200,12 @@ export const FINDING_LABEL_KEYS: Record<string, TKey> = {
   price_baseline_unknown: 'assessment.findingPriceBaselineUnknown',
   vat_rate_mismatch: 'assessment.findingVatRateMismatch',
   line_arithmetic_discrepancy: 'assessment.findingLineArithmeticDiscrepancy',
+  // 0324. A line the sum could not use now says so itself. `quantity_unreadable` above was the
+  // only one of the three inputs that had a voice; the unit price and the line total had none.
+  line_unit_price_missing: 'assessment.findingLineUnitPriceMissing',
+  line_unit_price_unreadable: 'assessment.findingLineUnitPriceUnreadable',
+  line_total_missing: 'assessment.findingLineTotalMissing',
+  lines_total_not_measured: 'assessment.findingLinesTotalNotMeasured',
   header_total_differs_from_lines: 'assessment.findingHeaderTotalDiffersFromLines',
   header_arithmetic_discrepancy: 'assessment.findingHeaderArithmeticDiscrepancy',
   credit_required: 'assessment.findingCreditRequired',

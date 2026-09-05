@@ -1,0 +1,172 @@
+PR 17 — QA-sweep-20260904 — DOC-02 / DOC-03 / DOC-04 / DOC-08
+SUITE p111_a_price_the_reader_can_say.sql — THE GREEN, with migration 0324 applied
+================================================================================
+
+RESULT: 36 passed / 0 failed / 36 total.  CONTROLS: 10 of 10 GREEN.  psql exit code 0.
+
+SAME SUITE FILE AS THE RED, hash read back INSIDE the container on BOTH sides:
+    sha256  4025bffe2cee68422849c6c1f016c5d9020994250e9e176732879cabedde7650
+            /var/lib/postgresql/p4-p111.sql
+Not "the same file" by assertion — the same 64 hex characters, printed by `sha256sum` inside the
+container that ran it, before the red and again before the green.
+
+HEAD READ IMMEDIATELY BEFORE THIS RUN, not inherited:
+    select string_agg(version, ' ' order by version)
+    from supabase_migrations.schema_migrations where version >= '0315';
+    -> 0315 0319 0320 0322 0323 0324
+0315 IS PRESENT (PR 7's guard is in the database) and 0324 IS PRESENT. The red was measured on
+0315 0319 0320 0322 0323 with 0324 physically moved out of supabase/migrations and the stack
+rebuilt from scratch.
+
+EVERY CASE MOVED, AND EVERY CONTROL STAYED. The 23 that failed in the red all pass; the 13 that
+passed in the red still pass; nothing else changed.
+
+  DOC-08 — `shekel-word/unit-price-line-{0,1,2}`: `(null)` -> `4.20`, `50.00`, `12.90`.
+    `shekel-word/printed-price-line-0` also carries `4.20 ש"ח` — what the document prints, kept
+    beside the value so a refusal can quote the cell instead of apologising for it.
+  DOC-03 — `lines-net`: `0.00` -> `969.00`. `lines-counted`: absent -> `3`.
+    `lines-vs-header-gap`: `-969.00` -> `0.00`. `no-header-mismatch-finding`: `present` -> `absent`.
+    The block was a comparison against a number nobody had measured, and it is gone because the
+    number is now real — not because the comparison was removed. `control/header-mismatch-still-
+    blocks` proves that in the same run.
+  DOC-03, the general case that SURVIVES the parser fix — `price-absent/*`: with one of two lines
+    unpriced, `lines_net` goes `20.00` (a partial sum published as the document's) -> `(null)`;
+    `lines_counted` -> `1`; `lines_net` joins `missing_rungs`; line 1 gains
+    `line_unit_price_missing` beside the pre-existing baseline warning; the document gains
+    `lines_total_not_measured`; and the header block disappears. A metric with no data shows `—`,
+    never `0` — and a partial sum is no better than a zero one.
+  `other-currency/*` — `$12.50` on an ILS document is now refused BY NAME
+    (`price_currency_mismatch`) with the printed cell quoted, instead of falling silent with the
+    same `(null)` as a price that was never printed. 0298's own lesson: one code covering five
+    failures tells a reviewer nothing.
+  DOC-02 — `filing/date-unreadable-names-the-date`: `invoice_identity_missing` ->
+    `invoice_date_missing`. `filing/number-unreadable-names-the-number`: `invoice_identity_missing`
+    -> `invoice_number_missing`. `control/filing-both-missing-unchanged` still reads
+    `invoice_identity_missing`, because that sentence was always true for that one state.
+  DOC-04 — `shekel-word/approval-blocked`: `true` -> `false`. `shekel-word/state`:
+    `blocked` -> `ready_for_approval`. A document read accurately, whose lines sum to its own
+    header, now reaches a state from which a business record can be created.
+
+WHAT THE APPLIED BODIES ACTUALLY ARE, verified rather than trusted. The three live bodies were
+captured from PRODUCTION with `pg_get_functiondef` before 0324 was written, the migration's
+anchored replacements were dry-run against those captured bytes in Node, and the result was then
+compared to what the local database holds after 0324 applied:
+
+    MATCH  document_assessment_lines               predicted=3847  live=3847
+    MATCH  document_reconciliation_assessment      predicted=32071 live=32071
+    MATCH  apply_document_interpretation           predicted=33294 live=33294
+    THE APPLIED BODIES ARE BYTE-IDENTICAL TO THE DRY RUN
+
+That is a two-sided result. It says 0324 did exactly what was designed, and it says the local
+pre-0324 bodies were byte-identical to production's — so the same anchors will match in
+production, which is the failure the `0171`-`0205` rollout hit at `0181` and the reason
+`check:anchored-replacements` exists.
+
+--------------------------------------------------------------------------------
+RAW TRANSCRIPT (psql, ON_ERROR_STOP=1, exit code at the end)
+--------------------------------------------------------------------------------
+
+BEGIN
+CREATE TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+ set_config 
+------------
+ 
+(1 row)
+
+ set_config 
+------------
+ 
+(1 row)
+
+INSERT 0 2
+INSERT 0 2
+INSERT 0 2
+INSERT 0 2
+INSERT 0 3
+INSERT 0 1
+ p111_case 
+-----------
+ 
+(1 row)
+
+ p111_case 
+-----------
+ 
+(1 row)
+
+ p111_case 
+-----------
+ 
+(1 row)
+
+DO
+DO
+DO
+DO
+DO
+ set_config 
+------------
+ none
+(1 row)
+
+ seq |                       case_id                        |  kind   |                     expected                      |                     observed                      | result 
+-----+------------------------------------------------------+---------+---------------------------------------------------+---------------------------------------------------+--------
+   1 | structure/guarded-read-exists                        | control | present, authenticated=true                       | present, authenticated=true                       | ok
+   2 | structure/apply-command-is-service-role-only         | control | authenticated=false service_role=true             | authenticated=false service_role=true             | ok
+   3 | structure/private-readers-shut-to-clients            | control | authenticated=false anon=false                    | authenticated=false anon=false                    | ok
+   4 | shekel-word/unit-price-line-0                        | case    | 4.20                                              | 4.20                                              | ok
+   5 | shekel-word/unit-price-line-1                        | case    | 50.00                                             | 50.00                                             | ok
+   6 | shekel-word/unit-price-line-2                        | case    | 12.90                                             | 12.90                                             | ok
+   7 | shekel-word/printed-price-line-0                     | case    | 4.20 ש"ח                                          | 4.20 ש"ח                                          | ok
+   8 | shekel-word/lines-net                                | case    | 969.00                                            | 969.00                                            | ok
+   9 | shekel-word/lines-counted                            | case    | 3                                                 | 3                                                 | ok
+  10 | shekel-word/missing-rungs                            | case    | []                                                | []                                                | ok
+  11 | shekel-word/lines-vs-header-gap                      | case    | 0.00                                              | 0.00                                              | ok
+  12 | shekel-word/no-header-mismatch-finding               | case    | absent                                            | absent                                            | ok
+  13 | shekel-word/line-0-carries-only-the-baseline-warning | case    | price_baseline_unknown                            | price_baseline_unknown                            | ok
+  14 | shekel-word/approval-blocked                         | case    | false                                             | false                                             | ok
+  15 | shekel-word/state                                    | case    | ready_for_approval                                | ready_for_approval                                | ok
+  16 | price-absent/lines-net-is-null                       | case    | (null)                                            | (null)                                            | ok
+  17 | price-absent/lines-counted                           | case    | 1                                                 | 1                                                 | ok
+  18 | price-absent/lines-vs-header-gap-is-null             | case    | (null)                                            | (null)                                            | ok
+  19 | price-absent/missing-rungs-names-lines-net           | case    | yes                                               | yes                                               | ok
+  20 | price-absent/line-1-names-the-missing-price          | case    | line_unit_price_missing,price_baseline_unknown    | line_unit_price_missing,price_baseline_unknown    | ok
+  21 | price-absent/document-says-sum-not-measured          | case    | present                                           | present                                           | ok
+  22 | price-absent/no-header-mismatch-finding              | case    | absent                                            | absent                                            | ok
+  23 | price-absent/line-0-still-clean                      | case    | price_baseline_unknown                            | price_baseline_unknown                            | ok
+  24 | other-currency/line-0-names-unreadable               | case    | line_unit_price_unreadable,price_baseline_unknown | line_unit_price_unreadable,price_baseline_unknown | ok
+  25 | other-currency/refusal-reason-is-named               | case    | price_currency_mismatch                           | price_currency_mismatch                           | ok
+  26 | other-currency/printed-cell-is-quoted                | case    | $12.50                                            | $12.50                                            | ok
+  27 | other-currency/lines-net-is-null                     | case    | (null)                                            | (null)                                            | ok
+  28 | control/plain-price-still-reads                      | control | 3.50                                              | 3.50                                              | ok
+  29 | control/comma-line-total-still-reads                 | control | 1890.00                                           | 1890.00                                           | ok
+  30 | control/header-mismatch-still-blocks                 | control | present                                           | present                                           | ok
+  31 | control/quantity-unreadable-still-fires              | control | yes                                               | yes                                               | ok
+  32 | control/product-unidentified-still-fires             | control | yes                                               | yes                                               | ok
+  33 | control/cross-tenant-read-refused                    | control | document_not_found                                | document_not_found                                | ok
+  34 | filing/date-unreadable-names-the-date                | case    | invoice_date_missing                              | invoice_date_missing                              | ok
+  35 | filing/number-unreadable-names-the-number            | case    | invoice_number_missing                            | invoice_number_missing                            | ok
+  36 | control/filing-both-missing-unchanged                | control | invoice_identity_missing                          | invoice_identity_missing                          | ok
+(36 rows)
+
+ passed | failed | total | controls_green | controls_total 
+--------+--------+-------+----------------+----------------
+     36 |      0 |    36 |             10 |             10
+(1 row)
+
+DO
+ROLLBACK
+EXIT=0

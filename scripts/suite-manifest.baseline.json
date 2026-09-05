@@ -896,21 +896,28 @@
     "role": "supabase_admin"
   },
   {
-    "ordinal": 127,
+    "ordinal": 128,
     "kind": "suite",
     "path": "supabase/tests/p113_a_currency_this_role_cannot_value.sql",
     "label": "A currency this role cannot value gets no row rather than a zero: the accountant sees the shekel debt it may value and NOTHING at all where the supplier owes 300 dollars on an unapproved invoice, so the card draws an em dash instead of the sentence that supplier owes nothing here, a supplier it can value nothing of returns nothing at all, a currency it CAN value is still reported in full, a measured zero that was paid off stays a zero rather than becoming an em dash, the owner's six rows are byte-for-byte what they were, and 150 shekels and 300 dollars are never one row of 450 -- every reading taken as an authenticated owner and an authenticated accountant rather than as the superuser, so RLS, the view grants and the role arms are actually in the path",
     "role": "postgres"
   },
   {
-    "ordinal": 128,
+    "ordinal": 129,
+    "kind": "suite",
+    "path": "supabase/tests/p111_a_price_the_reader_can_say.sql",
+    "label": "A price the reader can say, and a sum that admits when it was never measured: a unit price printed the way a Hebrew invoice prints it reaches the review grid as 4.20 instead of an em dash, the three lines carrying it are summed to 969.00 with the coverage counted rather than left at a fabricated 0.00, and the header-versus-lines block that fired against that fabrication is gone; a line whose price is genuinely ABSENT makes the sum null with `lines_net` named in missing_rungs, a per-line finding naming the missing price and a document finding saying the sum was not measured -- never a partial sum compared against a whole header; a price printed in another currency is refused BY NAME rather than falling silent; and the filing refusal names the date it could not read instead of announcing that an invoice number displayed at confidence 0.95 is missing -- every assessment read as an authenticated office clerk through the definer read, and the filing ladder reached in the trusted no-JWT shape the Edge Function uses, because the command grants EXECUTE to service_role and not to authenticated",
+    "role": "postgres"
+  },
+  {
+    "ordinal": 130,
     "kind": "suite",
     "path": "supabase/tests/p112_the_settings_boundary_is_not_cosmetic.sql",
     "label": "The /settings boundary is the database's and not the router's: no client role can select a colleague's phone or backup address off profiles, nor the tenant's commercial columns off organizations, while every other column of both stays readable and a person keeps the UPDATE on their own two; the owner reads all four narrowed surfaces through a directory that is not security_invoker, keeps security_barrier and carries both its role and its tenant predicate, office and accountant read NOTHING from any of them, a second tenant's owner reads only their own, and the direct column path is refused for the owner too -- every read measured as an authenticated subject rather than as the superuser, aggregated per row and compared to a literal, never counted",
     "role": "postgres"
   },
   {
-    "ordinal": 129,
+    "ordinal": 131,
     "kind": "suite",
     "path": "supabase/tests/p115_a_statement_line_is_spent_once.sql",
     "label": "A statement line is spent once: a 2,950 line already holding its whole amount in confirmed allocations refuses a second full match BY NAME through match_bank_transaction called as an authenticated owner, the table refuses the same second allocation whatever wrote it, one shekel past a legal 1,000 + 1,950 split is refused while the split itself stands, an allocation MOVED from another line onto a full one is refused where the same move onto a line with room is accepted, two sessions racing 2,000 and 2,000 at that line leave exactly one winner and one named refusal while two racing 1,000 and 1,000 both stand, and a full-amount SUGGESTION beside a confirmed match is not an over-allocation because a suggestion claims no money",

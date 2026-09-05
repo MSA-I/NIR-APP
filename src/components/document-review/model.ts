@@ -619,7 +619,13 @@ export const FILING_REASON_KEYS: Record<string, TKey> = {
   line_product_repeated: 'documents.filing_line_product_repeated',
   supplier_unidentified: 'documents.filing_supplier_unidentified',
   currency_unrecognised: 'documents.filing_currency_unrecognised',
+  /* 0324 split this arm in three. One code covered two obstacles, so the only sentence it could
+     write named BOTH — and on the sweep's invoice it named the invoice number as missing while
+     the same screen displayed `SI266001312` at confidence 0.95. The conjoined code survives for
+     the case it was always true for: neither was extracted. */
   invoice_identity_missing: 'documents.filing_invoice_identity_missing',
+  invoice_number_missing: 'documents.filing_invoice_number_missing',
+  invoice_date_missing: 'documents.filing_invoice_date_missing',
   invoice_number_unrepresentable: 'documents.filing_invoice_number_unrepresentable',
   invoice_number_unreasonable: 'documents.filing_invoice_number_unreasonable',
   total_missing: 'documents.filing_total_missing',
