@@ -1,0 +1,27 @@
+resource=local-supabase-stack + SQL suites + npm run quality
+SINGLE OCCUPANCY. Read this file before ANY command that touches the local stack.
+
+HELD BY: PR 17 (agent a07c7ed4197820ffa, DOC-02/DOC-03/DOC-04/DOC-08)
+since: 2026-09-05
+
+QUEUE (coordinator grants in this order, one at a time, by SendMessage):
+  1. PR 5+6   PERM-01                 migration 0319, suite p112
+  2. PR 14    MON-03/FIN-04/FIN-07    migration 0320, suite p113
+  3. PR 15    MON-06                  migration 0321, suite p114
+  4. PR 11    MON-04                  migration 0322, suite p115
+  5. PR 13    PERM-02                 migration 0323, suite p116
+
+WHAT COUNTS AS TOUCHING THE STACK:
+  docker exec ... psql on supabase_db_supplyflow-p0
+  supabase db reset / db push / start / stop
+  scripts/ci-sql-suites.mjs WITHOUT --list   (it RESETS the database)
+  npm run quality
+  npm run demo:restore
+
+READ-ONLY queries against the REMOTE production project through
+scripts/db-query.ps1 -ProjectRef rkftlbctohswhbbiaqin are NOT covered by this
+lock and need no grant.
+
+If you are not the holder: do every other part of your work, then STOP and report
+"ready for the stack", naming exactly what you will run. Do not poll, do not wait,
+do not take the lock yourself.

@@ -1,0 +1,60 @@
+holder=session-cf142aac (coordinator)
+resource=number-drawing
+redrawn=2026-09-05, fourth draw
+
+RESERVED for the qa-sweep-20260904 campaign. No agent may draw a number. Ask the coordinator.
+
+  debt section  §116  -- federated step-up deferred (ruling #355, PR 1). LANDED.
+  debt section  §119  -- the pre-0173 credit row and the writer's stale predicate (PR 28). LANDED;
+                         PR 7 carried its code half.
+  debt section  §120  -- next free; unassigned
+  migration     0315  -- PR 7, one balance one approval. LANDED.
+  migration     0318  -- PR 17: document assessment carries coverage (DOC-02/03/04/08).
+                         ANCHORED PATCH against the live body of
+                         private.document_reconciliation_assessment -- ancestor is NOT 0108;
+                         it has been patched since by 0227, 0244, 0260 and 0284.
+  SQL suite     p111  -- PR 17's suite.
+  migration     0319  -- PR 5+6, PERM-01: the two-phase settings boundary (phase 2, revoke/re-grant)
+  SQL suite     p112  -- PR 5+6's suite.
+  migration     0320  -- PR 14, MON-03/FIN-04/FIN-07: the supplier-balance role predicate
+  SQL suite     p113  -- PR 14's suite.
+  migration     0321  -- PR 15, MON-06: the credits a definer counts and the reader cannot show
+  SQL suite     p114  -- PR 15's suite.
+  migration     0322  -- PR 11, MON-04: the bank allocation constraint trigger
+  SQL suite     p115  -- PR 11's suite.
+  migration     0323  -- PR 13, PERM-02: the audit read-model scope
+  SQL suite     p116  -- PR 13's suite.
+  migration     0324  -- next free; unassigned
+  SQL suite     p117  -- next free; unassigned
+  owner ruling  #358  -- next free; unassigned
+
+  WATCH: PR 14's brief wrote "p115" once before correcting itself to p113 in the same sentence.
+  p115 belongs to PR 11. If PR 14 arrives carrying p115, renumber it to p113 BEFORE cherry-picking
+  -- git merges a taken number without a conflict, which is the whole failure mode.
+
+  PR 13a (PERM-03/PERM-05) and PR 31a (DASH-07) are MEASURE-FIRST and were given no number.
+  If either turns out to need a migration it asks the coordinator; it does not draw one.
+  A number assigned above and NOT used leaves a gap -- report it, and the coordinator
+  renumbers at land time rather than leaving a hole in the sequence.
+
+ANOTHER CAMPAIGN IS LIVE ON THIS MACHINE. `docs/ux-remediation-documents-assistant` holds
+migrations 0316 and 0317 and suites p109/p110, and has applied 0316 to the SHARED LOCAL STACK.
+That is why this campaign skips to 0318. Do not reuse 0316, 0317, p109 or p110, and do not assume
+the stack's head is what the last agent left it at -- READ IT.
+
+THE SERIALISED RESOURCES. The local Supabase stack and the SQL suites are single-occupancy, and
+`scripts/ci-sql-suites.mjs` without `--list` RESETS the database. At most ONE agent at a time.
+
+  supabase+sql  HELD BY: PR 17 (agent working DOC-02/DOC-03/DOC-04/DOC-08)
+
+WHY §115 IS NOT ON THIS LIST. It was drawn here first and was ALSO taken on
+origin/fix/new-user-surfaces-bar-pricelist-progress. Git merges both without a conflict -- the
+whole failure mode. PR 1 renumbered to §116 before merging. §118 is claimed on
+`docs/ux-laws-audit`. Draw late and re-check immediately before writing.
+
+FALSE COLLISIONS: the qa/prNN-* and worktree-agent-* branches are copies of this one and carry the
+same numbers. A report against `origin/*`, or a branch that is NOT such a copy, is real.
+
+NOT A NUMBER, SAME TRAP: ruling **#140 cannot be cited by number from code**. It is a prose section
+heading in OPEN-DECISIONS.md, not a table row, and `check:decision-numbers` resolves code citations
+against the table only. Cite it by title.
