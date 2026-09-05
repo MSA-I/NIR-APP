@@ -1,0 +1,158 @@
+PR 13 · PERM-02 · the finding confirmed against PRODUCTION, read-only
+=====================================================================
+
+WHEN      05.09.2026
+WHERE     project rkftlbctohswhbbiaqin (production), through scripts/db-query.ps1
+HOW       role `authenticated`, `request.jwt.claims` carrying accountant@gamos.demo's own
+          subject. NOT as `postgres`: a read as the superuser skips RLS entirely and would
+          have measured nothing. Every statement below is a SELECT; nothing was written.
+
+No password, token or service key appears in this file or was printed by any command.
+
+
+-----------------------------------------------------------------------------------------
+1. THE TWO NUMBERS THE LEDGER ROW ASKS FOR
+-----------------------------------------------------------------------------------------
+
+  begin;
+  select set_config('request.jwt.claims',
+    '{"sub":"4ca9a395-e386-48e1-9e4e-9ac5f7e77e2d","role":"authenticated"}', true);
+  set local role authenticated;
+  select
+    current_user                                            as ran_as,
+    public.auth_role()::text                                as jwt_role,
+    count(*)                                                as rows_the_accountant_reads,
+    count(*) filter (where v.user_id = '4ca9a395-e386-48e1-9e4e-9ac5f7e77e2d')
+                                                            as rows_they_are_the_subject_of,
+    jsonb_agg(jsonb_build_object('id', v.id, 'subject', v.user_id) order by v.created_at)
+                                                            as rows_read
+  from public.audit_log_read_model v
+  where v.action = 'password_changed';
+  rollback;
+
+RESULT
+
+  ran_as                        = authenticated
+  jwt_role                      = accountant
+  rows_the_accountant_reads     = 2
+  rows_they_are_the_subject_of  = 0
+  rows_read                     = [{"id":"85413c21-2c01-478d-9160-ad83ad1d94ef",
+                                    "subject":"273d686e-f15e-4af7-a4ee-d21269e5b6a0"},
+                                   {"id":"4f4d5bc8-3fe4-485d-a25b-3fe2dc138aac",
+                                    "subject":"273d686e-f15e-4af7-a4ee-d21269e5b6a0"}]
+
+  Subject 273d686e-f15e-4af7-a4ee-d21269e5b6a0 is owner@gamos.demo, role `owner`.
+  The accountant (4ca9a395-…) is the subject of NEITHER row. Both are the owner's.
+
+
+-----------------------------------------------------------------------------------------
+2. THE SURFACE IS THE VIEW; THE CAUSE IS THE POLICY
+-----------------------------------------------------------------------------------------
+
+`public.audit_log_read_model`, read LIVE rather than from the migration that created it:
+
+  reloptions  = {security_invoker=on,security_barrier=on}
+  definition  = SELECT id, org_id, user_id, action, entity_type, entity_id, old_values,
+                       new_values, reason, created_at, correlation_id, causation_id,
+                       scope_domain, scope_class, legal_entity_id
+                  FROM audit_logs;
+  grants      = SELECT to authenticated (plus postgres and service_role)
+
+  -> byte for byte the view 0175 creates, with no predicate of its own. It is
+     `security_invoker`, so what it returns is exactly what the policy on the base table
+     allows. The view is not where the scope lives.
+
+`audit_select` on `public.audit_logs`, read LIVE from pg_policy (permissive, SELECT,
+to `authenticated`):
+
+  ((org_id = auth_org())
+   AND (auth_role() = ANY (ARRAY['owner'::user_role, 'accountant'::user_role]))
+   AND (((scope_class = 'legal_entity'::text) AND (legal_entity_id = ANY (auth_scopes())))
+     OR ((scope_class = 'cross_scope'::text)
+         AND (scope_domain = 'organization_identity_platform'::text))
+     OR ((scope_class = 'cross_scope'::text)
+         AND (scope_domain = 'financial_accounting'::text)
+         AND (EXISTS ( SELECT 1
+                FROM org_units root
+               WHERE ((root.org_id = audit_logs.org_id)
+                 AND (root.unit_type = 'root'::org_unit_type)
+                 AND (root.id = ANY (auth_scopes())))))))))
+
+  -> identical to what 0175:362 installs; no migration after 0175 has touched it. The
+     SECOND branch is the opening: 0175 files `auth.users` as
+     `cross_scope`/`organization_identity_platform`, so every owner AND accountant of the
+     tenant reads every identity event of every colleague. That opening predates 0293 —
+     0293's rows walked through it.
+
+
+-----------------------------------------------------------------------------------------
+3. WHAT ELSE LIVES BEHIND THAT BRANCH (the size of what must NOT be disturbed)
+-----------------------------------------------------------------------------------------
+
+  scope_domain                      scope_class     rows
+  organization_identity_platform    cross_scope    27269
+  financial_accounting              legal_entity     214
+  financial_accounting              cross_scope       50
+
+  audit_logs rows with entity_type = 'auth.users':
+    password_changed             2
+    retired_persona_auth_banned  3
+
+  -> 27,269 of 27,533 rows are NOT password changes. 0323's conjunct tests
+     `action <> 'password_changed'` FIRST, so those 27,269 short-circuit on one text
+     comparison and never reach `auth.uid()` or `auth_role()`.
+
+
+-----------------------------------------------------------------------------------------
+4. THE STATEMENT 0323 WILL EXECUTE, BUILT ON PRODUCTION AND PRINTED RATHER THAN RUN
+-----------------------------------------------------------------------------------------
+
+  select format(
+    'alter policy audit_select on public.audit_logs using (%s and (%s))',
+    (select pg_get_expr(policy.polqual, policy.polrelid) from pg_catalog.pg_policy policy
+      where policy.polrelid = 'public.audit_logs'::regclass
+        and policy.polname  = 'audit_select'),
+    $narrow$action <> 'password_changed' or user_id = auth.uid() or auth_role() = 'owner'$narrow$);
+
+RESULT (nothing was applied — this is a SELECT that returns text)
+
+  alter policy audit_select on public.audit_logs using (((org_id = auth_org()) AND
+  (auth_role() = ANY (ARRAY['owner'::user_role, 'accountant'::user_role])) AND
+  (((scope_class = 'legal_entity'::text) AND (legal_entity_id = ANY (auth_scopes()))) OR
+  ((scope_class = 'cross_scope'::text) AND (scope_domain =
+  'organization_identity_platform'::text)) OR ((scope_class = 'cross_scope'::text) AND
+  (scope_domain = 'financial_accounting'::text) AND (EXISTS ( SELECT 1
+     FROM org_units root
+    WHERE ((root.org_id = audit_logs.org_id) AND (root.unit_type = 'root'::org_unit_type)
+      AND (root.id = ANY (auth_scopes())))))))) and (action <> 'password_changed' or
+  user_id = auth.uid() or auth_role() = 'owner'))
+
+  -> the whole of 0175's qual is CARRIED, not retyped, and one conjunct is appended.
+
+
+-----------------------------------------------------------------------------------------
+5. `auth.uid()` IS CALLABLE BY `authenticated` IN A POLICY — VERIFIED, NOT ASSUMED
+-----------------------------------------------------------------------------------------
+
+  has_function_privilege('authenticated', 'auth.uid()', 'execute') = true
+  27 existing policies already call it directly in their qual, among them
+  `notifications_select_own`, `push_subs_select` and `profiles_self_update` — the same
+  "the subject reads their own row" shape this conjunct uses.
+
+
+-----------------------------------------------------------------------------------------
+6. WHO HAS AN AUDIT SURFACE — from the code, not from instinct
+-----------------------------------------------------------------------------------------
+
+  src/App.tsx:424   /supplier-log  -> <Guard roles={['owner']}>   (the ONLY audit-ledger
+                                       screen in the product; ruling #153)
+  src/App.tsx:425   /settings      -> <Guard roles={['owner']}>   (identity administration)
+
+  `grep -rn password_changed` across the whole repository outside node_modules and
+  docs/qa: the QA sweep's own raw REST probe, migration 0293, artifacts/w1, the rollout
+  log, `scripts/auth-hardening.mjs` (a GoTrue mailer flag, unrelated), and
+  supabase/tests/p4_flags_identity.sql. NOTHING under src/. No screen shows a
+  password_changed row to anyone, and the accountant is bounced from both owner screens.
+
+  Ruling #357 (04.09.2026, PERM-01, this same sweep) states the rule generally:
+  „תפקיד שנחסם מהמסך אינו מקבל את מה שמאחוריו".
