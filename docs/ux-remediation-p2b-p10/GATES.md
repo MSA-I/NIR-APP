@@ -1,6 +1,6 @@
 # Gates: UX remediation P2b-P10
 
-OWNS: docs/UX-REMEDIATION-DOCUMENTS-20260904.md, docs/UX-REMEDIATION-REVIEW-LOG-20260904.md, docs/ux-remediation-p2b-p10/**, DESIGN.md, src/App.tsx, src/index.css, src/components/assistant/**, src/components/document-review/**, src/components/QuickCreateSupplier.tsx, src/components/QuickSupplierPicker.tsx, src/components/DocumentStatusBadge.tsx, src/components/FileUpload.tsx, src/components/UploadCenter.tsx, src/pages/DocumentsInbox.tsx, src/pages/DocumentReview.tsx, src/pages/PriceLists.tsx, src/lib/assistant/**, src/lib/documentStatus.ts, src/lib/documentStateRecovery.ts, src/lib/useDocumentProcessing.ts, src/lib/i18n/dictionaries/he.ts, src/lib/i18n/dictionaries/en.ts, src/**/*.spec.ts, src/**/*.spec.tsx, scripts/check-ux-remediation-p2b-p10-browser.cjs, scripts/check-ux-remediation-p3-browser.cjs, scripts/check-ux-remediation-p4-browser.cjs, scripts/check-ux-remediation-p5-browser.cjs, scripts/check-ux-remediation-p6-browser.cjs, scripts/check-ux-remediation-p8-browser.cjs, scripts/check-ux-remediation-p9-browser.cjs, scripts/i18n-baseline.json, supabase/migrations/**, supabase/tests/**, supabase/functions/assistant/**, scripts/check-quality-gates.ps1, scripts/suite-manifest.baseline.json, artifacts/ux-remediation-p2b-p10/**
+OWNS: docs/UX-REMEDIATION-DOCUMENTS-20260904.md, docs/UX-REMEDIATION-REVIEW-LOG-20260904.md, docs/ux-remediation-p2b-p10/**, DESIGN.md, src/App.tsx, src/index.css, src/components/assistant/**, src/components/document-review/**, src/components/QuickCreateSupplier.tsx, src/components/QuickSupplierPicker.tsx, src/components/DocumentStatusBadge.tsx, src/components/FileUpload.tsx, src/components/UploadCenter.tsx, src/pages/DocumentsInbox.tsx, src/pages/DocumentReview.tsx, src/pages/PriceLists.tsx, src/lib/assistant/**, src/lib/documentStatus.ts, src/lib/documentStateRecovery.ts, src/lib/useDocumentProcessing.ts, src/lib/i18n/dictionaries/he.ts, src/lib/i18n/dictionaries/en.ts, src/**/*.spec.ts, src/**/*.spec.tsx, scripts/check-design-tokens.ts, scripts/check-ux-remediation-p2b-p10-browser.cjs, scripts/check-ux-remediation-p3-browser.cjs, scripts/check-ux-remediation-p4-browser.cjs, scripts/check-ux-remediation-p5-browser.cjs, scripts/check-ux-remediation-p6-browser.cjs, scripts/check-ux-remediation-p8-browser.cjs, scripts/check-ux-remediation-p9-browser.cjs, scripts/i18n-baseline.json, scripts/key-manifest.baseline.json, scripts/check-orphan-keys.mjs, supabase/migrations/**, supabase/tests/**, supabase/functions/assistant/**, scripts/check-quality-gates.ps1, scripts/suite-manifest.baseline.json, artifacts/ux-remediation-p2b-p10/**
 
 Scope: complete every authorized package from P2b through P10, excluding cancelled P7 and P4b, then prove local integration, CI, rollout and live behavior required by each changed surface.
 
@@ -72,30 +72,30 @@ Scope: complete every authorized package from P2b through P10, excluding cancell
 - [x] P9D: glass, backdrop filters and decorative light bodies are absent; floating panel remains; no AI disclosure was added
   EVIDENCE: assistantRemediation source guards and browser DOM/computed-style checks prove zero assistant-gradient/assistant-mote nodes, backdrop-filter none, no AI disclosure, a fixed 24rem desktop card and full-screen mobile surface. The new-check action uses Plus, the panel remains reachable and DESIGN.md/index.css now describe the same opaque Onyx contract. Both viewports were inspected from screenshots.
 
-- [ ] P10A: final bilingual wording contains no targeted jargon, raw internal error wording or hard-coded Hebrew product copy
+- [x] P10A: final bilingual wording contains no targeted jargon, raw internal error wording or hard-coded Hebrew product copy
   CHECK: npm.cmd run test -- src/lib/i18n/uxRemediationCopy.spec.ts
   EXPECT: passed
-  EVIDENCE: pending
+  EVIDENCE: uxRemediationCopy passed 10/10 in both languages: the literal rung translation and pipeline banner vocabulary are gone; rechecks and upload failures no longer expose server/storage protocol terms; the final generic registration error names the documents list and a support path; the incomplete price-list upload names its visible retry action; monthly price-list receipts are called upload results; all 19 interpretation failures name a next action; price-list intake uses human result wording and fmtMonth instead of YYYY-MM; the upload intro is shorter; the targeted PriceLists labels use dictionary keys; automatic-assignment supervision keeps the no-human-approval warning without a raw percentage. check:i18n is pinned at 898 Hebrew source lines and check:orphan-keys passes at the lowered 100-key ratchet.
 
-- [ ] I1: dictionary, plural, orphan, JSX-space and contrast guards pass
+- [x] I1: dictionary, plural, orphan, JSX-space and contrast guards pass
   CHECK: npm.cmd run check:i18n
   EXPECT: passed
-  EVIDENCE: pending
+  EVIDENCE: check:i18n passed at the pinned 898 Hebrew lines; check:orphan-keys passed at 100; check:plurals passed 79 phrases; check:jsx-space passed 152 TSX files; check:contrast passed 53 text pairs, 7 non-text pairs and the direction contract. check:tokens also caught and removed three dead P9 dark-theme exemptions, then passed all 516 source files and 142 live tokens. The key manifest recorded that priceListReview.text_66–68 gained production readers and then passed with no newly stranded or spec-only key.
 
 - [ ] I2: full local verification passes on the final tree
   CHECK: npm.cmd run verify
   EXPECT: passed
-  EVIDENCE: pending; current interim check:migration-numbers correctly reports the reserved 0315 gap from another live branch. Do not reuse that number. Full final-tree verification waits for 0315 to enter the integration base.
+  EVIDENCE: all checks before and after migration numbering pass, including 233/233 test files and 2470/2470 tests in one-worker mode; the ordinary parallel local run exposes machine-load timeouts, while every timed-out file passes alone. The exact npm run verify command still stops at check:migration-numbers because reserved migration 0315 is on another live branch. Do not reuse that number. Full final-tree verification waits for 0315 to enter the integration base.
 
-- [ ] I3: TypeScript and production bundle pass on the final tree
+- [x] I3: TypeScript and production bundle pass on the final tree
   CHECK: npm.cmd run build
   EXPECT: built in
-  EVIDENCE: pending
+  EVIDENCE: npx tsc --noEmit passed; npm run build transformed 3657 modules, built the production bundle and PWA service worker, and ended with "built in 25.85s".
 
-- [ ] I4: desktop and mobile browser flows prove all visual and interaction claims with screenshots
+- [x] I4: desktop and mobile browser flows prove all visual and interaction claims with screenshots
   CHECK: node scripts/check-ux-remediation-p2b-p10-browser.cjs
   EXPECT: ux-remediation-p2b-p10 browser passed
-  EVIDENCE: pending
+  EVIDENCE: the aggregate browser run passed P2b, P3, P4, P5, P6, P8, P9 and P10 in desktop and mobile viewports. P10 screenshots for the upload copy, price-list page and price-list result were inspected at original resolution in both viewports: no clipped copy, the actions remain reachable and the result counts remain legible. Evidence is under artifacts/ux-remediation-p2b-p10/.
 
 - [ ] R1: PR CI passes build, verify, SQL, browser and affected Edge contracts on the final SHA
   EVIDENCE: pending

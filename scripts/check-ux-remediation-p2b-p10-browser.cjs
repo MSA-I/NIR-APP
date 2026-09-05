@@ -1,6 +1,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { execFileSync } = require('node:child_process');
 const { chromium } = require(path.resolve('node_modules/playwright-core'));
 const {
   installReviewMocks,
@@ -81,6 +82,10 @@ async function checkViewport(browser, name, viewport, baselineControls) {
       return limitElement && input ? Boolean(limitElement.compareDocumentPosition(input) & Node.DOCUMENT_POSITION_FOLLOWING) : false;
     });
     assert.equal(order, true, '10MB limit is not before the file input');
+    const uploadIntro = await dialog.innerText();
+    assert.match(uploadIntro, /מעלים צילום או קובץ\. המקור נשמר/);
+    assert.equal(uploadIntro.includes('המערכת תזהה בעצמה מה סוג המסמך'), false,
+      'the old 28-word upload explanation is still visible');
     await page.screenshot({ path: path.join(OUT, `${name}-upload-limit-p2b.png`), fullPage: true });
 
     const actorId = await page.evaluate(() => {
@@ -93,6 +98,14 @@ async function checkViewport(browser, name, viewport, baselineControls) {
       return null;
     });
     assert.ok(actorId, 'authenticated actor id missing');
+
+    await page.goto(`${BASE_URL}/prices`, { waitUntil: 'domcontentloaded' });
+    await settle(page);
+    await page.getByRole('heading', { name: 'מחירונים' }).waitFor({ timeout: 20_000 });
+    await page.getByRole('button', { name: 'ייבוא רב־ספקים מ־Excel' }).waitFor();
+    await page.getByRole('button', { name: 'העלאת מחירון' }).waitFor();
+    await page.screenshot({ path: path.join(OUT, `${name}-price-lists-copy-p10.png`), fullPage: true });
+
     const fixture = reviewFixture('invoice', actorId);
     await installReviewMocks(page, fixture);
     await page.goto(`${BASE_URL}/documents/${fixture.id}/review`, { waitUntil: 'domcontentloaded' });
@@ -108,6 +121,19 @@ async function checkViewport(browser, name, viewport, baselineControls) {
     assert.ok(review.panels < baseline.panels, `review panels did not fall (${baseline.panels} -> ${review.panels})`);
     assert.ok(review.textBlocks < baseline.textBlocks, `review text did not fall (${baseline.textBlocks} -> ${review.textBlocks})`);
     await page.screenshot({ path: path.join(OUT, `${name}-review-status-p2b.png`), fullPage: true });
+
+    await page.unroute('**/rest/v1/**');
+    const priceList = reviewFixture('price-list', actorId);
+    await installReviewMocks(page, priceList);
+    await page.goto(`${BASE_URL}/documents/${priceList.id}/review`, { waitUntil: 'domcontentloaded' });
+    await settle(page);
+    await page.getByRole('heading', { name: 'תוצאת קליטת המחירון' }).waitFor({ timeout: 20_000 });
+    const priceListText = await page.locator('body').innerText();
+    assert.equal(priceListText.includes('קבלת קליטת מחירון'), false);
+    for (const label of ['שורות שהתקבלו:', 'שורות שנדחו:', 'שורות ללא שינוי:']) {
+      assert.equal(priceListText.includes(label), true, `${label} missing from price-list result`);
+    }
+    await page.screenshot({ path: path.join(OUT, `${name}-price-list-result-copy-p10.png`), fullPage: true });
     assert.deepEqual(pageErrors, []);
     return {
       controls,
@@ -139,6 +165,16 @@ async function main() {
     fs.writeFileSync(path.join(OUT, 'p2b-metrics.json'), `${JSON.stringify(evidence, null, 2)}\n`, 'utf8');
   } finally {
     await browser.close();
+  }
+  for (const script of [
+    'check-ux-remediation-p3-browser.cjs',
+    'check-ux-remediation-p4-browser.cjs',
+    'check-ux-remediation-p5-browser.cjs',
+    'check-ux-remediation-p6-browser.cjs',
+    'check-ux-remediation-p8-browser.cjs',
+    'check-ux-remediation-p9-browser.cjs',
+  ]) {
+    execFileSync(process.execPath, [path.resolve('scripts', script)], { stdio: 'inherit' });
   }
   process.stdout.write('ux-remediation-p2b-p10 browser passed\n');
 }

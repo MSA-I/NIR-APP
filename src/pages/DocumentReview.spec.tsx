@@ -236,7 +236,7 @@ describe('התראת פענוח שנכשל', () => {
     });
 
     renderReview('en');
-    expect(await screen.findByText('The interpretation service is currently unavailable. Try again later.'))
+    expect(await screen.findByText('The data check is currently unavailable. Try again later.'))
       .toBeInTheDocument();
     expect(screen.queryByText('שירות הפירוש אינו זמין כרגע.')).toBeNull();
     expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();

@@ -65,7 +65,8 @@ function useAssistantDesktopMode(): boolean {
 }
 
 /**
- * The openings each role is offered. Decision #370 replaces a fixed count with two useful sets:
+ * The openings each role is offered. The "השאלות המוצעות בעוזר" ruling in
+ * `docs/UX-REMEDIATION-DECISIONS-20260904.md` replaces a fixed count with two useful sets:
  * usage guidance while the business has no working data, and data questions once it does.
  *
  * EVERY ENTRY IS CHECKED AGAINST THE TOOL THAT WOULD ANSWER IT, and against that tool's

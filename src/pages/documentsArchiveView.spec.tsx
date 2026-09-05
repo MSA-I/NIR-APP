@@ -94,6 +94,7 @@ const documents = http.get(`${SUPABASE_URL}/rest/v1/documents`, ({ request }) =>
 // unstubbed endpoint would make these tests pass or fail on timing.
 const quietTraffic = [
   http.get(`${SUPABASE_URL}/rest/v1/suppliers`, () => HttpResponse.json([])),
+  http.post(`${SUPABASE_URL}/rest/v1/rpc/organization_usage_snapshot`, () => HttpResponse.json([])),
   http.post(`${SUPABASE_URL}/rest/v1/rpc/get_document_processing_statuses`, () => HttpResponse.json([])),
   http.post(`${SUPABASE_URL}/rest/v1/rpc/get_document_folder_review_states`, () => HttpResponse.json([])),
   http.get(`${SUPABASE_URL}/rest/v1/document_auto_actions`, () => HttpResponse.json([])),
@@ -271,7 +272,7 @@ describe('פעולות הארכיון', () => {
     await screen.findAllByText(ARCHIVED);
     await openMenuFor(ARCHIVED);
     expect(screen.getByText('החזרה לטיפול')).toBeInTheDocument();
-    expect(screen.getByText('הסרה')).toBeInTheDocument();
+    expect(screen.getByText('הסרה מהארכיון — הקובץ נשמר')).toBeInTheDocument();
   });
 
   // The control that makes the assertion above mean something: the same row shape in the folder
@@ -300,7 +301,7 @@ describe('פעולות הארכיון', () => {
     await userEvent.click(screen.getByRole('button', { name: 'ביטול' }));
 
     await openMenuFor(ARCHIVED);
-    await userEvent.click(screen.getByText('הסרה'));
+    await userEvent.click(screen.getByText('הסרה מהארכיון — הקובץ נשמר'));
     expect(await screen.findByRole('dialog')).toHaveTextContent('הסרת מסמך מהארכיון');
     expect(screen.queryByLabelText(/סיבה/)).not.toBeInTheDocument();
     // The file survives, and the dialog says so rather than letting "הסרה" read as destruction.
@@ -351,7 +352,8 @@ describe('קליטה אחת — הסוג נקרא מהמסמך, לא נבחר מ
 
     expect(within(dialog).queryByLabelText('סוג מסמך')).not.toBeInTheDocument();
     // …and it says who will answer the question instead, so the omission does not read as a gap.
-    expect(within(dialog).getByText(/המערכת תזהה בעצמה מה סוג המסמך/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/מעלים צילום או קובץ\. המקור נשמר/)).toBeInTheDocument();
+    expect(within(dialog).queryByText(/המערכת תזהה בעצמה מה סוג המסמך/)).toBeNull();
   });
 
   it('אינו חותם את תאריך היום כשהמשתמש לא פתח את השדות האופציונליים', async () => {

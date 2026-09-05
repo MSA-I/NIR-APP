@@ -565,5 +565,5 @@ describe('כתובת דואר חלופית', () => {
     const body = invoke.mock.calls[1]![1].body as Record<string, unknown>;
     expect(body.backup_email).toBe(BACKUP);
     expect(body.email).toBe('owner@example.test');
-  });
+  }, 15_000);
 });

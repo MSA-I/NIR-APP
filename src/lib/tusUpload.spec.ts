@@ -208,7 +208,7 @@ describe('403 during PATCH — exactly one renew-then-resume', () => {
     await expect(handle.done).rejects.toBeInstanceOf(TusUploadError);
     await expect(handle.done).rejects.toThrow(/tus_upload_forbidden/);
     // The condition is half the contract; the other half is that it still has a sentence.
-    expect(toHebrewError(new Error('tus_upload_forbidden'))).toMatch(/השרת דחה את ההעלאה/);
+    expect(toHebrewError(new Error('tus_upload_forbidden'))).toMatch(/לא הצלחנו להעלות את הקובץ/);
     // Still exactly one renewal — the second 403 surfaces instead of looping.
     expect(supabaseState.rpc).toHaveBeenCalledTimes(1);
     expect(upload.started).toBe(2);

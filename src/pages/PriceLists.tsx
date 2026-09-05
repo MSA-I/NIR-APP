@@ -207,8 +207,8 @@ export default function PriceLists() {
         })}
         actions={canWrite ? (
           <div className="flex flex-wrap gap-2">
-            <button className="btn-secondary" onClick={() => setImportOpen(true)}><Upload size={ICON.sm} aria-hidden="true" /> ייבוא רב־ספקים מ־Excel</button>
-            <button data-tour-anchor="prices-upload" className="btn-primary" onClick={() => setDocumentOpen(true)}><Upload size={ICON.sm} aria-hidden="true" /> העלאת מחירון</button>
+            <button className="btn-secondary" onClick={() => setImportOpen(true)}><Upload size={ICON.sm} aria-hidden="true" /> {t('priceListsTail.importMultiSupplier')}</button>
+            <button data-tour-anchor="prices-upload" className="btn-primary" onClick={() => setDocumentOpen(true)}><Upload size={ICON.sm} aria-hidden="true" /> {t('priceListsTail.uploadPriceList')}</button>
           </div>
         ) : (
           /* „מנהל רכש”, not „משרד”: PRODUCT.md:13 and status.ts's ROLE_LABEL both name `office`
@@ -229,7 +229,7 @@ export default function PriceLists() {
           </div>
           <div className="mt-2 text-sm text-ink-body">
             {comparison.spansCurrencies ? (
-              <>המוצר מצוטט ביותר ממטבע אחד, ולכן אין הצעה &quot;זולה ביותר&quot;. ההצעות מוצגות למטה, כל אחת במטבע שלה.</>
+              <>{t('priceListsTail.multiCurrencyComparison')}</>
             ) : comparison.cheapest ? (
               <>
                 {t('priceListsTail.cheapest')}{' '}<bdi className="font-medium">{comparison.cheapest.supplier.name}</bdi>
@@ -429,10 +429,10 @@ function EditPriceModal({ row, onClose, onSaved }: { row: Row; onClose: () => vo
         {/* The row already carries its currency and every READ on this screen honours it — the
             table, the trend column, the chart axis and the history table all format from
             `r.currency`. This one label was the exception, and it is the field that WRITES. */}
-        <div><label className="label" htmlFor="price-list-price">{`מחיר חדש (${row.currency})`}</label><input id="price-list-price" type="number" step="0.01" className="input num" value={price} onChange={(e) => setPrice(e.target.value)} /></div>
-        <div><label className="label" htmlFor="price-list-date">בתוקף מתאריך</label><input id="price-list-date" type="date" className="input" value={date} onChange={(e) => setDate(e.target.value)} /></div>
-        <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="rounded" checked={available} onChange={(e) => setAvailable(e.target.checked)} /> זמין אצל הספק</label>
-        <div><label className="label" htmlFor="price-list-reason">סיבת העדכון (רשות)</label><input id="price-list-reason" className="input" value={reason} onChange={(e) => setReason(e.target.value)} /></div>
+        <div><label className="label" htmlFor="price-list-price">{t('priceListsTail.newPriceLabel', { currency: row.currency })}</label><input id="price-list-price" type="number" step="0.01" className="input num" value={price} onChange={(e) => setPrice(e.target.value)} /></div>
+        <div><label className="label" htmlFor="price-list-date">{t('priceListsTail.effectiveDate')}</label><input id="price-list-date" type="date" className="input" value={date} onChange={(e) => setDate(e.target.value)} /></div>
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="rounded" checked={available} onChange={(e) => setAvailable(e.target.checked)} /> {t('priceListsTail.supplierAvailable')}</label>
+        <div><label className="label" htmlFor="price-list-reason">{t('priceListsTail.updateReason')}</label><input id="price-list-reason" className="input" value={reason} onChange={(e) => setReason(e.target.value)} /></div>
       </div>
       <div className="flex justify-end gap-2 mt-5">
         <button className="btn-secondary" disabled={busy} onClick={onClose}>{t('priceLists.text_20')}</button>

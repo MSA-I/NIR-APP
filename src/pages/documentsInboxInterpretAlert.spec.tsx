@@ -77,7 +77,9 @@ const traffic = () => [
   http.get(`${SUPABASE_URL}/rest/v1/documents`, () => HttpResponse.json([DOC])),
   http.get(`${SUPABASE_URL}/rest/v1/suppliers`, () => HttpResponse.json([])),
   http.get(`${SUPABASE_URL}/rest/v1/document_auto_actions`, () => HttpResponse.json([])),
+  http.post(`${SUPABASE_URL}/rest/v1/rpc/organization_usage_snapshot`, () => HttpResponse.json([])),
   http.post(`${SUPABASE_URL}/rest/v1/rpc/get_document_processing_statuses`, () => HttpResponse.json([job()])),
+  http.post(`${SUPABASE_URL}/rest/v1/rpc/get_document_folder_review_states`, () => HttpResponse.json([])),
   http.post(`${SUPABASE_URL}/functions/v1/interpret-document`, () => {
     interpretCalls.count += 1;
     return HttpResponse.json({ error: { message: 'interpretation service unavailable' } }, { status: 500 });
@@ -97,7 +99,7 @@ function renderGallery() {
   render(<DocumentsGallery />, { wrapper: Wrapper });
 }
 
-const ALERT = /שלב הפענוח לא הצליח/;
+const ALERT = /המסמך נקרא, אך בדיקת הנתונים לא הושלמה/;
 
 describe('התראת הפענוח בתיקיית המסמכים', () => {
   beforeEach(() => {

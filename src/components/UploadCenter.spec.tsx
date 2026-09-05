@@ -11,7 +11,7 @@ import { MemoryRouter } from 'react-router';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { http, HttpResponse } from 'msw';
 import { server } from '../test/msw/server';
-import { rest, SUPABASE_URL } from '../test/msw/handlers';
+import { SUPABASE_URL } from '../test/msw/handlers';
 import { createAppQueryClient } from '../lib/query/client';
 import { DOCUMENT_PROCESSING_CHANGED_EVENT } from '../lib/useDocumentProcessing';
 
@@ -149,7 +149,7 @@ describe('state machine and progressbar aria', () => {
   });
 
   it('renders the queue, announcements and default failure in English without Hebrew leakage', async () => {
-    server.use(rest('document_processing_jobs', []));
+    server.use(jobsRpc([]));
     renderCenter('en');
     await act(async () => {
       await enqueueUploadCenterBatchRaw(
@@ -164,12 +164,12 @@ describe('state machine and progressbar aria', () => {
 
     const section = screen.getByRole('region', { name: 'Upload center' });
     expect(within(section).getByText(/Partially completed batch/)).toBeInTheDocument();
-    expect(within(section).getByText(/server refused the upload/i)).toBeInTheDocument();
+    expect(within(section).getByText(/file could not be uploaded/i)).toBeInTheDocument();
     expect(section.textContent).not.toMatch(/[֐-׿]/);
   });
 
   it('walks queued → uploading → registered, with aria-valuenow following and spaced announcements', async () => {
-    server.use(rest('document_processing_jobs', []));
+    server.use(jobsRpc([]));
     renderCenter();
     const gate = deferred();
     let taskContext: UploadCenterTaskContext | null = null;
@@ -249,7 +249,7 @@ describe('state machine and progressbar aria', () => {
 
 describe('the money rule — stored-not-registered never invites a re-upload', () => {
   it('shows the stored state, offers ONLY a complete-registration retry, and the retry redoes only the failed step', async () => {
-    server.use(rest('document_processing_jobs', []));
+    server.use(jobsRpc([]));
     renderCenter();
     const uploadStep = vi.fn();
     const registerStep = vi.fn();
@@ -327,7 +327,7 @@ describe('the money rule — stored-not-registered never invites a re-upload', (
   });
 
   it('labels a retryable post-registration failure as processing-only and never uploads again', async () => {
-    server.use(rest('document_processing_jobs', []));
+    server.use(jobsRpc([]));
     renderCenter();
     const uploadStep = vi.fn();
     const registrationStep = vi.fn();
@@ -473,7 +473,7 @@ describe('the money rule — stored-not-registered never invites a re-upload', (
   });
 
   it('marks a mixed finished batch as partially completed', async () => {
-    server.use(rest('document_processing_jobs', []));
+    server.use(jobsRpc([]));
     renderCenter();
     await act(async () => {
       await enqueueUploadCenterBatch([file('ok.pdf'), file('fails.pdf')], async (item, ctx) => {

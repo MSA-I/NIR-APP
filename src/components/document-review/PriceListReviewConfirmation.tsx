@@ -10,7 +10,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { ConfirmDialog, ICON, MonthPicker, Note, SubPanel } from '../ui';
 import { PrimaryDecision } from './PrimaryDecision';
 import { FILING_REASON_KEYS, type ReviewSnapshot } from './model';
-import { bidiIsolate, formatUnit, normalizeUnitInput } from '../../lib/format';
+import { bidiIsolate, fmtMonth, formatUnit, normalizeUnitInput } from '../../lib/format';
 
 interface PriceListReviewConfirmationProps {
   snapshot: ReviewSnapshot;
@@ -914,7 +914,7 @@ export function PriceListReviewConfirmation({
       {attemptedPayload && !receipt && (
         <Note tone="await" className="mt-4 flex-wrap">
           <span className="min-w-0 flex-1">
-            {t('priceListReview.lockedAfterFirst')}<span className="num">{attemptedPayload.approvedRows.length}</span> {t('priceListReview.slice')} <span className="num">{attemptedPayload.targetMonth.slice(0, 7)}</span>{t('priceListReview.replayNoChanges')}
+            {t('priceListReview.lockedAfterFirst')}<span className="num">{attemptedPayload.approvedRows.length}</span> {t('priceListReview.slice')} <span className="num">{fmtMonth(attemptedPayload.targetMonth, locale)}</span>{t('priceListReview.replayNoChanges')}
           </span>
           {canReplay && (
             <button type="button" className="btn-secondary" disabled={busy} onClick={() => void submitPayload(attemptedPayload)}>
@@ -1199,9 +1199,9 @@ export function PriceListReviewConfirmation({
         <div className="mt-4 rounded-lg border border-done-line bg-done-wash p-4" aria-live="polite">
           <h3 className="font-semibold text-ink-body">{t('priceListReview.text_61')}</h3>
           <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
-            <div><dt className="inline font-medium">שורות שהתקבלו: </dt><dd className="inline num">{receipt.accepted_count}</dd></div>
-            <div><dt className="inline font-medium">שורות שנדחו: </dt><dd className="inline num">{receipt.rejected_count}</dd></div>
-            <div><dt className="inline font-medium">שורות ללא שינוי: </dt><dd className="inline num">{receipt.unchanged_count}</dd></div>
+            <div><dt className="inline font-medium">{t('priceListReview.text_66')} </dt><dd className="inline num">{receipt.accepted_count}</dd></div>
+            <div><dt className="inline font-medium">{t('priceListReview.text_67')} </dt><dd className="inline num">{receipt.rejected_count}</dd></div>
+            <div><dt className="inline font-medium">{t('priceListReview.text_68')} </dt><dd className="inline num">{receipt.unchanged_count}</dd></div>
           </dl>
           <div className="mt-4">
             <Link className="btn-secondary" to={returnPath}>{t('priceListReview.text_69')}</Link>

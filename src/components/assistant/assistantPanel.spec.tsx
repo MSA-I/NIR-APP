@@ -668,7 +668,7 @@ describe('העוזר של InPlace — הפאנל', () => {
     expect(screen.getByRole('link', { name: 'מרכז הבקרה' })).toHaveAttribute('href', '/dashboard');
   });
 
-  it('undefined_business_rule אומר שהמוצר לא הגדיר את הכלל — לא שאין נתונים', async () => {
+  it('undefined_business_rule אומר שאין כלל שעונה כרגע — לא שאין נתונים', async () => {
     ask.mockResolvedValue(makeResult({
       answer: {
         blocks: [{ type: 'text', text: 'אין תשובה לשאלה הזו.' }],
@@ -681,7 +681,7 @@ describe('העוזר של InPlace — הפאנל', () => {
     renderPanel();
     await openDialog();
     await askQuestion();
-    expect(await screen.findByText(/טרם הגדיר את הכלל העסקי/)).toBeInTheDocument();
+    expect(await screen.findByText(/אין כרגע כלל עסקי שמאפשר לענות/)).toBeInTheDocument();
     expect(screen.queryByText(/אין נתונים במערכת/)).toBeNull();
   });
 

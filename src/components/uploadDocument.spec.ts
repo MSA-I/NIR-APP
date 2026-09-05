@@ -175,8 +175,8 @@ describe('uploadDocument registration recovery', () => {
     ['retired key', { data: null, error: { code: '23505', message: 'document_upload_key_retired' }, status: 409 }, 'כבר קשור'],
     ['missing RPC', { data: null, error: { code: 'PGRST202', message: 'Could not find the function' }, status: 503 }, 'גרסת השרת'],
     ['misconfigured PostgREST', { data: null, error: { code: 'PGRST300', message: 'JWT secret missing' }, status: 500 }, 'אינו מוגדר כראוי'],
-    ['generic server error', { data: null, error: { message: 'internal server error' }, status: 500 }, 'נדרשת בדיקה'],
-    ['unsupported server response', { data: null, error: { message: 'unsupported protocol' }, status: 505 }, 'נדרשת בדיקה'],
+    ['generic server error', { data: null, error: { message: 'internal server error' }, status: 500 }, 'פנה לתמיכה'],
+    ['unsupported server response', { data: null, error: { message: 'unsupported protocol' }, status: 505 }, 'פנה לתמיכה'],
     ['invalid target', { data: null, error: { code: '23503', message: 'foreign key violation' }, status: 409 }, 'אינם תקינים'],
   ])('marks a terminal %s registration failure as needs-attention without inviting retry', async (_label, response, message) => {
     mocks.rpc.mockResolvedValueOnce(response);
@@ -217,7 +217,7 @@ describe('uploadDocument registration recovery', () => {
       documentId: null,
       clientUploadKey: 'unknown-key-0008',
     });
-    expect(say(failure.code)).toContain('נדרשת בדיקה');
+    expect(say(failure.code)).toContain('פנה לתמיכה');
     expect(mocks.tusUpload).toHaveBeenCalledTimes(1);
     expect(mocks.remove).not.toHaveBeenCalled();
   });

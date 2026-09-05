@@ -1,6 +1,7 @@
 -- 0317 -- The review screen accepts one human sentence about the document, not annotation and
 -- learning-rule administration. The old ledgers remain immutable history; this new contract does
--- not write to them and is not a replacement operations console (owner rulings #373-#374).
+-- not write to them and is not a replacement operations console (the "שדות האילוף במסך אישור
+-- המסמך" and "איך המשתמש אומר זה לא נכון" rulings in UX-REMEDIATION-DECISIONS-20260904.md).
 
 create table public.document_review_feedback (
   id uuid primary key default gen_random_uuid(),
