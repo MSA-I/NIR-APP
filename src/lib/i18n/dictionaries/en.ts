@@ -1176,7 +1176,6 @@ export const en: Dictionary = {
     title: 'Remove a bank match',
     text_10: 'Removing the bank match',
     text_11: 'Removing the match returns the bank transaction to the queue and the payment request to "executed". The payment and its allocations are not undone. A direct match to an invoice needs a separate financial correction.',
-    text_12: 'Reason for removing the match *',
     text_13: 'Cancel',
     text_14: 'Choose an XLSX file built from the current template. CSV and XLS are not supported.',
     text_15: 'The XLSX workbook is damaged or cannot be read.',

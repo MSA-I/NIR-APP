@@ -1,7 +1,7 @@
 import { useT } from '../lib/i18n/LocaleProvider';
 import type { TKey } from '../lib/i18n/t';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { reasonOr } from '../lib/reason';
+import { OPTIONAL_REASON_LABEL_KEY, reasonOr } from '../lib/reason';
 import { useSearchParams } from 'react-router';
 import { Upload, Download, Landmark, Link2, AlertTriangle, EyeOff, Loader2, CheckCircle2, Unlink } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -289,7 +289,13 @@ function UnmatchModal({ tx, onClose, onChanged }: { tx: TxRow; onClose: () => vo
             here, before it. One quiet line, not a second panel. */}
         <p className="text-xs text-ink-muted">{t('bank.directMatchCorrection')}</p>
         <div>
-          <label className="label" htmlFor="bank-unmatch-reason">{t('bank.text_12')}</label>
+          {/* The label the server's own behaviour supports, not the one the screen wished for.
+              `unmatch_bank_transaction` refuses a blank `p_reason` by name — and never sees one,
+              because `reasonOr` below writes the ledger sentence when the box is empty. So the
+              button is not blocked, the '*' this label used to carry was decorative, and the
+              action dialog two panels down already said "(רשות)" over an identical box. One key
+              for the whole product settles which of the two conventions is real. */}
+          <label className="label" htmlFor="bank-unmatch-reason">{t(OPTIONAL_REASON_LABEL_KEY)}</label>
           <input id="bank-unmatch-reason" className="input" value={reason} onChange={(e) => setReason(e.target.value)} />
         </div>
         <div className="flex justify-end gap-2">
