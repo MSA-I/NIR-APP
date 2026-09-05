@@ -58,7 +58,26 @@ RESERVED for the qa-sweep-20260904 campaign. No agent may draw a number. Ask the
                          Owner ruling 05.09.2026. WRITTEN.
   owner ruling  #359  -- /alerts: the screen EXPANDS to cover everything, rather than narrowing
                          its promise. Owner ruling 05.09.2026. WRITTEN.
-  owner ruling  #360  -- next free; unassigned
+  owner ruling  #364  -- deliberate refusals stop arriving as a server error (REQ-07, DOC-09)
+  owner ruling  #365  -- a granted assistant allowance ADDS to the introductory window (ASSIST-10)
+  owner ruling  #366  -- a failed assistant run is not counted, and the screen says so (ASSIST-08)
+  owner ruling  #367  -- a webhook can be REMOVED (OWN-10)
+  owner ruling  #368  -- the server reads a two-digit year and the document files itself (§123 R2)
+  owner ruling  #369  -- the password-change record gets an owner screen (§121)
+                         ALL SIX WRITTEN 05.09.2026.
+  owner ruling  #370  -- next free; unassigned
+  migration     0325  -- next free; unassigned
+  SQL suite     p117  -- next free; unassigned
+
+  #360-#363 ARE NOT OURS. `next-number` reported #364 as the first free, so the other campaign
+  took four while we were merging. Drawing from the tool rather than from the line above is what
+  caught it -- the same lesson as 0318 and p111 earlier in this campaign.
+
+  TWO OWNER ANSWERS THAT DELIBERATELY BECAME NO RULING:
+    * The operations console shows NOTHING for a state nobody can name. The other campaign chose
+      that to cut noise; the owner upheld their choice, so there is nothing new to rule.
+    * Login-attempt limiting and the orphan organisation wait for the first real customer --
+      ruling #352 already says exactly that and still stands.
 
   TWO OWNER ANSWERS THAT DELIBERATELY DREW NO NUMBER, because they are actions on data and not
   rules: this tenant KEEPS 17.5% VAT (the 18% rule stands and is untouched), and the 150.00 credit
