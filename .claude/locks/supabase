@@ -16,6 +16,21 @@ HELD BY: PR 14 (MON-03/FIN-04/FIN-07) — granted 05.09.2026 06:45 local.
 
 QUEUE (coordinator grants in this order, one at a time, by SendMessage):
   1. PR 5+6   PERM-01                 migration 0319, suite p112
+     *** READY FOR THE STACK, 05.09.2026. Branch worktree-agent-a3bfa1394780d727a. TWO commits,
+     and they must stay two and stay in order: 521d34e5 (PR 5, the client stops asking -- closes
+     NOTHING, PERM-01 stays DIAGNOSED after it) then 926e7b55 (PR 6, the database stops answering).
+     FIXED arrives by amending 926e7b55 after the stack run, not before.
+     Neither 0319 nor p112 has ever been EXECUTED -- their syntax is unverified until the first
+     reset. That is stated rather than assumed.
+     Its own sequence: baseline the postgres crash count -> RED with 0319 moved aside (head 0315)
+     -> GREEN with it back (head 0319) -> SEVEN regression suites one at a time, because a REVOKE
+     is the one change here that can break every open tab (p0_client_dml_acl, p1_financial_commands,
+     p17_financial_supplier_view, p3_org_scope, p22_trial_read_only, p43_active_persona_surface,
+     p44_trial_retirement_document_control) -> `npm run demo:restore` -> re-check the crash count.
+     WHAT IT FOUND BEYOND THE FINDING: `select('*')` was also handing every office clerk and
+     accountant `profiles.backup_email` -- the address a person nominates to RECOVER THEIR ACCOUNT.
+     Its live count is 0 only because nobody has nominated one yet; the column is fully readable,
+     so the first person to nominate one publishes it to every colleague.
   2. PR 14    MON-03/FIN-04/FIN-07    migration 0320, suite p113
      *** READY FOR THE STACK, 05.09.2026. Branch worktree-agent-a4ddfa2e0c205b10b, commits
      f5d05a8b and a04b7e0f. Off-stack work done: production measurement (the supplier the sweep
