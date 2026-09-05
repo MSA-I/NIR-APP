@@ -24,8 +24,8 @@ import {
   ASSIGNABLE_ROLES, INVITABLE_ROLES, INVITATION_COLUMNS, invitationStatusOf,
   sendInvite, resendInvite, revokeInvite, type Invitation,
 } from '../lib/invitations';
-import { isActiveRole, type ActiveRole, type Profile } from '../lib/types';
-import { PROFILE_COLUMNS } from '../lib/accountColumns';
+import { isActiveRole, type ActiveRole, type OrganizationPerson, type Profile } from '../lib/types';
+import { ORGANIZATION_PEOPLE_COLUMNS, PROFILE_COLUMNS } from '../lib/accountColumns';
 import { CurrencyTolerancesPanel } from '../components/CurrencyTolerancesPanel';
 import { SupportContact } from '../components/SupportContact';
 import {
@@ -126,6 +126,25 @@ export default function Settings() {
   // to recover their account -- for nothing. See src/lib/accountColumns.ts.
   const { data: users, loading, error, refetch } = useQuery<Profile[]>(async () =>
     unwrap(await supabase.from('profiles').select(PROFILE_COLUMNS).order('full_name')));
+
+  /**
+   * The telephone numbers, and the reason they are a SECOND read rather than four more characters
+   * in the one above.
+   *
+   * Migration 0319 revoked the column privilege on `profiles.phone` from every client role,
+   * because a column privilege is the only thing that can hide a column and because all three
+   * product roles are one database role -- so "owner yes, office no" can only be said by a view
+   * that reads with its owner's privileges and carries its own predicate. That view is
+   * `organization_people_directory`, and office and accountant get zero rows from it.
+   *
+   * It is an ENRICHMENT and never the roster. Between the moment this bundle ships and the moment
+   * the migration is applied the view does not exist, and a roster that depended on it would be
+   * empty rather than one column short. `error` is deliberately not surfaced: a screen that shows
+   * a red note because a column is missing would be louder than the fact deserves.
+   */
+  const { data: directory } = useQuery<OrganizationPerson[]>(async () =>
+    unwrap(await supabase.from('organization_people_directory').select(ORGANIZATION_PEOPLE_COLUMNS)));
+  const phones = directory ? new Map(directory.map((person) => [person.id, person.phone])) : null;
 
   const { data: invitations, refetch: refetchInvites } = useQuery<Invitation[]>(async () =>
     unwrap(await supabase.from('invitations').select(INVITATION_COLUMNS).order('created_at', { ascending: false })));
@@ -531,7 +550,14 @@ export default function Settings() {
       sortValue: (u) => u.full_name ?? '',
     },
     { key: 'role', header: t('settings.text_15'), render: (u) => roleLabels[u.role] ?? u.role, sortValue: (u) => u.role },
-    { key: 'phone', header: t('settings.text_16'), className: 'num', render: (u) => <span dir="ltr">{u.phone ?? '—'}</span> },
+    /* The column exists only when the directory answered. A `—` in every cell would be a claim
+       that nobody has a number on file, which is a different and untrue statement from "this
+       reader was not served the column" -- and that is exactly the state during the minutes
+       between the bundle shipping and 0319 being applied. */
+    ...(phones ? [{
+      key: 'phone', header: t('settings.text_16'), className: 'num',
+      render: (u: Profile) => <span dir="ltr">{phones.get(u.id) ?? '—'}</span>,
+    } satisfies Column<Profile>] : []),
     {
       key: 'status', header: t('settings.text_17'), mobileLabel: null,
       render: (u) => (u.active ? <span className="badge-done">{t('settings.text_18')}</span> : <span className="badge-idle">{t('settings.text_19')}</span>),
@@ -784,13 +810,16 @@ export default function Settings() {
                 `.th`/`.td` with `scope`, and a focusable, named scroll region. */}
             <div className="table-scroll overflow-x-auto [contain:layout]" role="region" aria-label={t('settings.aria_label')} tabIndex={0}>
               <table className="w-full">
-                <thead className="table-head"><tr><th scope="col" className="th">{t('settings.text_34')}</th><th scope="col" className="th">{t('settings.text_35')}</th><th scope="col" className="th">{t('settings.text_36')}</th><th scope="col" className="th">{t('settings.text_37')}</th></tr></thead>
+                {/* Same rule as the roster's phone column: the column exists only when the owner
+                    directory answered, because a `—` in every cell would say these people had no
+                    number rather than that this reader was not served the column. */}
+                <thead className="table-head"><tr><th scope="col" className="th">{t('settings.text_34')}</th><th scope="col" className="th">{t('settings.text_35')}</th>{phones && <th scope="col" className="th">{t('settings.text_36')}</th>}<th scope="col" className="th">{t('settings.text_37')}</th></tr></thead>
                 <tbody className="divide-y divide-line-soft">
                   {archived.map((u) => (
                     <tr key={u.id}>
                       <td className="td font-medium">{u.full_name}</td>
                       <td className="td">{roleLabels[u.role] ?? u.role}</td>
-                      <td className="td" dir="ltr">{u.phone ?? '—'}</td>
+                      {phones && <td className="td" dir="ltr">{phones.get(u.id) ?? '—'}</td>}
                       <td className="td"><span className="badge-idle">{t('settings.text_38')}</span></td>
                     </tr>
                   ))}

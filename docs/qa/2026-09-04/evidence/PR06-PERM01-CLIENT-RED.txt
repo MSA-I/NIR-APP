@@ -1,0 +1,596 @@
+PR06 - PERM-01 - RED - the client half of the second commit
+============================================================
+Tree: branch worktree-agent-a3bfa1394780d727a at 521d34e5 (PR 5, the client narrowing) plus the
+oracle's own new cases and migration 0319. NOTHING behavioural has moved yet:
+src/lib/accountColumns.ts still names `phone` in PROFILE_COLUMNS, src/lib/types.ts still declares
+it on Profile, and src/pages/Settings.tsx still renders it out of the roster row.
+
+The harness was corrected once, before this run, and BOTH sides were then measured against the
+corrected version:
+  * the MSW profiles handler now honours `id=eq.<uuid>`, because the bootstrap reads its own row
+    with `.maybeSingle()` and a handler that answered two rows failed the bootstrap for a reason
+    this file is not about;
+  * `getAllByText` replaces `getByText` for cell values, because DataTable renders a desktop table
+    AND a mobile card list, so every value legitimately appears twice.
+Neither touches what is asserted.
+
+Command: npx vitest run src/pages/accountColumnBoundary.spec.tsx
+Result:  4 failed | 2 passed (6)
+
+  x reads profiles by name, and never asks for a column 0319 revokes
+      expected [ 'id', 'org_id', 'full_name', ...(6) ] to not include 'phone'
+  x reads profiles by name rather than with a star            (the roster read, same assertion)
+      expected [ 'id', 'org_id', 'full_name', ...(6) ] to not include 'phone'
+  x asks the directory for the two columns it needs and draws the number it returns
+      Unable to find an element with the text: 050-7654321
+  x drops the column, not the roster, when the directory is not there yet
+      expected 0 to be greater than 0        (the directory is never asked at all)
+
+TWO CONTROLS, green in this run and in the green one:
+  + control: the invitations read was already named and is unchanged
+  + reads the organisation by name, and never asks for the commercial columns  -- fixed by PR 5
+    and untouched here, so it also proves the harness is still observing requests
+
+---- output ----
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a3bfa1394780d727a
+
+ ❯ src/pages/accountColumnBoundary.spec.tsx (6 tests | 4 failed) 6637ms
+     × reads profiles by name, and never asks for a column 0319 revokes 95ms
+     × reads profiles by name rather than with a star 196ms
+     × asks the directory for the two columns it needs and draws the number it returns 3036ms
+     × drops the column, not the roster, when the directory is not there yet 3153ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/accountColumnBoundary.spec.tsx > the account bootstrap asks the two account tables for named columns > reads profiles by name, and never asks for a column 0319 revokes
+AssertionError: expected [ 'id', 'org_id', 'full_name', …(6) ] to not include 'phone'
+ ❯ src/pages/accountColumnBoundary.spec.tsx:180:35
+    178|       expect(columns(select)).toEqual(columns(PROFILE_COLUMNS));
+    179|       expect(columns(select)).not.toContain('backup_email');
+    180|       expect(columns(select)).not.toContain('phone');
+       |                                   ^
+    181|     }
+    182|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  src/pages/accountColumnBoundary.spec.tsx > the settings roster asks for named columns > reads profiles by name rather than with a star
+AssertionError: expected [ 'id', 'org_id', 'full_name', …(6) ] to not include 'phone'
+ ❯ src/pages/accountColumnBoundary.spec.tsx:207:35
+    205|       expect(columns(select)).toEqual(columns(PROFILE_COLUMNS));
+    206|       expect(columns(select)).not.toContain('backup_email');
+    207|       expect(columns(select)).not.toContain('phone');
+       |                                   ^
+    208|     }
+    209|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  src/pages/accountColumnBoundary.spec.tsx > a colleague's number comes from the owner directory, or from nowhere > asks the directory for the two columns it needs and draws the number it returns
+TestingLibraryElementError: Unable to find an element with the text: 050-7654321. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"space-y-5 max-w-3xl"[39m
+    [36m>[39m
+      [36m<header[39m
+        [33mclass[39m=[32m"flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between "[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"min-w-0 space-y-1"[39m
+        [36m>[39m
+          [36m<h1[39m
+            [33mclass[39m=[32m"page-title break-words"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"flex items-center gap-2"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-settings"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"22"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"22"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"[39m
+                [36m/>[39m
+                [36m<circle[39m
+                  [33mcx[39m=[32m"12"[39m
+                  [33mcy[39m=[32m"12"[39m
+                  [33mr[39m=[32m"3"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [0m [0m
+              [0mהגדרות מערכת[0m
+            [36m</span>[39m
+          [36m</h1>[39m
+          [36m<span[39m
+            [33maria-hidden[39m=[32m"true"[39m
+            [33mclass[39m=[32m"section-mark"[39m
+          [36m/>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"text-sm text-ink-soft"[39m
+          [36m>[39m
+            [0mעסק, צוות ואבטחה[0m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex shrink-0 flex-wrap items-center gap-2"[39m
+        [36m>[39m
+          [36m<a[39m
+            [33mclass[39m=[32m"btn-secondary"[39m
+            [33mdata-discover[39m=[32m"true"[39m
+            [33mhref[39m=[32m"/onboarding"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"lucide lucide-clipboard-check"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"15"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"15"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<rect[39m
+                [33mheight[39m=[32m"4"[39m
+                [33mrx[39m=[32m"1"[39m
+                [33mry[39m=[32m"1"[39m
+                [33mwidth[39m=[32m"8"[39m
+                [33mx[39m=[32m"8"[39m
+                [33my[39m=[32m"2"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m9 14 2 2 4-4"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [0m [0m
+            [0mרשימת הקמה[0m
+          [36m</a>[39m
+        [36m</div>[39m
+      [36m</header>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"card card-pad  space-y-4"[39m
+      [36m>[39m
+        [36m<h2[39m
+          [33mclass[39m=[32m"section-title"[39m
+        [36m>[39m
+          [0mהגדרות עסק[0m
+        [36m</h2>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"grid grid-cols-1 sm:grid-cols-3 gap-4"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"sm:col-span-3"[39m
+          [36m>[39m
+            [36m<label[39m
+              [33mclass[39m=[32m"label"[39m
+              [33mfor[39m=[32m"settings-org-name"[39m
+            [36m>[39m
+              [0mשם הארגון לתצוגה[0m
+            [36m</label>[39m
+            [36m<input[39m
+              [33mclass[39m=[32m"input"[39m
+              [33mid[39m=[32m"settings-org-name"[39m
+              [33mmaxlength[39m=[32m"120"[39m
+              [33mvalue[39m=[32m""[39m
+            [36m/>[39m
+          [36m</div>[39m
+          [36m<div>[39m
+            [36m<label[39m
+              [33mclass[39m=[32m"label"[39m
+              [33mfor[39m=[32m"settings-vat-rate"[39m
+            [36m>[39m
+              [0mשיעור מע״מ (%)[0m
+            [36m</label>[39m
+            [36m<input[39m
+              [33mclass[39m=[32m"input num"[39m
+              [33mid[39m=[32m"settings-vat-rate"[39m
+              [33mmax[39m=[32m"100"[39m
+              [33mmin[39m=[32m"0"[39m
+              [33mstep[39m=[32m"0.5"[39m
+              [33mtype[39m=[32m"number"[39m
+              [33mvalue[39m=[32m"18"[39m
+            [36m/>[39m
+          [36m</div>[39m
+          [36m<div>[39m
+            [36m<label[39m
+              [33mclass[39m=[32m"label"[39m
+              [33mfor[39m=[32m"settings-match-days"[39m
+            [36m>[39m
+              [0mטווח ימים להתאמת בנק[0m
+            [36m</label>[39m
+            [36m<input[39m
+              [33maria-describedby[39m=[32m"settings-match-days-hint"[39m
+              [33mclass[39m=[32m"input num"[39m
+              [33mid[39m=[32m"settings-match-days"[39m
+              [33mmin[39m=[32m"0"[39m
+              [33mstep[39m=[32m"1"[39m
+              [33mtype[39m=[32m"number"[39m
+              [33mvalue[39m=[32m"7"[39m
+            [36m/>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"mt-1 text-sm text-ink-muted"[39m
+              [33mid[39m=[32m"settings-match-days-hint"[39m
+            [36m>[39m
+              [0mמספר שלם של ימים. תשלום שנרשם בטווח הזה סביב מועד השורה בדף הבנק מוצע כהתאמה סבירה יותר.[0m
+            [36m</p>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex justify-end"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"btn...
+
+Ignored nodes: comments, script, style
+[36m<html>[39m
+  [36m<head />[39m
+  [36m<body>[39m
+    [36m<div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"space-y-5 max-w-3xl"[39m
+      [36m>[39m
+        [36m<header[39m
+          [33mclass[39m=[32m"flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between "[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"min-w-0 space-y-1"[39m
+          [36m>[39m
+            [36m<h1[39m
+              [33mclass[39m=[32m"page-title break-words"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"flex items-center gap-2"[39m
+              [36m>[39m
+                [36m<svg[39m
+                  [33maria-hidden[39m=[32m"true"[39m
+                  [33mclass[39m=[32m"lucide lucide-settings"[39m
+                  [33mfill[39m=[32m"none"[39m
+                  [33mheight[39m=[32m"22"[39m
+                  [33mstroke[39m=[32m"currentColor"[39m
+                  [33mstroke-linecap[39m=[32m"round"[39m
+                  [33mstroke-linejoin[39m=[32m"round"[39m
+                  [33mstroke-width[39m=[32m"2"[39m
+                  [33mviewBox[39m=[32m"0 0 24 24"[39m
+                  [33mwidth[39m=[32m"22"[39m
+                  [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+                [36m>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"[39m
+                  [36m/>[39m
+                  [36m<circle[39m
+                    [33mcx[39m=[32m"12"[39m
+                    [33mcy[39m=[32m"12"[39m
+                    [33mr[39m=[32m"3"[39m
+                  [36m/>[39m
+                [36m</svg>[39m
+                [0m [0m
+                [0mהגדרות מערכת[0m
+              [36m</span>[39m
+            [36m</h1>[39m
+            [36m<span[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"section-mark"[39m
+            [36m/>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"text-sm text-ink-soft"[39m
+            [36m>[39m
+              [0mעסק, צוות ואבטחה[0m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex shrink-0 flex-wrap items-center gap-2"[39m
+          [36m>[39m
+            [36m<a[39m
+              [33mclass[39m=[32m"btn-secondary"[39m
+              [33mdata-discover[39m=[32m"true"[39m
+              [33mhref[39m=[32m"/onboarding"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-clipboard-check"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"15"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"15"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<rect[39m
+                  [33mheight[39m=[32m"4"[39m
+                  [33mrx[39m=[32m"1"[39m
+                  [33mry[39m=[32m"1"[39m
+                  [33mwidth[39m=[32m"8"[39m
+                  [33mx[39m=[32m"8"[39m
+                  [33my[39m=[32m"2"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m9 14 2 2 4-4"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [0m [0m
+              [0mרשימת הקמה[0m
+            [36m</a>[39m
+          [36m</div>[39m
+        [36m</header>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"card card-pad  space-y-4"[39m
+        [36m>[39m
+          [36m<h2[39m
+            [33mclass[39m=[32m"section-title"[39m
+          [36m>[39m
+            [0mהגדרות עסק[0m
+          [36m</h2>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"grid grid-cols-1 sm:grid-cols-3 gap-4"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"sm:col-span-3"[39m
+            [36m>[39m
+              [36m<label[39m
+                [33mclass[39m=[32m"label"[39m
+                [33mfor[39m=[32m"settings-org-name"[39m
+              [36m>[39m
+                [0mשם הארגון לתצוגה[0m
+              [36m</label>[39m
+              [36m<input[39m
+                [33mclass[39m=[32m"input"[39m
+                [33mid[39m=[32m"settings-org-name"[39m
+                [33mmaxlength[39m=[32m"120"[39m
+                [33mvalue[39m=[32m""[39m
+              [36m/>[39m
+            [36m</div>[39m
+            [36m<div>[39m
+              [36m<label[39m
+                [33mclass[39m=[32m"label"[39m
+                [33mfor[39m=[32m"settings-vat-rate"[39m
+              [36m>[39m
+                [0mשיעור מע״מ (%)[0m
+              [36m</label>[39m
+              [36m<input[39m
+                [33mclass[39m=[32m"input num"[39m
+                [33mid[39m=[32m"settings-vat-rate"[39m
+                [33mmax[39m=[32m"100"[39m
+                [33mmin[39m=[32m"0"[39m
+                [33mstep[39m=[32m"0.5"[39m
+                [33mtype[39m=[32m"number"[39m
+                [33mvalue[39m=[32m"18"[39m
+              [36m/>[39m
+            [36m</div>[39m
+            [36m<div>[39m
+              [36m<label[39m
+                [33mclass[39m=[32m"label"[39m
+                [33mfor[39m=[32m"settings-match-days"[39m
+              [36m>[39m
+                [0mטווח ימים להתאמת בנק[0m
+              [36m</label>[39m
+              [36m<input[39m
+                [33maria-describedby[39m=[32m"settings-match-days-hint"[39m
+                [33mclass[39m=[32m"input num"[39m
+                [33mid[39m=[32m"settings-match-days"[39m
+                [33mmin[39m=[32m"0"[39m
+                [33mstep[39m=[32m"1"[39m
+                [33mtype[39m=[32m"number"[39m
+                [33mvalue[39m=[32m"7"[39m
+              [36m/>[39m
+              [36m<p[39m
+                [33mclass[39m=[32m"mt-1 text-sm text-ink-muted"[39m
+                [33mid[39m=[32m"settings-match-days-hint"[39m
+              [36m>[39m...
+ ❯ Proxy.waitForWrapper ../../../node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ src/pages/accountColumnBoundary.spec.tsx:232:11
+    230|   it('asks the directory for the two columns it needs and draws the nu…
+    231|     renderShell(<Settings />);
+    232|     await waitFor(() => expect(screen.getAllByText(COLLEAGUE_PHONE).le…
+       |           ^
+    233|
+    234|     expect(asked.organization_people_directory.length).toBeGreaterThan…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  src/pages/accountColumnBoundary.spec.tsx > a colleague's number comes from the owner directory, or from nowhere > drops the column, not the roster, when the directory is not there yet
+AssertionError: expected 0 to be greater than 0
+
+Ignored nodes: comments, script, style
+[36m<html>[39m
+  [36m<head />[39m
+  [36m<body>[39m
+    [36m<div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"space-y-5 max-w-3xl"[39m
+      [36m>[39m
+        [36m<header[39m
+          [33mclass[39m=[32m"flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between "[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"min-w-0 space-y-1"[39m
+          [36m>[39m
+            [36m<h1[39m
+              [33mclass[39m=[32m"page-title break-words"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"flex items-center gap-2"[39m
+              [36m>[39m
+                [36m<svg[39m
+                  [33maria-hidden[39m=[32m"true"[39m
+                  [33mclass[39m=[32m"lucide lucide-settings"[39m
+                  [33mfill[39m=[32m"none"[39m
+                  [33mheight[39m=[32m"22"[39m
+                  [33mstroke[39m=[32m"currentColor"[39m
+                  [33mstroke-linecap[39m=[32m"round"[39m
+                  [33mstroke-linejoin[39m=[32m"round"[39m
+                  [33mstroke-width[39m=[32m"2"[39m
+                  [33mviewBox[39m=[32m"0 0 24 24"[39m
+                  [33mwidth[39m=[32m"22"[39m
+                  [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+                [36m>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"[39m
+                  [36m/>[39m
+                  [36m<circle[39m
+                    [33mcx[39m=[32m"12"[39m
+                    [33mcy[39m=[32m"12"[39m
+                    [33mr[39m=[32m"3"[39m
+                  [36m/>[39m
+                [36m</svg>[39m
+                [0m [0m
+                [0mהגדרות מערכת[0m
+              [36m</span>[39m
+            [36m</h1>[39m
+            [36m<span[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"section-mark"[39m
+            [36m/>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"text-sm text-ink-soft"[39m
+            [36m>[39m
+              [0mעסק, צוות ואבטחה[0m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex shrink-0 flex-wrap items-center gap-2"[39m
+          [36m>[39m
+            [36m<a[39m
+              [33mclass[39m=[32m"btn-secondary"[39m
+              [33mdata-discover[39m=[32m"true"[39m
+              [33mhref[39m=[32m"/onboarding"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-clipboard-check"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"15"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"15"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<rect[39m
+                  [33mheight[39m=[32m"4"[39m
+                  [33mrx[39m=[32m"1"[39m
+                  [33mry[39m=[32m"1"[39m
+                  [33mwidth[39m=[32m"8"[39m
+                  [33mx[39m=[32m"8"[39m
+                  [33my[39m=[32m"2"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m9 14 2 2 4-4"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [0m [0m
+              [0mרשימת הקמה[0m
+            [36m</a>[39m
+          [36m</div>[39m
+        [36m</header>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"card card-pad  space-y-4"[39m
+        [36m>[39m
+          [36m<h2[39m
+            [33mclass[39m=[32m"section-title"[39m
+          [36m>[39m
+            [0mהגדרות עסק[0m
+          [36m</h2>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"grid grid-cols-1 sm:grid-cols-3 gap-4"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"sm:col-span-3"[39m
+            [36m>[39m
+              [36m<label[39m
+                [33mclass[39m=[32m"label"[39m
+                [33mfor[39m=[32m"settings-org-name"[39m
+              [36m>[39m
+                [0mשם הארגון לתצוגה[0m
+              [36m</label>[39m
+              [36m<input[39m
+                [33mclass[39m=[32m"input"[39m
+                [33mid[39m=[32m"settings-org-name"[39m
+                [33mmaxlength[39m=[32m"120"[39m
+                [33mvalue[39m=[32m""[39m
+              [36m/>[39m
+            [36m</div>[39m
+            [36m<div>[39m
+              [36m<label[39m
+                [33mclass[39m=[32m"label"[39m
+                [33mfor[39m=[32m"settings-vat-rate"[39m
+              [36m>[39m
+                [0mשיעור מע״מ (%)[0m
+              [36m</label>[39m
+              [36m<input[39m
+                [33mclass[39m=[32m"input num"[39m
+                [33mid[39m=[32m"settings-vat-rate"[39m
+                [33mmax[39m=[32m"100"[39m
+                [33mmin[39m=[32m"0"[39m
+                [33mstep[39m=[32m"0.5"[39m
+                [33mtype[39m=[32m"number"[39m
+                [33mvalue[39m=[32m"18"[39m
+              [36m/>[39m
+            [36m</div>[39m
+            [36m<div>[39m
+              [36m<label[39m
+                [33mclass[39m=[32m"label"[39m
+                [33mfor[39m=[32m"settings-match-days"[39m
+              [36m>[39m
+                [0mטווח ימים להתאמת בנק[0m
+              [36m</label>[39m
+              [36m<input[39m
+                [33maria-describedby[39m=[32m"settings-match-days-hint"[39m
+                [33mclass[39m=[32m"input num"[39m
+                [33mid[39m=[32m"settings-match-days"[39m
+                [33mmin[39m=[32m"0"[39m
+                [33mstep[39m=[32m"1"[39m
+                [33mtype[39m=[32m"number"[39m
+                [33mvalue[39m=[32m"7"[39m
+              [36m/>[39m
+              [36m<p[39m
+                [33mclass[39m=[32m"mt-1 text-sm text-ink-muted"[39m
+                [33mid[39m=[32m"settings-match-days-hint"[39m
+              [36m>[39m...
+ ❯ src/pages/accountColumnBoundary.spec.tsx:252:76
+    250|     renderShell(<Settings />);
+    251|     await waitFor(() => expect(screen.getAllByText('פקידת המשרד').leng…
+    252|     await waitFor(() => expect(asked.organization_people_directory.len…
+       |                                                                            ^
+    253|
+    254|     expect(screen.queryByRole('columnheader', { name: PHONE_HEADER }))…
+ ❯ runWithExpensiveErrorDiagnosticsDisabled ../../../node_modules/@testing-library/dom/dist/config.js:47:12
+ ❯ checkCallback ../../../node_modules/@testing-library/dom/dist/wait-for.js:124:77
+ ❯ Timeout.checkRealTimersCallback ../../../node_modules/@testing-library/dom/dist/wait-for.js:118:16
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 2 passed (6)
+   Start at  06:34:28
+   Duration  10.54s (transform 1000ms, setup 631ms, import 1.46s, tests 6.64s, environment 1.46s)
+

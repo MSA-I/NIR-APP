@@ -222,7 +222,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               org_id: cached.orgId,
               role: cached.role,
               full_name: '',
-              phone: null,
               active: true,
               supplier_id: null,
               // Offline bootstrap carries scope, not preferences. `null` is the honest answer:

@@ -20,12 +20,21 @@ export function isActiveRole(role: string | null | undefined): role is ActiveRol
   return ACTIVE_ROLES.includes(role as ActiveRole);
 }
 
+/**
+ * A colleague as any member of the tenant may read them.
+ *
+ * `phone` is deliberately NOT here. Migration 0319 revoked the column privilege on
+ * `profiles.phone` from every client role, because a column privilege is the only thing that can
+ * hide a column — RLS cannot — and because all three product roles are the same database role. The
+ * owner reads it from `public.organization_people_directory`; see `OrganizationPerson` below and
+ * `src/lib/accountColumns.ts`. `backup_email` was never here and must not be added: it is an
+ * account-recovery address, and a person reads their own through `my_backup_email()`.
+ */
 export interface Profile {
   id: string;
   org_id: string;
   full_name: string;
   role: Role;
-  phone: string | null;
   active: boolean;
   supplier_id: string | null; // historical supplier-agent association; never grants an active login
   // Interface language this person chose (0213). `null` is a third state, not Hebrew: it means
@@ -35,6 +44,15 @@ export interface Profile {
   // same third state as `locale`'s: never chose, so the product's own default applies and stays
   // free to change. See src/lib/appearance.ts.
   theme: Theme | null;
+}
+
+/**
+ * One row of `public.organization_people_directory` (0319) — the owner-only view that hands back
+ * the one column a `Profile` may no longer carry. Read with `ORGANIZATION_PEOPLE_COLUMNS`.
+ */
+export interface OrganizationPerson {
+  id: string;
+  phone: string | null;
 }
 
 export type OrgStatus = 'active' | 'suspended';
