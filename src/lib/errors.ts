@@ -231,11 +231,23 @@ const PATTERNS: [RegExp, string][] = [
     'definite_duplicate_invoice_cannot_be_overridden'],
   /* 0315, decision #350. Its own sentence, ahead of nothing and behind nothing that could swallow
      it — no pattern above matches this name. The generic `payment_request_checks_failed` below is
-     the reason it needed one: that sentence tells the reader an invoice was paid or a balance
-     moved, and neither happened here. What happened is that somebody else's approval got to this
-     invoice first, and the money is spoken for until that request is cancelled or executed. */
+     the reason it needed one: a reservation is not a failed check, and folding it into that
+     sentence would describe somebody else's approval as this request's own problem. What happened
+     is that another approval got to this invoice first, and the money is spoken for until that
+     request is cancelled or executed. */
   [/payment_request_invoice_reserved/i,
     'payment_request_invoice_reserved'],
+  /* REQ-01. The barrier behind this name (`0031:895-915`, and the same one re-run at `0073:639`)
+     is a DISJUNCTION — no invoices linked, an invoice that is not this org's or this supplier's or
+     is deleted, an invoice not `approved` for payment, or an allocation above what the invoice
+     still owes. Its sentence used to name one disjunct as fact ("an invoice was paid, or a balance
+     changed") and end in "refresh". On the request the sweep pressed, `paid_invoice_count` was 0,
+     no balance had moved, and refreshing redisplayed the same screen: a cause that did not happen
+     and an instruction that changed nothing. The sentence now names the two disjuncts a person can
+     actually reach and the step for each, and the panel above the button names WHICH invoice
+     (REQ-02) — so between them the reader gets the specific cause without the client guessing at
+     one. Reaching this refusal from the approve button is itself now closed on the unapproved-invoice
+     arm (`PaymentRequests.tsx`, `invoiceUnapproved`); this stays for the race. */
   [/payment_request_checks_failed/i,
     'payment_request_checks_failed'],
   [/payment_request_checks_mismatch/i,

@@ -872,6 +872,16 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
      above rather than from the check, because the check is a COUNT — the 0034 anti-oracle keeps the
      server from naming an invoice, and the panel does not need it to: it is holding the rows. */
   const unapprovedLinks = (links ?? []).filter((link) => link.invoice.review_status !== 'approved');
+  /* REQ-01. The one refusal on this panel that is ABSOLUTE. `p1_transition_payment_request`
+     (0031:903) and the exceptional credit route (0073:650) both refuse approval while any linked
+     invoice is not `approved`, and there is no override, no reason field and no role that gets past
+     it — so a button offered here has exactly one outcome, a server error. REQ-02 gave the panel the
+     sentence naming which invoice; this closes the door beside it, by the pattern `overAllocated`
+     already set two lines up. Read from BOTH sides on purpose: the server's own count is the
+     authority on what its barrier will do, the rows are what the reader can see, and neither alone
+     is reliably the fresher of the two. Either one shuts the door — never widened, only narrowed. */
+  const invoiceUnapproved = unapprovedLinks.length > 0
+    || (summary?.blocking.some((check) => check.code === 'invoice_unapproved') ?? false);
 
   return (
     <Modal open onClose={onClose} title={t('paymentRequests.detailTitle', { number: pr.number, supplier: pr.supplier.name })} wide busy={busy} statusMessage={busy ? t('paymentRequests.detailBusy') : undefined}>
@@ -979,6 +989,13 @@ export function PaymentRequestDetail({ pr, isOffice, onClose, onChanged }: {
             {['pending_approval', 'suspected_duplicate', 'investigation'].includes(pr.status) && (
               overAllocated ? (
                 <button className="btn-secondary" disabled aria-label={t('paymentRequests.aria_label_4')}>
+                  <CheckCircle2 size={ICON.sm} aria-hidden="true" /> {t('paymentRequests.text_38')}
+                </button>
+              ) : invoiceUnapproved ? (
+                /* REQ-01. Ahead of the credit branch, because that branch's exceptional route
+                   re-runs the identical barrier (0073:650) and would offer a second door to the
+                   same refusal. */
+                <button className="btn-secondary" disabled aria-label={t('paymentRequests.approveBlockedInvoiceUnapproved')}>
                   <CheckCircle2 size={ICON.sm} aria-hidden="true" /> {t('paymentRequests.text_38')}
                 </button>
               ) : openCreditTotal > 0 ? (
