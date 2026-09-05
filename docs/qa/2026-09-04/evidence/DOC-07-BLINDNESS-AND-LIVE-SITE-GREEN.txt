@@ -1,0 +1,136 @@
+DOC-07 — green: the live site isolated, the guard able to see it
+================================================================
+branch      fix/doc07-filename-isolation-guard, cut from worktree-qa-sweep-20260904 @ 3c9e08f2
+date        05.09.2026
+red         docs/qa/2026-09-04/evidence/DOC-07-BLINDNESS-AND-LIVE-SITE-RED.txt
+
+WHAT CHANGED
+------------
+1. src/components/document-review/DocumentSourceViewer.tsx:65
+     <p className="mt-1 break-words text-sm text-ink-muted">{fileName}</p>
+  -> <p className="mt-1 break-words text-sm text-ink-muted"><bdi dir="ltr">{fileName}</bdi></p>
+   The same idiom as DocumentScanPreview.tsx:197 and the other isolated sites. No new pattern.
+
+2. src/lib/fileNameIsolation.spec.ts — the detector, the exemptions, and one new assertion.
+   - READS_A_FILE_NAME matched only `.file_name` / `.fileName`. It now matches a property access
+     OR a bare identifier, and tells declarations from reads by what surrounds it: `fileName:` is
+     a key or type member, `fileName=` is an attribute NAME, and an opening quote makes it a
+     string. `fileName={fileName}` therefore matches once, on the value.
+   - `fileName={` LEAVES the NOT_A_RENDER exemption list. It named a duty and never verified it.
+     In its place: a new `it()` asserting the receiving component is defined in a file THIS scan
+     reads, so the widened detector judges its render. A receiver it cannot resolve is reported.
+   - `alt={` JOINS the spoken-channel exemptions, on the rule the file already applies to
+     `aria-label`: an image's accessible name is spoken, not painted. Every line this newly
+     touches is `alt={t(..., { fileName })}`.
+
+3. src/components/document-review/DocumentSourceViewer.spec.tsx — the component oracle, with a
+   control that passes in both runs.
+
+4. scripts/doc07-review-filename-visual-check.cjs — the rendered half, on the review route.
+
+
+THE SWEEP FOR THE SAME SHAPE — REPORTED IN FULL, EVEN THOUGH IT IS SHORT
+------------------------------------------------------------------------
+Every bare (non-dotted) `fileName` / `file_name` read in a non-spec .tsx under src/, classified:
+
+  DRAWN AND UNISOLATED (the finding)
+    components/document-review/DocumentSourceViewer.tsx:65        FIXED here
+
+  DRAWN AND ALREADY ISOLATED
+    components/document-review/DocumentScanPreview.tsx:197        <bdi dir="ltr">
+
+  SPOKEN, NOT DRAWN — an image's accessible name
+    components/document-review/DocumentScanPreview.tsx:95,238,244 alt={t(..., { fileName })}
+    components/document-review/DocumentSourceViewer.tsx:97        alt={t(..., { fileName })}
+    components/UploadCenter.tsx:757,771                           aria-label={t(..., { ... })}
+    components/UploadCenter.tsx:348,350,375,376                   announce(record.t(...))
+    pages/DocumentsInbox.tsx:1051                                 rowLabel={...}
+
+  ALREADY ISOLATED IN A TRANSLATED SENTENCE
+    pages/DocumentsInbox.tsx:1142,1154,1164                       ltrIsolate(...)
+
+  PLUMBING — moves the string, paints nothing
+    pages/Bank.tsx:356,423,460 · pages/Expenses.tsx:271,273,341,362 · pages/Reports.tsx:280,292,305
+    pages/ProductPurchaseSummary.tsx:240,245,266 · pages/InvoiceDetail.tsx:450 · pages/Orders.tsx:614
+    pages/Receiving.tsx:352 · pages/InvoiceNew.tsx:92,107 · components/OfflineQueueStatus.tsx:45
+    components/UploadCenter.tsx:154,307,404 · components/FileUpload.tsx:528
+    components/ExportTemplatesPanel.tsx:89
+
+  HANDS THE NAME TO A COMPONENT — now checked by the new assertion, not exempted
+    components/document-review/DocumentReviewWorkspace.tsx:193 -> DocumentSourceViewer
+    pages/DocumentReview.tsx:280                               -> DocumentScanPreview
+    components/document-review/DocumentScanPreview.tsx:222     -> ScanCornerEditor
+
+One false positive the widened read produced across all of src/, and it is excluded by the
+opening-quote rule rather than by a needle:
+    pages/DocumentOperations.tsx:97  type RecoveryTarget = Pick<DocumentControlAttempt, ... 'file_name'>
+a TYPE on a line that happens to carry `<`.
+
+
+GREEN — THE SOURCE ORACLES
+---------------------------
+  $ npx vitest run src/lib/fileNameIsolation.spec.ts
+     Test Files  1 passed (1)
+          Tests  3 passed (3)
+
+  $ npx vitest run src/components/document-review/DocumentSourceViewer.spec.tsx
+     Test Files  1 passed (1)
+          Tests  7 passed (7)
+
+  $ npx vitest run src/lib/fileNameIsolation.spec.ts \
+        src/components/document-review/DocumentSourceViewer.spec.tsx \
+        src/components/document-review/DocumentScanPreview.spec.tsx
+     Test Files  3 passed (3)
+          Tests  21 passed (21)
+
+
+GREEN — RENDERED, HEADED EDGE, 1440x900, ON /documents/:documentId/review
+--------------------------------------------------------------------------
+  $ DOC07_SHOT=AFTER node scripts/doc07-review-filename-visual-check.cjs         (exit 0)
+
+--- measured (visual order, left to right) ---
+PASS  record header  <BDI dir=ltr> direction=ltr unicode-bidi=isolate
+      logical: 93_00002007 — חלק 3.jpeg
+      visual : 93_00002007 — 3 קלח.jpeg
+PASS  source viewer  <BDI dir=ltr> direction=ltr unicode-bidi=isolate
+      logical: 93_00002007 — חלק 3.jpeg
+      visual : 93_00002007 — 3 קלח.jpeg
+
+review-screen file-name check completed with no findings — 2 rendered copies measured
+
+The source viewer moved from `jpeg.3 קלח — 00002007_93` to `93_00002007 — 3 קלח.jpeg`. The record
+header — the control — is byte-identical in both runs.
+
+screenshot: docs/qa/2026-09-04/evidence/DOC07-review-desktop-1440x900-AFTER.png   (READ, not remembered)
+
+Both images were opened and read. BEFORE: the two copies of the name on the screen disagree — the
+header line ends `.jpeg`, the source-viewer line begins `jpeg.3`. AFTER: the two lines are
+identical, character for character.
+
+
+GUARDS RUN ON THIS TREE
+------------------------
+  npm run check:i18n            passed: 65 file(s), 923 Hebrew line(s), all at pinned counts
+  npm run check:orphan-keys     passed: 6178 leaf key(s), 106 with no call site, pinned
+  npm run check:key-manifest    passed: 5671 keys, 107 without a production call site, same as baseline
+  npm run check:jsx-space       passed: 153 .tsx file(s), no glued translated expressions
+  npm run check:baseline-drift  passed: baselines moved only in the allowed direction
+  npm run check:suite-manifest  passed: 132 entries, 128 suites, identical to baseline
+  npm run check:dead-code       passed (knip; configuration hints only, all pre-existing)
+  npx tsc --noEmit              exit 0
+
+NOT RUN, AND WHY
+----------------
+  npm run verify (whole) and npm run quality — forbidden by the campaign brief for a remediation
+  agent; the campaign runs one baseline verify on an idle machine.
+  Anything touching the LOCAL Supabase stack — this agent does not hold the lock and did not need
+  it: both the source oracles and the rendered check answer every Supabase call from a fixture
+  against a dead port.
+
+
+RESIDUAL, RECORDED RATHER THAN SILENTLY FIXED
+----------------------------------------------
+The new hand-off assertion covers the `fileName={...}` spelling. A file name passed into a
+component under some OTHER prop name is a transfer it does not see; widening it to every
+`attr={...}` would sweep in `src=`, `alt=` and `message=` and drown the signal. The guard states
+this in its own comment, with the reason, so the next reader does not have to rediscover it.

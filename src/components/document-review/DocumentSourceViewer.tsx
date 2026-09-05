@@ -62,7 +62,7 @@ export function DocumentSourceViewer({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <h2 id="document-source-title" className="section-title">{t('documentSourceViewer.title')}</h2>
-          <p className="mt-1 break-words text-sm text-ink-muted">{fileName}</p>
+          <p className="mt-1 break-words text-sm text-ink-muted"><bdi dir="ltr">{fileName}</bdi></p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           {/* Only when there is somewhere to go. A lone "עמוד 1" is a control that does nothing. */}

@@ -1,0 +1,164 @@
+DOC-07 — the guard's blind spot, and the live unisolated site behind it
+=======================================================================
+branch      fix/doc07-filename-isolation-guard, cut from worktree-qa-sweep-20260904 @ 3c9e08f2
+machine     Windows, node via the repo's own node_modules junction; no local Supabase stack touched
+date        05.09.2026
+
+WHAT IS BEING SHOWN RED, AND IN WHAT ORDER
+------------------------------------------
+A. the OLD guard on the unfixed tree                  -> GREEN beside a live defect   (blindness)
+B. the OLD guard with DocumentScanPreview reverted    -> GREEN                        (blindness)
+C. the NEW component oracle on the unfixed viewer     -> RED                          (the defect)
+D. the WIDENED guard, DocumentScanPreview reverted    -> RED                          (acceptance)
+E. the WIDENED guard, DocumentSourceViewer reverted   -> RED                          (the defect)
+F. the WIDENED guard's hand-off assertion, mutated    -> RED                          (it is alive)
+G. rendered, headed Edge 1440x900, BEFORE the fix     -> the name reads backwards     (the defect)
+
+Every revert below was made with the Edit tool, one anchored line, and restored immediately after
+the run; `git status` was checked clean of them before the commit.
+
+
+A. THE OLD GUARD, UNFIXED TREE — GREEN WHILE A FILE NAME RENDERS UNISOLATED
+---------------------------------------------------------------------------
+The tree at 3c9e08f2 contains, verbatim:
+
+    src/components/document-review/DocumentSourceViewer.tsx:65
+      <p className="mt-1 break-words text-sm text-ink-muted">{fileName}</p>
+
+no <bdi>, no dir="ltr", no ltrIsolate(). It is the file name on /documents/:documentId/review.
+
+  $ npx vitest run src/lib/fileNameIsolation.spec.ts
+
+   RUN  v4.1.10 D:/.../agent-a1f7c1d21174f5ff6
+
+   Test Files  1 passed (1)
+        Tests  2 passed (2)
+     Duration  2.07s
+
+GREEN. The guard whose job is this rule reports full coverage over a screen it never looked at.
+
+
+B. THE OLD GUARD, DocumentScanPreview.tsx:197 REVERTED TO A BARE <bdi> — STILL GREEN
+-------------------------------------------------------------------------------------
+reverted:   <p className="..."><bdi dir="ltr">{fileName}</bdi></p>
+        ->  <p className="..."><bdi>{fileName}</bdi></p>
+
+A bare <bdi> is the exact form the guard's own header says is no longer enough, because it resolves
+direction from the first strong character.
+
+  $ npx vitest run src/lib/fileNameIsolation.spec.ts
+
+   Test Files  1 passed (1)
+        Tests  2 passed (2)
+     Duration  3.09s
+
+GREEN. This reproduces the cross-verification measurement exactly. CAUSE: the site detector was
+/\.(file_name|fileName)\b/ — it REQUIRES A DOT, so a component that destructures the prop and
+renders {fileName} is invisible to it. One of the 25 sites DOC-07 claims to have proved was never
+guarded.
+
+Restored to <bdi dir="ltr"> before continuing.
+
+
+C. THE COMPONENT ORACLE AGAINST THE UNFIXED VIEWER — RED
+---------------------------------------------------------
+New in src/components/document-review/DocumentSourceViewer.spec.tsx. The name is
+`93_00002007 — חלק 3.pdf`: digits first, so the run takes its direction from `חלק`.
+
+  $ npx vitest run src/components/document-review/DocumentSourceViewer.spec.tsx
+
+ ❯ src/components/document-review/DocumentSourceViewer.spec.tsx (7 tests | 1 failed) 764ms
+     × draws the file name inside an explicit LTR isolate 16ms
+
+ FAIL  ... > the name of the document under review (DOC-07, חוק בידוד השמות) > draws the file name inside an explicit LTR isolate
+AssertionError: the file name is drawn with no explicit LTR isolate above it: <p class="mt-1 break-words text-sm text-ink-muted">93_00002007 — חלק 3.pdf</p>: expected null not to be null
+ ❯ src/components/document-review/DocumentSourceViewer.spec.tsx:99:109
+
+   Test Files  1 failed (1)
+        Tests  1 failed | 6 passed (7)
+
+CONTROL — "the Hebrew section title is not forced LTR, so the assertion above can fail honestly" —
+is among the 6 that passed, and uses the same closest('[dir="ltr"]') machinery. A red here is the
+screen, not the harness.
+
+
+D. THE WIDENED GUARD, DocumentScanPreview.tsx:197 REVERTED — RED
+-----------------------------------------------------------------
+This is the acceptance test set for the guard: the case that proved the blindness must now be
+caught.
+
+  $ npx vitest run src/lib/fileNameIsolation.spec.ts
+
+ ❯ src/lib/fileNameIsolation.spec.ts (3 tests | 1 failed) 195ms
+     × finds no file-name render left to first-strong direction anywhere under src/ 74ms
+
+AssertionError: a file name is an atomic technical identifier: wrap it in <bdi dir="ltr"> (markup),
+put dir="ltr" on the element already there, or use ltrIsolate() inside a translated sentence:
+components\document-review\DocumentScanPreview.tsx:197  <p className="mt-1 break-words text-sm text-ink-muted"><bdi>{fileName}</bdi></p>: expected [ Array(1) ] to deeply equal []
+
+   Test Files  1 failed (1)
+        Tests  1 failed | 2 passed (3)
+
+RED, naming the line verbatim. Restored.
+
+
+E. THE WIDENED GUARD, DocumentSourceViewer.tsx:65 REVERTED — RED
+-----------------------------------------------------------------
+The live defect itself, put back and re-measured against the fixed guard.
+
+ ❯ src/lib/fileNameIsolation.spec.ts (3 tests | 1 failed) 225ms
+     × finds no file-name render left to first-strong direction anywhere under src/ 106ms
+
+AssertionError: ...
+components\document-review\DocumentSourceViewer.tsx:65  <p className="mt-1 break-words text-sm text-ink-muted">{fileName}</p>: expected [ Array(1) ] to deeply equal []
+
+   Test Files  1 failed (1)
+        Tests  1 failed | 2 passed (3)
+
+RED. The widened guard would have found this defect on the day it was written. Restored.
+
+
+F. THE HAND-OFF ASSERTION IS ALIVE — RED UNDER A MUTATED RECEIVER
+------------------------------------------------------------------
+The old `fileName={` exemption trusted the callee and never checked. Its replacement asserts the
+receiver is source this scan reads. Mutation: DocumentReviewWorkspace.tsx:192 `<DocumentSourceViewer`
+-> `<ViewerFromSomeDependency` (textual only, reverted immediately).
+
+AssertionError: a file name handed to a component this scan cannot read is an unchecked promise,
+which is how DOC-07 missed DocumentSourceViewer:
+components\document-review\DocumentReviewWorkspace.tsx:193  → ViewerFromSomeDependency: expected [ Array(1) ] to deeply equal []
+
+   Test Files  1 failed (1)
+        Tests  1 failed | 2 passed (3)
+
+RED. Restored.
+
+
+G. RENDERED, HEADED EDGE, 1440x900, BEFORE THE FIX
+---------------------------------------------------
+  $ DOC07_SHOT=BEFORE node scripts/doc07-review-filename-visual-check.cjs        (exit 1)
+
+Route /documents/:documentId/review, real DocumentReview page, real stylesheet, <html dir="rtl">.
+Per-character Range rectangles sorted by screen x — the reader's order, not the DOM string's.
+No database and no sign-in: every Supabase call answered from a fixture, client pointed at a dead
+port. Name: `93_00002007 — חלק 3.jpeg` (.jpeg rather than .pdf so the viewer paints an image
+instead of pulling pdf.js into the harness; the bidi shape is identical).
+
+--- measured (visual order, left to right) ---
+PASS  record header  <BDI dir=ltr> direction=ltr unicode-bidi=isolate
+      logical: 93_00002007 — חלק 3.jpeg
+      visual : 93_00002007 — 3 קלח.jpeg
+FAIL  source viewer  <P dir=null> direction=rtl unicode-bidi=isolate
+      logical: 93_00002007 — חלק 3.jpeg
+      visual : jpeg.3 קלח — 00002007_93
+      ! the extension ".jpeg" is not last — the rendered name ends "02007_93"
+      ! the run "93_00002007" is broken or reordered
+
+FINDINGS (1):
+  source viewer: <P dir=null> renders "jpeg.3 קלח — 00002007_93"
+
+THE CONTROL IS IN THE SAME PICTURE. The record header has carried <bdi dir="ltr"> since before this
+finding and reads correctly in this run — so the harness is not broken, the screen is. One name,
+one screen, two copies, one of them backwards.
+
+screenshot: docs/qa/2026-09-04/evidence/DOC07-review-desktop-1440x900-BEFORE.png   (READ, not remembered)
