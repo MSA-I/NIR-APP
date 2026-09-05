@@ -1,7 +1,20 @@
 resource=local-supabase-stack + SQL suites + npm run quality
 SINGLE OCCUPANCY. Read this file before ANY command that touches the local stack.
 
-HELD BY: PR 11 (MON-04) — granted 05.09.2026 08:35 local.
+HELD BY: PR 13 (PERM-02) — granted 05.09.2026 09:35 local.
+
+  PR 11 RELEASED IT, done and proved. The red printed exactly the five lines its author predicted
+  and nothing else, with five controls green in the SAME run, and it read the money the aborted
+  run left behind: 5,900.00 confirmed on a 2,950.00 line, reached through the real command as an
+  authenticated owner. Green exit 0 on a file whose hash was read back inside the container both
+  times.
+  THE RACE ACTUALLY SERIALISED, and proving it took an extra step worth copying: p115 drops its own
+  schema on success, so its per-session messages are unreadable afterwards. Rather than assert the
+  shape and call it proved, the agent re-ran the identical race as a supplementary probe and
+  printed the two outcomes -- `session_a | ok`, `session_b | bank_allocation_exceeds_statement_line`
+  -- with session B blocked on the guard's row lock, not deadlocked and not timed out.
+  0322's pre-install assertion passed on every reset and was not weakened; the demo seed then
+  loaded THROUGH the live bound with zero lines over it. Landed at 0418a9aa.
 
   PR 5+6 RELEASED IT, done and proved, and it did something worth copying: it found the SUITE
   ITSELF could not satisfy the brief. As committed, p112 raised inside its first assertion under
