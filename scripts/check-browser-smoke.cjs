@@ -1728,22 +1728,34 @@ async function orderSupplierComparison(browser) {
 }
 
 async function paymentRequestNamesAndModalStack(browser) {
-  const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 1024, height: 768 } });
+  const context = await browser.newContext({ locale: 'he-IL', serviceWorkers: 'block', viewport: { width: 1440, height: 900 } });
   const supplierId = '94000000-0000-4000-8000-000000000001';
   const invoiceId = '94000000-0000-4000-8000-000000000011';
+  let invoiceReviewStatus = 'pending';
   const request = {
-    id: 'p4-request', org_id: 'p4-org', supplier_id: supplierId, number: 7001, amount: 850,
+    id: 'p4-request', org_id: 'p4-org', supplier_id: supplierId, number: 7001, amount: 850, currency: 'ILS',
     due_date: '2026-07-30', status: 'draft', notes: 'בדיקת שכבות', created_at: '2026-07-22T08:00:00Z',
     supplier: { name: 'ספק בדיקת שכבות' },
   };
-  await context.route('**/rest/v1/payment_requests?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [request] }));
-  await context.route('**/rest/v1/payment_request_invoices?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [] }));
+  await context.route('**/rest/v1/payment_requests?**', (route) => {
+    const url = new URL(route.request().url());
+    return route.fulfill({ status: 200, headers: jsonHeaders, json: url.searchParams.has('amount') ? [] : [request] });
+  });
+  await context.route('**/rest/v1/payment_request_invoices?**', (route) => route.fulfill({
+    status: 200,
+    headers: jsonHeaders,
+    json: [{
+      invoice_id: invoiceId,
+      amount_allocated: 850,
+      invoice: { invoice_number: 'INV-P4-01', invoice_date: '2026-07-01', review_status: invoiceReviewStatus },
+    }],
+  }));
   await context.route('**/rest/v1/financial_supplier_directory?**', (route) => route.fulfill({
     status: 200,
     headers: jsonHeaders,
     json: [{ id: supplierId, name: 'ספק בדיקת שכבות', tax_id: null, payment_terms: null, status: 'active', bank_details: null }],
   }));
-  await context.route('**/rest/v1/invoices?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [{ id: invoiceId, supplier_id: supplierId, invoice_number: 'INV-P4-01', invoice_date: '2026-07-01', total_amount: 850, currency: 'ILS', review_status: 'approved' }] }));
+  await context.route('**/rest/v1/invoices?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [{ id: invoiceId, supplier_id: supplierId, invoice_number: 'INV-P4-01', invoice_date: '2026-07-01', total_amount: 850, currency: 'ILS', review_status: invoiceReviewStatus }] }));
   await context.route('**/rest/v1/invoice_balances_by_currency?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [{ invoice_id: invoiceId, currency: 'ILS', balance_in_currency: 850 }] }));
   await context.route('**/rest/v1/bank_transactions?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [] }));
   await context.route('**/rest/v1/credit_requests?**', (route) => route.fulfill({ status: 200, headers: jsonHeaders, json: [] }));
@@ -1754,14 +1766,32 @@ async function paymentRequestNamesAndModalStack(browser) {
       requested_invoice_count: 1,
       visible_invoice_count: 1,
       paid_invoice_count: 0,
-      unapproved_invoice_count: 0,
+      unapproved_invoice_count: invoiceReviewStatus === 'approved' ? 0 : 1,
+      over_allocated_invoice_count: 0,
+      currency: 'ILS',
       amount_matches_open_balance: true,
       similar_bank_transfer_check: 'unavailable',
-      open_credit_total: 0,
+      open_credit_total_by_currency: [],
     },
   }));
   const page = await context.newPage();
   captureConsole(page, 'payment-request-modal');
+  const capturePaymentRequestViewport = async (dialog, fileName, width, height) => {
+    await page.setViewportSize({ width, height });
+    await page.waitForTimeout(100);
+    const metrics = await page.evaluate(() => ({
+      documentWidth: document.documentElement.scrollWidth,
+      clientWidth: document.documentElement.clientWidth,
+    }));
+    const overflow = metrics.documentWidth - metrics.clientWidth;
+    report.viewports.push({
+      role: 'owner', label: fileName.replace(/\.png$/, ''), width, height, ...metrics, overflow,
+    });
+    if (width === 390) assert(overflow <= 1, `${fileName}: horizontal document overflow ${overflow}px`);
+    assert(await dialog.isVisible(), `${fileName}: payment-request dialog is not visible`);
+    await page.screenshot({ path: path.join(outDir, fileName), fullPage: true });
+    report.screenshots.push(fileName);
+  };
   try {
     await login(page, 'owner');
     await page.goto(`${baseURL}/payment-requests`);
@@ -1770,6 +1800,13 @@ async function paymentRequestNamesAndModalStack(browser) {
     await opener.click();
     const parent = page.getByRole('dialog', { name: /דרישת תשלום #7001/ });
     await parent.waitFor();
+    const dependency = parent.getByText(/ממתינה לאישור החשבונית INV-P4-01 לתשלום/);
+    await dependency.waitFor();
+    assert.match(await dependency.innerText(), /INV-P4-01/, 'approval dependency did not name its invoice');
+    await capturePaymentRequestViewport(parent, 'payment-request-dependency-1440.png', 1440, 900);
+    await capturePaymentRequestViewport(parent, 'payment-request-dependency-390.png', 390, 844);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.waitForTimeout(100);
     await parent.getByRole('button', { name: 'ביטול', exact: true }).click();
     const child = page.getByRole('dialog', { name: 'ביטול דרישת תשלום' });
     await child.waitFor();
@@ -1785,6 +1822,7 @@ async function paymentRequestNamesAndModalStack(browser) {
     await page.waitForFunction((node) => document.activeElement === node, openerHandle, { timeout: 3_000 });
     assert(await opener.evaluate((node) => document.activeElement === node), 'nested modal did not restore opener focus');
 
+    invoiceReviewStatus = 'approved';
     const createButton = page.getByRole('button', { name: 'דרישה חדשה' });
     await createButton.click();
     const create = page.getByRole('dialog', { name: 'דרישת תשלום חדשה' });
@@ -1792,7 +1830,20 @@ async function paymentRequestNamesAndModalStack(browser) {
     const checkbox = create.getByRole('checkbox', { name: 'בחירת חשבונית INV-P4-01 של ספק בדיקת שכבות להקצאה בדרישת התשלום' });
     await checkbox.waitFor({ timeout: 20_000 });
     await checkbox.check();
-    await create.getByRole('spinbutton', { name: 'סכום ההקצאה לחשבונית INV-P4-01 של ספק בדיקת שכבות' }).waitFor();
+    const amount = create.getByRole('spinbutton', { name: 'סכום ההקצאה לחשבונית INV-P4-01 של ספק בדיקת שכבות' });
+    await amount.waitFor();
+    await amount.fill('850.01');
+    const critical = create.locator('.note-alert').filter({ hasText: /הסכום שהוקצה לחשבונית INV-P4-01 גבוה מהיתרה הפתוחה שלה/ });
+    await critical.waitFor();
+    assert.match(await critical.innerText(), /INV-P4-01/, 'over-balance finding did not name its invoice');
+    const draft = create.getByRole('button', { name: 'שמירה כטיוטה חסומה — הסכום שהוקצה גבוה מהיתרה הפתוחה של החשבונית' });
+    const submit = create.getByRole('button', { name: 'השליחה לאישור חסומה — הסכום שהוקצה גבוה מהיתרה הפתוחה של החשבונית' });
+    assert(await draft.isDisabled(), 'over-balance draft save remained enabled');
+    assert(await submit.isDisabled(), 'over-balance approval submit remained enabled');
+    await capturePaymentRequestViewport(create, 'payment-request-overbalance-1440.png', 1440, 900);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await submit.scrollIntoViewIfNeeded();
+    await capturePaymentRequestViewport(create, 'payment-request-overbalance-390.png', 390, 844);
     await page.keyboard.press('Escape');
     await create.waitFor({ state: 'hidden' });
   } finally {

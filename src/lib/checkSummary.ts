@@ -50,6 +50,11 @@ export interface ChecksSummary {
 const REQUIRED_ACTION_KEY: Readonly<Partial<Record<CheckCode, TKey>>> = {
   allocation_vs_balance_one: 'checks.actionAllocationVsBalance',
   allocation_vs_balance_many: 'checks.actionAllocationVsBalance',
+  // `allocation_over_open_balance_*` is deliberately NOT here, and not because it has no remedy —
+  // it has the clearest one in the file. It carries that remedy inside its own message instead,
+  // the way the two codes above once did, because the only screen that produces it renders
+  // `CheckList` and not this summary. An entry here would be a line of configuration that cannot
+  // fire, which is worse than no entry: it reads as covered.
 };
 
 /** Partition a check run by severity and resolve the one action, if any, that clears the block. */

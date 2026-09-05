@@ -229,6 +229,13 @@ const PATTERNS: [RegExp, string][] = [
     'approved_invoice_override_immutable'],
   [/definite_duplicate_invoice_cannot_be_overridden/i,
     'definite_duplicate_invoice_cannot_be_overridden'],
+  /* 0315, decision #350. Its own sentence, ahead of nothing and behind nothing that could swallow
+     it — no pattern above matches this name. The generic `payment_request_checks_failed` below is
+     the reason it needed one: that sentence tells the reader an invoice was paid or a balance
+     moved, and neither happened here. What happened is that somebody else's approval got to this
+     invoice first, and the money is spoken for until that request is cancelled or executed. */
+  [/payment_request_invoice_reserved/i,
+    'payment_request_invoice_reserved'],
   [/payment_request_checks_failed/i,
     'payment_request_checks_failed'],
   [/payment_request_checks_mismatch/i,
