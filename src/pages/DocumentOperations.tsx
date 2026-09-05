@@ -105,7 +105,12 @@ const PRICE_ACTION_KEYS: Record<string, TKey> = {
 
 function attemptFilterKey(attempt: DocumentControlAttempt): Exclude<AttemptFilter, 'all'> {
   const status = attemptUiStatus(attempt);
-  if (status.state === 'failed' || status.state === 'stuck' || status.state === 'review') return 'attention';
+  // `awaiting_scan` belongs with `review` and not in the residual bucket, for the reason
+  // `documentStatus.ts` gives when it ranks the two together: both are work that stopped and waits
+  // on a person. It reached this line as the residual before OWN-08 and would have gone on falling
+  // through to `completed` after it — a document nobody has looked at, filed under „הושלם".
+  if (status.state === 'failed' || status.state === 'stuck'
+    || status.state === 'review' || status.state === 'awaiting_scan') return 'attention';
   if (status.state === 'processing') return 'processing';
   return 'completed';
 }

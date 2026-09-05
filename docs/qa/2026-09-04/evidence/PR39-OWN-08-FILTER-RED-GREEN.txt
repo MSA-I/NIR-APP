@@ -1,0 +1,73 @@
+﻿# PR39 addendum — OWN-08's second half: the state was named and then filed with finished work.
+#
+# RED, against the tree that already carries the naming fix (commit fe2c4c1e):
+#   npx vitest run src/pages/documentOperationsDecisionQueue.spec.tsx -t "files the scan-approval document"
+#
+#   FAIL > files the scan-approval document under דורש טיפול, never under הושלם
+#   Error: no table row for consolidated-page-1.png
+#     at tableRow src/pages/documentOperationsDecisionQueue.spec.tsx:164
+#   Test Files  1 failed (1) - Tests  1 failed | 9 skipped (10)
+#
+# The document was under „הושלם": attemptFilterKey grouped failed/stuck/review as attention and
+# let everything else fall to completed, so the newly named state landed with finished work — the
+# one filter nobody sweeps. It reached that line as the residual before the naming fix too, so
+# this was true both before and after it.
+#
+# GREEN, whole file:
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a1c9e560c72009a1f
+
+ ✓ src/pages/documentOperationsDecisionQueue.spec.tsx > OWN-02 · the price column states what the row actually has > CONTROL — a row with both prices still shows the comparison it was built for 344ms
+ ✓ src/pages/documentOperationsDecisionQueue.spec.tsx > OWN-02 · the price column states what the row actually has > renders one true statement per row, not one arrow for all of them 160ms
+ ✓ src/pages/documentOperationsDecisionQueue.spec.tsx > OWN-02 · the price column states what the row actually has > reads a figure with no currency as no price at all, never as a bare number 31ms
+ ✓ src/pages/documentOperationsDecisionQueue.spec.tsx > OWN-02 · the price column states what the row actually has > draws each sentence from the dictionary, not from a literal in the screen 1ms
+ ✓ src/pages/documentOperationsDecisionQueue.spec.tsx > OWN-07 · both counts carry their unit > names documents on the tile and price-list lines on the queue 86ms
+ ✓ src/pages/documentOperationsDecisionQueue.spec.tsx > OWN-08 · the console names every state the ladder names > keeps the canonical answer instead of overwriting it with the residual 0ms
+ ✓ src/pages/documentOperationsDecisionQueue.spec.tsx > OWN-08 · the console names every state the ladder names > CONTROL — still answers with the residual for a status nothing can name 0ms
+ ✓ src/pages/documentOperationsDecisionQueue.spec.tsx > OWN-08 · the console names every state the ladder names > shows the scan-approval state on the row instead of an unknown one 64ms
+node.exe : stderr | src/pages/documentOperationsDecisionQueue.spec.tsx > OWN-08 · the console names every state the 
+ladder names > files the scan-approval document under דורש טיפול, never under הושלם
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (stderr | src/pa...ver under הושלם:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+An update to DataTable inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at 
+https://react.dev/link/wrap-tests-with-act
+An update to DataTable inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at 
+https://react.dev/link/wrap-tests-with-act
+
+ ✓ src/pages/documentOperationsDecisionQueue.spec.tsx > OWN-08 · the console names every state the ladder names > CONTROL — an unnameable status still reads „מצב לא ידוע" on its row 72ms
+ ✓ src/pages/documentOperationsDecisionQueue.spec.tsx > OWN-08 · the console names every state the ladder names > files the scan-approval document under דורש טיפול, never under הושלם 187ms
+ ✓ src/pages/documentOperationsContract.spec.ts > document control capability and UX contract > keeps the stable owner-only route while naming it בקרת מסמכים everywhere 3ms
+ ✓ src/pages/documentOperationsContract.spec.ts > document control capability and UX contract > uses only the customer-safe read models and excludes laboratory telemetry 1ms
+ ✓ src/pages/documentOperationsContract.spec.ts > document control capability and UX contract > presents the quiet summary-to-tasks-to-details hierarchy with 44px actions 1ms
+ ✓ src/pages/documentOperationsContract.spec.ts > document control capability and UX contract > maps processing states to clear Hebrew meanings 1ms
+ ✓ src/pages/documentOperationsContract.spec.ts > document control capability and UX contract > renders the recovery task at mobile width and announces its result 281ms
+ ✓ src/pages/documentOperationsContract.spec.ts > document control capability and UX contract > reprocesses after a confirmation with no reason box, and still sends a non-blank reason 166ms
+ ✓ src/pages/documentOperationsContract.spec.ts > document control capability and UX contract > chooses current recoverable work and reads stable Edge error messages 5ms
+
+ Test Files  2 passed (2)
+      Tests  17 passed (17)
+   Start at  05:35:59
+   Duration  3.99s (transform 1.55s, setup 921ms, import 2.49s, tests 1.42s, environment 2.19s)
+

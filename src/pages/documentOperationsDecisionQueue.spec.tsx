@@ -23,7 +23,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createElement } from 'react';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 import { ToastProvider } from '../components/ui';
@@ -278,5 +278,20 @@ describe('OWN-08 · the console names every state the ladder names', () => {
 
     const alien = tableRow('alien-status.pdf');
     expect(within(alien).getAllByText(he.documentOperations.unknownState).length).toBeGreaterThan(0);
+  });
+
+  it('files the scan-approval document under דורש טיפול, never under הושלם', async () => {
+    await renderConsole();
+    const filter = screen.getAllByLabelText(he.documentOps.aria_label_3)[0];
+
+    // Naming the state and then filing it with finished work would put a document waiting on a
+    // person behind the one filter nobody sweeps. It is work that stopped and waits — the same
+    // bucket `review` is in, which is where `documentStatus.ts` ranks it.
+    fireEvent.change(filter, { target: { value: 'attention' } });
+    expect(tableRow('consolidated-page-1.png')).toBeTruthy();
+
+    fireEvent.change(filter, { target: { value: 'completed' } });
+    expect(screen.getAllByRole('row').some((r) => r.textContent?.includes('consolidated-page-1.png')))
+      .toBe(false);
   });
 });
