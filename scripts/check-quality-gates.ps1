@@ -1529,6 +1529,7 @@ try {
     Invoke-SqlTest "supabase\tests\payment_credit_override_concurrency.sql" "Concurrent payment replay, approval, execution and credit creation" "supabase_admin"
     Invoke-SqlTest "supabase\tests\monthly_report_snapshots_concurrency.sql" "Concurrent immutable monthly snapshot version allocation" "supabase_admin"
     Invoke-SqlTest "supabase\tests\p63_financial_credit_concurrency.sql" "Two accountants racing for one credit remainder: one payment, one named refusal, no double allocation" "supabase_admin"
+    Invoke-SqlTest "supabase\tests\p108_one_balance_one_approval.sql" "One balance, one approval: an invoice of 640 already holding 300 approved refuses a second approval of the whole balance BY NAME while still ALLOWING the second request to be typed, splitting a payment across two approvals of 250 and 390 still passes, two sessions approving on the same locked invoice leave exactly one winner and one named refusal, and the writer that could not see a partially consumed credit stops admitting 900 where the reader prints 780 -- every refusal measured as an authenticated owner rather than as the superuser, so the financial guard and the role checks are actually in the path" "supabase_admin"
 
     Write-Gate "P1B local Edge runtime, 10/100/1,000 rows and failure recovery"
     Invoke-PriceListEdgeSmoke
