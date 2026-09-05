@@ -1,0 +1,191 @@
+PR 14 — MON-03 / FIN-04 / FIN-07 — WHAT THE FOUR SCREENSHOTS ACTUALLY SHOW
+=========================================================================
+
+Every image below was OPENED AND LOOKED AT, not inferred from the DOM dump beside it. Where the two
+disagree that is said. The machine-written companions are `PR14-RED-screen-read.txt` and
+`PR14-GREEN-screen-read.txt`, which record the text the page returned; this file records the
+picture.
+
+Capture conditions, identical for all four: headed system Edge via `executablePath` (Playwright's
+bundled chromium fails `spawn UNKNOWN` on this machine), viewport 1440x900, `reducedMotion:
+'reduce'`, `locale: 'he-IL'`, `serviceWorkers: 'block'`, real sign-in as the demo accountant through
+`/login` against the local stack. Camera: `scripts/pr14-supplier-currency-visual-check.cjs`.
+
+The RED pair was taken on the database WITHOUT `0320` and with the pre-fix wording of the two
+`FIN-07` labels temporarily restored, so the "before" is what a reader actually met. The GREEN pair
+was taken after `supabase db reset` WITH `0320`, on the restored tree.
+
+--------------------------------------------------------------------------------------------
+PR14-RED-accountant-supplier-card-1440x900.png
+--------------------------------------------------------------------------------------------
+
+`/finance/suppliers/aa000000-0000-4000-8000-000000000013`, signed in as the demo accountant.
+
+Heading: "כרטיס ספק פיננסי — אריזות הדרום", with a green "פעיל" pill and, under it,
+"עוסק / חברה: 512667788   תנאי תשלום: שוטף + 45".
+
+A row of four KPI cards runs right to left across the top. The rightmost, "יתרה פתוחה", is the one
+this finding is about, and it is drawn as TWO STACKED LINES:
+
+        150 ₪
+          0 $
+
+Both in the same weight and size. Nothing on the card distinguishes the first line — a figure this
+role read and valued — from the second, which is a zero the role's own invoice read never produced.
+The three cards to its left read "חשיפה שהגיעה למועד — " (an em dash, correctly, for a metric with
+no data), "תנועות בנק לא מותאמות 0" and "התאמות שממתינות לאישור 0".
+
+Directly UNDER that `0 $`, in the blue information banner: "אין במערכת מועדי פירעון שמאפשרים לחשב
+חשיפה שהגיעה למועד; לכן מוצג — ולא אפס." — the product stating its own policy, that a metric with no
+data is drawn as an em dash and never as a zero, immediately below a zero that breaks it.
+
+Below that, the feed "חשבוניות זמינות לתפקיד" lists exactly two rows: `MON03-ILS` 150 ₪ marked
+"לא שולמה", and `3377` 0 ₪ marked "שולמה". BOTH ARE SHEKEL INVOICES. The USD 300 invoice that the
+`0 $` is a statement about is not on this screen at all — the accountant cannot see the debt and
+cannot see any hint that a debt exists. That is what makes the zero a false statement of settlement
+rather than a cosmetic extra line: there is nothing on the page to contradict it.
+
+--------------------------------------------------------------------------------------------
+PR14-GREEN-accountant-supplier-card-1440x900.png
+--------------------------------------------------------------------------------------------
+
+Same URL, same role, same fixture, after `0320`.
+
+"יתרה פתוחה" is now a SINGLE line:
+
+        150 ₪
+
+The `0 $` line is gone. The card is one line shorter and everything below it — the banner, the feed,
+"תשלומים והקצאות", "זיכויים" — has moved up by that line; the two shekel feed rows and their
+"לא שולמה" / "שולמה" pills are otherwise identical, as are the three neighbouring KPI cards
+("— ", "0", "0"). Nothing was added, and no new figure appeared: a currency this role cannot value
+now produces no row, exactly as a supplier with no invoices already did, and `Money.tsx` draws the
+absence the way `0218`'s header already decided it would.
+
+The owner's reading of the same supplier, taken on the guarded path in the same minute, is still
+ILS 150 and USD 300. The accountant did not gain the $300 and did not gain a zero standing in for
+it — which is the whole point, and is why this is a fix and not a widening.
+
+--------------------------------------------------------------------------------------------
+PR14-RED-accountant-dashboard-1440x900.png
+--------------------------------------------------------------------------------------------
+
+`/dashboard` as the accountant: "מרכז הבקרה — הנהלת חשבונות", with the subtitle "פותחים כאן את היום:
+מה דורש טיפול עכשיו, מה עלול לעלות כסף ומה מצב העסק ברגע זה."
+
+The "דורש טיפול היום" panel carries 3 items. Under it runs the KPI strip. Its second cell from the
+right reads:
+
+        יתרת חשבוניות פתוחות
+        ₪ 4,184
+
+That is the plain, unqualified word `FIN-07` is about: the identical phrase stands over the owner's
+much larger figure on the owner's own screen, and a reader who compares the two has no way to learn
+from either that they were counted over different populations.
+
+The rest of the strip: "שולם החודש —", "תנועות בנק לא מותאמות 2", "התאמות שממתינות לאישור 1",
+"זיכויים שטרם קוזזו 0", "ממתין להעברה לרו״ח 3". Below, the "תשלומים לפי חודש" bars (יוני and יולי
+2026) and the "יתרות פתוחות לפי ספק" donut with ₪4.2K in its centre.
+
+--------------------------------------------------------------------------------------------
+PR14-GREEN-accountant-dashboard-1440x900.png
+--------------------------------------------------------------------------------------------
+
+Same screen, after the label change. The same KPI cell now reads, on two wrapped lines:
+
+        יתרת חשבוניות פתוחות —
+        מאושרות בלבד
+        ₪ 4,184
+
+THE FIGURE IS THE SAME ₪ 4,184 IN BOTH IMAGES. That is the measurement that matters here: `FIN-07`
+was answered by the label and not by the query, so the accountant's population was not widened by
+one row. Everything else on the screen is identical — the same 3/2/1 counts in the panel, the same
+"—" for "שולם החודש", the same two bars, the same ₪4.2K donut with the same four legend entries
+(משקאות אור בע"מ 68%, תבליני הגליל 15%, נקי וזוהר 13%, אריזות הדרום 4%). The KPI strip is a few
+pixels taller because the label wraps to a second line; nothing else moved.
+
+The owner's screen is deliberately NOT changed. Nothing narrowed the owner's figure, and putting a
+scope qualifier there would be the same false statement pointing the other way.
+
+--------------------------------------------------------------------------------------------
+THE THIRD SURFACE, READ AS TEXT RATHER THAN PHOTOGRAPHED
+--------------------------------------------------------------------------------------------
+
+`/invoices` as the accountant, column headers, read from the live DOM in both runs:
+
+  RED    מס׳ חשבונית · ספק · תאריך · סה״כ · יתרה            · בדיקה · תשלום · רו״ח · פעולות
+  GREEN  מס׳ חשבונית · ספק · תאריך · סה״כ · יתרה (מאושרות) · בדיקה · תשלום · רו״ח · פעולות
+
+This is the second surface the sweep totalled. It is recorded as text because the change is one word
+in a table header and a 1440x900 screenshot of the list adds nothing a reader could not get here.
+The owner's header stays "יתרה".
+
+--------------------------------------------------------------------------------------------
+APPENDIX — THE SCREENSHOT FIXTURE, VERBATIM, SO THE FOUR IMAGES CAN BE REPRODUCED
+--------------------------------------------------------------------------------------------
+
+`supabase/demo/demo_seed.sql` carries no dollar invoice at all, so the shape production has — and
+that the sweep photographed — does not exist locally. It was reproduced with the SQL below, run as
+`postgres` against the demo tenant after `npm run demo:restore` and BEFORE each pair of shots. It is
+kept here rather than added to the repository because it is a one-off camera prop, not a suite: it
+belongs to these four images and to nothing else.
+
+The shekel invoice is approved through `public.set_invoice_review_status` with role `authenticated`
+and a real subject — 0099 forbids a fixture from materialising `approved` any other way. The dollar
+invoice is left at `received` on purpose: that is the state the accountant's arm of
+`p0_invoice_balance_rows_by_currency()` stops at, and therefore the state that produced the `$ 0`.
+
+    begin;
+    delete from public.invoices where id in (
+      'f4000000-0000-4000-8000-0000000000a1', 'f4000000-0000-4000-8000-0000000000a2');
+    insert into public.invoices (
+      id, org_id, unit_id, supplier_id, invoice_number, invoice_date, received_date, received_by,
+      amount_before_vat, vat_amount, total_amount, review_status, payment_status, currency)
+    select v.id::uuid,
+           '11111111-1111-4111-8111-111111111111'::uuid,
+           (select u.id from public.org_units u
+             where u.org_id = '11111111-1111-4111-8111-111111111111'
+               and u.unit_type = 'legal_entity' order by u.created_at, u.id limit 1),
+           'aa000000-0000-4000-8000-000000000013'::uuid,
+           v.number, current_date, current_date,
+           (select p.id from public.profiles p
+             where p.org_id = '11111111-1111-4111-8111-111111111111' and p.role = 'office'
+             order by p.id limit 1),
+           v.amount::numeric, 0, v.amount::numeric, 'received', 'unpaid', v.currency
+    from (values
+      ('f4000000-0000-4000-8000-0000000000a1', 'MON03-ILS', '150', 'ILS'),
+      ('f4000000-0000-4000-8000-0000000000a2', 'MON03-USD', '300', 'USD')
+    ) v(id, number, amount, currency);
+
+    -- only the shekel invoice is approved, and it is approved the way production approves one
+    select set_config('request.jwt.claim.sub', (select p.id::text from public.profiles p
+      where p.org_id = '11111111-1111-4111-8111-111111111111' and p.role = 'owner'
+      order by p.id limit 1), true);
+    select set_config('request.jwt.claim.role', 'authenticated', true);
+    select set_config('request.jwt.claims', jsonb_build_object(
+      'sub', (select p.id::text from public.profiles p
+               where p.org_id = '11111111-1111-4111-8111-111111111111' and p.role = 'owner'
+               order by p.id limit 1),
+      'amr', jsonb_build_array(jsonb_build_object(
+        'method', 'password', 'timestamp', extract(epoch from clock_timestamp())::bigint))
+    )::text, true);
+    set local role authenticated;
+    select public.set_invoice_review_status(
+      'f4000000-0000-4000-8000-0000000000a1', 'in_review', 'MON-03 screenshot fixture');
+    select public.set_invoice_review_status(
+      'f4000000-0000-4000-8000-0000000000a1', 'approved', 'MON-03 screenshot fixture');
+    reset role;
+    commit;
+
+AND ITS RETIREMENT, run before the stack was handed back, so the next agent's demo tenant does not
+inherit two invoices this one invented. SOFT, because financial rows are soft-deleted only — and
+because the database enforced it: the audit rows the approval wrote cannot be deleted
+(`private.audit_log_immutable_guard`) and `invoice_three_way_approval_snapshots` still references
+the approved invoice.
+
+    update public.invoices set deleted_at = now()
+     where id in ('f4000000-0000-4000-8000-0000000000a1',
+                  'f4000000-0000-4000-8000-0000000000a2');
+
+Read back afterwards, supplier `…0013` is the demo seed's own shape again — one shekel invoice,
+fully paid, `0.000/0` for both the owner and the accountant.
