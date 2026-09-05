@@ -98,7 +98,7 @@ Scope: complete every authorized package from P2b through P10, excluding cancell
   EVIDENCE: the aggregate browser run passed P2b, P3, P4, P5, P6, P8, P9 and P10 in desktop and mobile viewports. P10 screenshots for the upload copy, price-list page and price-list result were inspected at original resolution in both viewports: no clipped copy, the actions remain reachable and the result counts remain legible. Evidence is under artifacts/ux-remediation-p2b-p10/.
 
 - [ ] R1: PR CI passes build, verify, SQL, browser and affected Edge contracts on the final SHA
-  EVIDENCE: pending
+  EVIDENCE: on 07c65579, build, Deno contracts and all 125 SQL suites passed; the SQL run includes P0 service-role ACL, P75 activity-registry completeness, P86 full tenant purge and P109-P111. Verify remains blocked only by the reserved 0315 prerequisite. Browser closed the four stale P5/P10 assertions from the previous run and exposed one last reversed mobile-order assertion; that assertion is corrected to P6's source-first contract in the next SHA, so final-SHA CI remains pending.
 
 - [ ] R2: migrations are backed up, dry-run, applied forward-only with ledger and postflight, without replaying prior migrations
   EVIDENCE: pending

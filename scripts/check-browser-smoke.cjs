@@ -2745,8 +2745,8 @@ async function automaticPriceListAcceptance(browser) {
       panel.boundingBox(),
       page.locator('[data-testid="document-source-viewer"]').boundingBox(),
     ]);
-    assert(mobileResultBox && mobileSourceBox && mobileResultBox.y < mobileSourceBox.y,
-      'the original document still appears before the latest price-list result on mobile');
+    assert(mobileResultBox && mobileSourceBox && mobileSourceBox.y < mobileResultBox.y,
+      'the latest price-list result still appears before the original document on mobile');
     await auditAccessibility(page, 'ocr-price-list/390');
     await page.screenshot({ path: path.join(outDir, 'ocr-price-list-collapsed-390.png'), fullPage: true });
     report.screenshots.push('ocr-price-list-collapsed-390.png');
