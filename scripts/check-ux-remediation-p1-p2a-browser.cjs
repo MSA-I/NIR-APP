@@ -223,10 +223,27 @@ async function installReviewMocks(page, fixture) {
       fixture.reviewApplyBodies.push(request.postDataJSON());
       return route.fulfill({ json: { applied: true, idempotent: false, outcome: 'invoice_created' } });
     }
+    if (table === 'add_document_review_feedback' && fixture.documentFeedbackBodies) {
+      const body = request.postDataJSON();
+      fixture.documentFeedbackBodies.push(body);
+      const row = {
+        id: 'ux-document-feedback', org_id: 'org-1', document_id: fixture.id,
+        interpretation_id: fixture.interpretation.id, extraction_id: fixture.extraction.id,
+        actor_id: fixture.document.uploaded_by, idempotency_key: body.p_idempotency_key,
+        note: body.p_note, reason: body.p_reason, created_at: new Date().toISOString(),
+      };
+      fixture.documentReviewFeedback = [row];
+      return route.fulfill({ json: { feedback_id: row.id, idempotent: false } });
+    }
     if (table === 'documents') return route.fulfill({ json: [fixture.document] });
     if (table === 'document_processing_jobs') return route.fulfill({ json: [fixture.job] });
     if (table === 'document_extractions') return route.fulfill({ json: [fixture.extraction] });
     if (table === 'document_interpretations') return route.fulfill({ json: [fixture.interpretation] });
+    if (table === 'document_annotations' && fixture.annotations) return route.fulfill({ json: fixture.annotations });
+    if (table === 'document_rule_applications' && fixture.ruleApplications) return route.fulfill({ json: fixture.ruleApplications });
+    if (table === 'document_learning_rules' && fixture.learningRules) return route.fulfill({ json: fixture.learningRules });
+    if (table === 'document_feedback' && fixture.annotationFeedback) return route.fulfill({ json: fixture.annotationFeedback });
+    if (table === 'document_review_feedback') return route.fulfill({ json: fixture.documentReviewFeedback ?? [] });
     if (table === 'suppliers') return route.fulfill({ json: fixture.suppliers ?? [] });
     if (table === 'purchase_orders') return route.fulfill({ json: fixture.purchaseOrders ?? [] });
     if (table === 'supplier_price_submissions') {
@@ -567,7 +584,7 @@ async function main() {
   process.stdout.write(`ux-remediation-p1-p2a browser ${args.viewport} passed\n`);
 }
 
-module.exports = { installReviewMocks, metrics, reviewFixture, settle };
+module.exports = { installReviewMocks, login, metrics, reviewFixture, settle };
 
 if (require.main === module) {
   main().catch((error) => {

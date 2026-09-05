@@ -1,6 +1,6 @@
 # Gates: UX remediation P2b-P10
 
-OWNS: docs/UX-REMEDIATION-DOCUMENTS-20260904.md, docs/UX-REMEDIATION-REVIEW-LOG-20260904.md, docs/ux-remediation-p2b-p10/**, DESIGN.md, src/App.tsx, src/index.css, src/components/assistant/**, src/components/document-review/**, src/components/QuickCreateSupplier.tsx, src/components/QuickSupplierPicker.tsx, src/components/DocumentStatusBadge.tsx, src/components/FileUpload.tsx, src/components/UploadCenter.tsx, src/pages/DocumentsInbox.tsx, src/pages/DocumentReview.tsx, src/pages/PriceLists.tsx, src/lib/assistant/**, src/lib/documentStatus.ts, src/lib/i18n/dictionaries/he.ts, src/lib/i18n/dictionaries/en.ts, src/**/*.spec.ts, src/**/*.spec.tsx, scripts/check-ux-remediation-p2b-p10-browser.cjs, scripts/check-ux-remediation-p3-browser.cjs, scripts/i18n-baseline.json, supabase/migrations/**, supabase/tests/**, supabase/functions/assistant/**, scripts/check-quality-gates.ps1, artifacts/ux-remediation-p2b-p10/**
+OWNS: docs/UX-REMEDIATION-DOCUMENTS-20260904.md, docs/UX-REMEDIATION-REVIEW-LOG-20260904.md, docs/ux-remediation-p2b-p10/**, DESIGN.md, src/App.tsx, src/index.css, src/components/assistant/**, src/components/document-review/**, src/components/QuickCreateSupplier.tsx, src/components/QuickSupplierPicker.tsx, src/components/DocumentStatusBadge.tsx, src/components/FileUpload.tsx, src/components/UploadCenter.tsx, src/pages/DocumentsInbox.tsx, src/pages/DocumentReview.tsx, src/pages/PriceLists.tsx, src/lib/assistant/**, src/lib/documentStatus.ts, src/lib/useDocumentProcessing.ts, src/lib/i18n/dictionaries/he.ts, src/lib/i18n/dictionaries/en.ts, src/**/*.spec.ts, src/**/*.spec.tsx, scripts/check-ux-remediation-p2b-p10-browser.cjs, scripts/check-ux-remediation-p3-browser.cjs, scripts/check-ux-remediation-p4-browser.cjs, scripts/i18n-baseline.json, supabase/migrations/**, supabase/tests/**, supabase/functions/assistant/**, scripts/check-quality-gates.ps1, artifacts/ux-remediation-p2b-p10/**
 
 Scope: complete every authorized package from P2b through P10, excluding cancelled P7 and P4b, then prove local integration, CI, rollout and live behavior required by each changed surface.
 
@@ -26,13 +26,13 @@ Scope: complete every authorized package from P2b through P10, excluding cancell
 - [x] P3C: supplier_unresolved is read in the folder UI; order warnings name cancelled, closed and fully received states; credit still requires its source invoice
   EVIDENCE: unit/browser evidence shows one get_document_folder_review_states call for all visible ids, a visible supplier-not-identified badge, every scoped supplier/currency order without a status filter, named cancelled/closed/fully-received warnings, and a disabled credit approval after manual supplier selection when source invoice remains unresolved. Desktop/mobile screenshots and p3-metrics.json are under artifacts/ux-remediation-p2b-p10/.
 
-- [ ] P4A: training controls are absent and one document-level feedback action persists and rereads its note
+- [x] P4A: training controls are absent and one document-level feedback action persists and rereads its note
   CHECK: npm.cmd run test -- src/components/document-review/documentFeedbackUx.spec.tsx
   EXPECT: passed
-  EVIDENCE: pending
+  EVIDENCE: documentFeedbackUx passed 2/2 and DocumentReviewProposals passed 5/5. Browser injected live annotation, rule and rule-application rows but rendered none of the training console; exactly one resting action opened one note field, persisted it, refetched and reread the note in desktop and mobile screenshots.
 
-- [ ] P4B: document feedback mutation rejects role and cross-tenant access, replays idempotently and audits a non-null reason
-  EVIDENCE: pending
+- [x] P4B: document feedback mutation rejects role and cross-tenant access, replays idempotently and audits a non-null reason
+  EVIDENCE: p110 passed four Postgres cases: owner create/read, exact replay, duplicate-press collapse, immutable changed-note conflict, accountant/reason/cross-tenant/interpretation zero-write refusals, non-null audit reason and no direct browser DML. The old annotation feedback ledger stayed untouched. Browser RPC body carried document, interpretation, note, stable key and reason.
 
 - [ ] P5A: state matrix maps every state to wait, retry, review, file or explicit no-action without erasing safety distinctions
   CHECK: npm.cmd run test -- src/lib/documentStateRecovery.spec.tsx

@@ -335,6 +335,19 @@ export interface DocumentFeedback {
   created_at: string;
 }
 
+export interface DocumentReviewFeedback {
+  id: string;
+  org_id: string;
+  document_id: string;
+  interpretation_id: string;
+  extraction_id: string;
+  actor_id: string;
+  idempotency_key: string;
+  note: string;
+  reason: string;
+  created_at: string;
+}
+
 export interface DocumentExportTemplateRow {
   id: string;
   org_id: string;
@@ -440,6 +453,7 @@ export interface DocumentProcessingSnapshot {
   priceListLines: PriceListInterpretationLine[];
   priceListPredictions: PriceListPredictedLine[];
   feedback: DocumentFeedback[];
+  documentReviewFeedback: DocumentReviewFeedback[];
   exportTemplates: DocumentExportTemplateRow[];
   exportTemplateVersions: DocumentExportTemplateVersion[];
   exports: DocumentExportRow[];
@@ -486,6 +500,7 @@ function createSnapshot(documentId: string): DocumentProcessingSnapshot {
     priceListLines: [],
     priceListPredictions: [],
     feedback: [],
+    documentReviewFeedback: [],
     exportTemplates: [],
     exportTemplateVersions: [],
     exports: [],
@@ -645,7 +660,7 @@ async function loadProcessing(
     .flatMap((snapshot) => snapshot.interpretation ? [snapshot.interpretation.id] : []);
   const [annotations, ruleApplications, reviewCorrections, typeReviewDecisions, filings,
     priceListDecisions, priceListLines, priceListPredictions,
-    feedback, exports, exportTemplates, packets] = await Promise.all([
+    feedback, documentReviewFeedback, exports, exportTemplates, packets] = await Promise.all([
     fetchByColumnIds<DocumentAnnotation>('document_annotations', 'interpretation_id', currentInterpretationIds),
     fetchByColumnIds<DocumentRuleApplication>('document_rule_applications', 'interpretation_id', currentInterpretationIds),
     fetchByColumnIds<DocumentReviewCorrection>('document_review_corrections', 'interpretation_id', currentInterpretationIds),
@@ -664,6 +679,9 @@ async function loadProcessing(
       'price_list_shadow_lines', 'interpretation_id', currentInterpretationIds,
     ).catch(() => []),
     fetchByColumnIds<DocumentFeedback>('document_feedback', 'interpretation_id', currentInterpretationIds),
+    fetchByColumnIds<DocumentReviewFeedback>(
+      'document_review_feedback', 'interpretation_id', currentInterpretationIds,
+    ).catch(() => []),
     fetchByColumnIds<DocumentExportRow>('document_exports', 'interpretation_id', currentInterpretationIds),
     fetchAll<DocumentExportTemplateRow>((from, to) => supabase
       .from('document_export_templates').select(ALL_COLUMNS).eq('active', true)
@@ -732,6 +750,12 @@ async function loadProcessing(
     if (!annotation) continue;
     const snapshot = snapshots[annotation.document_id];
     if (snapshot?.interpretation?.id === item.interpretation_id) snapshot.feedback.push(item);
+  }
+  for (const item of documentReviewFeedback) {
+    const snapshot = snapshots[item.document_id];
+    if (snapshot?.interpretation?.id === item.interpretation_id) {
+      snapshot.documentReviewFeedback.push(item);
+    }
   }
   for (const item of exports) {
     const snapshot = snapshots[item.document_id];

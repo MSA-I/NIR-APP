@@ -83,6 +83,7 @@ function proposalsSnapshot(over: { lineItems?: unknown[] } = {}): ReviewSnapshot
       active: true, version: 2, created_at: '2026-08-17T00:00:00Z',
     }],
     reviewCorrections: [], typeReviewDecisions: [], filings: [], feedback: [],
+    documentReviewFeedback: [],
     exportTemplates: [], exportTemplateVersions: [], exports: [],
     actorNames: new Map<string, string>(),
   } as unknown as ReviewSnapshot;
@@ -99,7 +100,7 @@ function renderProposals(snapshot = proposalsSnapshot()) {
 const foldFor = (label: string) => screen.getByText(label).closest('details') as HTMLDetailsElement;
 
 describe('הראיות מתקפלות, ההחלטה נשארת פתוחה', () => {
-  it('פותח את משטחי ההחלטה ומקפל את ארבעת מקטעי הראיות עם ספירה', () => {
+  it('פותח את משטחי ההחלטה ומקפל את שני מקטעי הראיות עם ספירה', () => {
     renderProposals();
 
     // Open, because these are what the reviewer decides on.
@@ -108,17 +109,20 @@ describe('הראיות מתקפלות, ההחלטה נשארת פתוחה', () =
     expect(screen.getByText('סוג המסמך').closest('details')).toBeNull();
     expect(screen.getByRole('button', { name: /יצירת טיוטת חשבונית מהמסמך/ }).closest('details')).toBeNull();
 
-    // Folded, each carrying its own count on the summary row.
+    // Folded evidence, each carrying its own count on the summary row.
     for (const [label, count] of [
       ['שדות מוצעים', '2'],
       ['שורות מוצעות', '3'],
-      ['הערות והחלטות', '1'],
-      ['כללים שהופעלו', '1'],
     ] as const) {
       const fold = foldFor(label);
       expect(fold.open).toBe(false);
       expect(fold.querySelector('summary')).toHaveTextContent(count);
     }
+
+    // Training-console surfaces are gone. One document-level action replaces them.
+    expect(screen.queryByText('הערות והחלטות')).toBeNull();
+    expect(screen.queryByText('כללים שהופעלו')).toBeNull();
+    expect(screen.getAllByRole('button', { name: 'זה לא נכון' })).toHaveLength(1);
   });
 
   it('אינו בונה את טבלת השורות לפני פתיחה', async () => {

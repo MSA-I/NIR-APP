@@ -3,36 +3,31 @@ import type { TKey } from '../../lib/i18n/t';
 type TFn = (key: TKey, vars?: Record<string, string | number>) => string;
 
 import { useT } from '../../lib/i18n/LocaleProvider';
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { reasonOr } from '../../lib/reason';
 import { useNavigate } from 'react-router';
-import { Check, FilePlus2, Info, Loader2, RotateCcw, ShieldAlert, X } from 'lucide-react';
+import { FilePlus2, Info, Loader2, ShieldAlert } from 'lucide-react';
 import { fmtDateTime } from '../../lib/format';
 import { supabase } from '../../lib/supabase';
-import type { DocumentAnnotation, DocumentFeedback, DocumentLearningRule, InterpretationContract } from '../../lib/useDocumentProcessing';
-import { Disclosure, ICON, Note, SubPanel, useToast } from '../ui';
+import type { InterpretationContract } from '../../lib/useDocumentProcessing';
+import { Disclosure, ICON, Note, useToast } from '../ui';
 import {
-  ANNOTATION_SOURCE_KEYS,
   DOCUMENT_TYPE_KEYS,
-  MARK_KIND_KEYS,
   actorName,
   confidenceLabel,
   creditDraftFromInterpretation,
   documentRoutingSummary,
   fieldKeyLabel,
   filingReason,
-  latestCorrections,
-  latestFeedbackByAnnotation,
   latestTypeReviewDecision,
   lineItemArithmetic,
   lineItemKeyLabel,
   paymentConfirmationFacts,
   sameAmount,
-  resolvedText,
-  ruleWhy,
   supplierMatchCaution,
   type ReviewSnapshot,
 } from './model';
+import { DocumentReviewFeedback } from './DocumentReviewFeedback';
 
 interface DocumentReviewProposalsProps {
   snapshot: ReviewSnapshot;
@@ -43,38 +38,6 @@ function valueText(value: string | number | boolean | null, t: TFn): string {
   if (value === null) return t('docReview.valueNotRecognised');
   if (typeof value === 'boolean') return value ? t('docReview.valueYes') : t('docReview.valueNo');
   return String(value);
-}
-
-function annotationTarget(snapshot: ReviewSnapshot, annotation: DocumentAnnotation, t: TFn): string {
-  if (annotation.target_kind === 'block') {
-    const block = snapshot.extraction?.payload.blocks.find(({ id }) => id === annotation.target_id);
-    const text = block
-      ? resolvedText(block.text, latestCorrections(snapshot.reviewCorrections), 'block', block.id).text
-      : null;
-    return block
-      ? t('docReview.blockOnPage', { page: block.page, text: text || t('docReview.blockNoText') })
-      : t('docReview.blockRef', { id: annotation.target_id });
-  }
-  const mark = snapshot.extraction?.payload.marks.find(({ id }) => id === annotation.target_id);
-  return mark
-    ? t('docReview.markOnPage', { mark: t(MARK_KIND_KEYS[mark.kind]), page: mark.page })
-    : t('docReview.markRef', { id: annotation.target_id });
-}
-
-/**
- * Which mark a learning rule fired on, as a locator a person can find on the page.
- *
- * The raw `target_id` used to be printed here ("הופעל על סימון 7f3a…"), which named nothing the
- * reviewer could act on — the same argument the mark overlays already make about uuids. The id is
- * not lost: it is a row in the extraction table of "פרטים טכניים" at the top of the workspace.
- * The fallback says plainly that the mark is not in the extraction on screen rather than inventing
- * a location, because a rule application can outlive the extraction revision it fired against.
- */
-function ruleApplicationTarget(snapshot: ReviewSnapshot, targetId: string, t: TFn): string {
-  const mark = snapshot.extraction?.payload.marks.find(({ id }) => id === targetId);
-  return mark
-    ? t('docReview.markOnPage', { mark: t(MARK_KIND_KEYS[mark.kind]), page: mark.page })
-    : t('docReview.markNotInExtraction');
 }
 
 function TypeReviewControls({ snapshot, canDecide, onRefetch }: {
@@ -405,180 +368,10 @@ function DocumentDraftAction({ documentType, documentId, interpretation }: {
   );
 }
 
-const FEEDBACK_KEYS: Record<DocumentFeedback['feedback_type'], TKey> = {
-  accepted: 'docReview.text_21',
-  rejected: 'docReview.text_22',
-  corrected: 'docReview.feedbackCorrected',
-};
-
-function FeedbackControls({ annotation, onRefetch }: {
-  annotation: DocumentAnnotation;
-  onRefetch: () => Promise<boolean>;
-}) {
-  const { errorText, t } = useT();
-  const toast = useToast();
-  const [reason, setReason] = useState('');
-  const [tagKey, setTagKey] = useState(annotation.tag_key);
-  const [label, setLabel] = useState(annotation.label);
-  const [busy, setBusy] = useState<string | null>(null);
-
-  async function submit(feedbackType: 'accepted' | 'rejected' | 'corrected') {
-    if (feedbackType === 'corrected' && (!tagKey.trim() || !label.trim())) {
-      toast(t('docReview.toast_4'), 'error');
-      return;
-    }
-    setBusy(feedbackType);
-    try {
-      const result = await supabase.rpc('add_document_feedback', {
-        p_annotation_id: annotation.id,
-        p_feedback_type: feedbackType,
-        p_after: feedbackType === 'corrected' ? { tag_key: tagKey.trim(), label: label.trim() } : {},
-        p_reason: reasonOr(reason, 'משוב על הצעת המערכת'),
-      });
-      if (result.error) throw new Error(result.error.message);
-      const refreshed = await onRefetch();
-      const success = feedbackType === 'accepted' ? t('docReview.text_21') : feedbackType === 'rejected' ? t('docReview.text_22') : t('docReview.text_23');
-      if (refreshed) toast(success);
-      else toast(t('docReview.refreshFailed', { message: success }), 'error');
-      setReason('');
-    } catch (error) {
-      toast(errorText(error), 'error');
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  return (
-    <div className="mt-3 border-t border-line pt-3">
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label className="block">
-          <span className="label">{t('docReview.text_24')}</span>
-          <input className="input" value={tagKey} maxLength={100} onChange={(event) => setTagKey(event.target.value)} disabled={!!busy} />
-        </label>
-        <label className="block">
-          <span className="label">{t('docReview.text_25')}</span>
-          <input className="input" value={label} maxLength={200} onChange={(event) => setLabel(event.target.value)} disabled={!!busy} />
-        </label>
-      </div>
-      <label className="mt-3 block">
-        <span className="label">{t('docReview.text_26')}</span>
-        <textarea className="input" rows={2} maxLength={1000} value={reason} onChange={(event) => setReason(event.target.value)} disabled={!!busy} />
-      </label>
-      <div className="mt-3 flex flex-wrap gap-2">
-        <button type="button" className="btn-primary" disabled={!!busy} onClick={() => void submit('accepted')}>
-          {busy === 'accepted' ? <Loader2 className="animate-spin" size={ICON.md} aria-hidden="true" /> : <Check size={ICON.md} aria-hidden="true" />} {t('docReview.acceptProposal')}
-        </button>
-        <button type="button" className="btn-secondary" disabled={!!busy} onClick={() => void submit('corrected')}>
-          {busy === 'corrected' ? <Loader2 className="animate-spin" size={ICON.md} aria-hidden="true" /> : <RotateCcw size={ICON.md} aria-hidden="true" />} {t('docReview.correctProposal')}
-        </button>
-        <button type="button" className="btn-danger" disabled={!!busy} onClick={() => void submit('rejected')}>
-          {busy === 'rejected' ? <Loader2 className="animate-spin" size={ICON.md} aria-hidden="true" /> : <X size={ICON.md} aria-hidden="true" />} {t('docReview.rejectProposal')}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function RuleControls({ rule, onRefetch }: {
-  rule: DocumentLearningRule;
-  onRefetch: () => Promise<boolean>;
-}) {
-  const { errorText, t } = useT();
-  const toast = useToast();
-  const [tagKey, setTagKey] = useState(rule.tag_key);
-  const [label, setLabel] = useState(rule.label);
-  const [reason, setReason] = useState('');
-  const [busy, setBusy] = useState<string | null>(null);
-
-  async function finish(message: string) {
-    const refreshed = await onRefetch();
-    if (refreshed) toast(message);
-    else toast(t('docReview.refreshFailed', { message }), 'error');
-  }
-
-  async function disableRule() {
-    setBusy('disable');
-    try {
-      const result = await supabase.rpc('disable_document_learning_rule', {
-        p_rule_id: rule.id,
-        p_reason: reasonOr(reason, 'השבתת כלל למידה'),
-      });
-      if (result.error) throw new Error(result.error.message);
-      await finish(t('docReview.finish'));
-      setReason('');
-    } catch (error) {
-      toast(errorText(error), 'error');
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function correctRule(event: FormEvent) {
-    event.preventDefault();
-    if (!tagKey.trim() || !label.trim()) {
-      toast(t('docReview.toast_5'), 'error');
-      return;
-    }
-    setBusy('correct');
-    try {
-      const result = await supabase.rpc('create_document_learning_rule', {
-        p_rule_scope: rule.user_id ? 'personal' : 'organization',
-        p_document_type: rule.document_type,
-        p_supplier_id: rule.supplier_id,
-        p_mark_kind: rule.mark_kind,
-        p_mark_fingerprint: rule.mark_fingerprint,
-        p_tag_key: tagKey.trim(),
-        p_label: label.trim(),
-        p_reason: reasonOr(reason, 'עדכון כלל למידה'),
-      });
-      if (result.error) throw new Error(result.error.message);
-      await finish(t('docReview.finish_2'));
-      setReason('');
-    } catch (error) {
-      toast(errorText(error), 'error');
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  if (!rule.active) return null;
-  return (
-    <form className="mt-3 border-t border-line pt-3" onSubmit={correctRule}>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label className="block">
-          <span className="label">{t('docReview.text_27')}</span>
-          <input className="input" maxLength={100} value={tagKey} onChange={(event) => setTagKey(event.target.value)} disabled={!!busy} />
-        </label>
-        <label className="block">
-          <span className="label">{t('docReview.text_28')}</span>
-          <input className="input" maxLength={200} value={label} onChange={(event) => setLabel(event.target.value)} disabled={!!busy} />
-        </label>
-      </div>
-      <label className="mt-3 block">
-        <span className="label">{t('docReview.text_29')}</span>
-        <textarea className="input" rows={2} maxLength={1000} value={reason} onChange={(event) => setReason(event.target.value)} disabled={!!busy} />
-      </label>
-      <div className="mt-3 flex flex-wrap gap-2">
-        <button className="btn-secondary" disabled={!!busy}>
-          {busy === 'correct' && <Loader2 className="animate-spin" size={ICON.md} aria-hidden="true" />} {t('docReview.createCorrectedVersion')}
-        </button>
-        <button type="button" className="btn-danger" disabled={!!busy} onClick={() => void disableRule()}>
-          {busy === 'disable' && <Loader2 className="animate-spin" size={ICON.md} aria-hidden="true" />} {t('docReview.disableRule')}
-        </button>
-      </div>
-    </form>
-  );
-}
-
 export function DocumentReviewProposals({ snapshot, onRefetch }: DocumentReviewProposalsProps) {
   const { t } = useT();
   const navigate = useNavigate();
   const interpretation = snapshot.interpretation;
-  const ruleById = useMemo(() => new Map(snapshot.learningRules.map((rule) => [rule.id, rule])), [snapshot.learningRules]);
-  const feedbackByAnnotation = useMemo(
-    () => latestFeedbackByAnnotation(snapshot.feedback),
-    [snapshot.feedback],
-  );
   /**
    * The proposed-lines table builds its rows only once someone opens it.
    *
@@ -737,64 +530,15 @@ export function DocumentReviewProposals({ snapshot, onRefetch }: DocumentReviewP
           <p className="border-t border-line-soft px-3 py-3 text-sm text-ink-muted sm:px-4">{t('docReview.text_48')}</p>
         )}
 
-        {snapshot.annotations.length > 0 && (
-          <Disclosure className="border-t border-line-soft" title={t('docReview.title_3')} count={snapshot.annotations.length}>
-            <p className="text-sm text-ink-muted">{t('docReview.text_49')}</p>
-            <div className="mt-3 space-y-3">
-              {snapshot.annotations.map((annotation) => {
-                const feedback = feedbackByAnnotation.get(annotation.id);
-                return (
-                  <SubPanel as="article" key={annotation.id}>
-                    <div className="flex flex-wrap items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <h4 className="break-words font-semibold text-ink-body">{annotation.label}</h4>
-                        <p className="mt-1 break-words text-sm text-ink-soft">{annotation.tag_key} · {annotationTarget(snapshot, annotation, t)}</p>
-                        <p className="mt-1 text-xs text-ink-muted">
-                          {confidenceLabel(annotation.confidence, t)} · {t(ANNOTATION_SOURCE_KEYS[annotation.source])} · {fmtDateTime(annotation.created_at)}
-                          {annotation.rule_version ? t('docReview.ruleVersionSuffix', { version: annotation.rule_version }) : ''}
-                        </p>
-                      </div>
-                      <span className={annotation.active ? 'badge-info' : 'badge-idle'}>{annotation.active ? t('docReview.text_50') : t('docReview.text_51')}</span>
-                    </div>
-                    {feedback && (
-                      <div className="mt-3 rounded-lg bg-surface-sunken p-3 text-sm text-ink-soft">
-                        <p><strong>{t(FEEDBACK_KEYS[feedback.feedback_type])}</strong> · {fmtDateTime(feedback.created_at)}</p>
-                        <p className="mt-1 break-words">{feedback.reason}</p>
-                        <p className="mt-1 break-words text-xs text-ink-muted">{t('docReview.actorBy', { name: actorName(snapshot, feedback.actor_id) })}</p>
-                      </div>
-                    )}
-                    {!feedback && annotation.active && annotation.source !== 'user' && snapshot.job?.status === 'review' && (
-                      <FeedbackControls annotation={annotation} onRefetch={onRefetch} />
-                    )}
-                  </SubPanel>
-                );
-              })}
-            </div>
-          </Disclosure>
-        )}
-
-        {snapshot.ruleApplications.length > 0 && (
-          <Disclosure className="border-t border-line-soft" title={t('docReview.title_4')} count={snapshot.ruleApplications.length}>
-            <p className="text-sm text-ink-muted">{t('docReview.text_52')}</p>
-            <div className="mt-3 space-y-3">
-              {snapshot.ruleApplications.map((application) => {
-                const rule = ruleById.get(application.rule_id);
-                return (
-                  <SubPanel as="article" key={application.id}>
-                    <div className="flex flex-wrap items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <h4 className="break-words font-semibold text-ink-body">{rule ? `${rule.label} (${rule.tag_key})` : t('docReview.ruleFallbackName', { id: application.rule_id })}</h4>
-                        <p className="mt-1 text-sm text-ink-soft">{t('docReview.firedOn')} {ruleApplicationTarget(snapshot, application.target_id, t)}; {confidenceLabel(application.confidence, t)}</p>
-                        <p className="mt-1 text-sm text-ink-muted"><strong>{t('docReview.ruleWhy')}</strong> {ruleWhy(rule, t)}</p>
-                      </div>
-                      <span className="badge-done">{t('docReview.ruleBadge', { version: application.rule_version })}</span>
-                    </div>
-                    {rule && snapshot.job?.status === 'review' && <RuleControls rule={rule} onRefetch={onRefetch} />}
-                  </SubPanel>
-                );
-              })}
-            </div>
-          </Disclosure>
+        {snapshot.job?.status === 'review' && (
+          <div className="border-t border-line-soft px-3 py-3 sm:px-4">
+            <DocumentReviewFeedback
+              documentId={snapshot.documentId}
+              interpretationId={interpretation.id}
+              existing={snapshot.documentReviewFeedback[0] ?? null}
+              onRefetch={onRefetch}
+            />
+          </div>
         )}
       </div>
     </section>
