@@ -35,6 +35,7 @@ describe('documentUiStatus precedence', () => {
   it('maps every persisted pipeline stage into one canonical UI state', () => {
     const states = [
       documentUiStatus({ status: 'unprocessed', document: inbox, evaluatedAt: NOW }).state,
+      documentUiStatus({ status: 'awaiting_scan', document: inbox, evaluatedAt: NOW }).state,
       documentUiStatus({ status: 'queued', document: inbox, evaluatedAt: NOW }).state,
       documentUiStatus({ status: 'processing', document: inbox, evaluatedAt: NOW }).state,
       documentUiStatus({ status: 'extracted', document: inbox, evaluatedAt: NOW }).state,
@@ -43,7 +44,7 @@ describe('documentUiStatus precedence', () => {
       documentUiStatus({ status: 'failed', document: inbox, evaluatedAt: NOW }).state,
     ];
     expect(states).toEqual([
-      'unassigned', 'processing', 'processing', 'processing', 'review', 'unassigned', 'failed',
+      'unassigned', 'processing', 'processing', 'processing', 'processing', 'review', 'unassigned', 'failed',
     ]);
   });
 
@@ -138,7 +139,7 @@ describe('documentUiStatus precedence', () => {
     expect(say(status.labelKey)).not.toContain('שויך');
   });
 
-  it('names both supported business assignment targets', () => {
+  it('keeps both supported business assignment targets under one compact list label', () => {
     const invoice = documentUiStatus({
       status: 'completed',
       document: { entity_type: 'invoice', entity_id: 'invoice-1' },
@@ -149,8 +150,8 @@ describe('documentUiStatus precedence', () => {
       document: { entity_type: 'goods_receipt', entity_id: 'receipt-1' },
       evaluatedAt: NOW,
     });
-    expect(say(invoice.labelKey)).toBe('שויך לחשבונית');
-    expect(say(receipt.labelKey)).toBe('שויך לקבלת סחורה');
+    expect(say(invoice.labelKey)).toBe('משויך');
+    expect(say(receipt.labelKey)).toBe('משויך');
   });
 
   it('archive is a completed no-target decision and never claims a business assignment', () => {

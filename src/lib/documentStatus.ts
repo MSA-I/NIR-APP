@@ -44,6 +44,8 @@ export interface DocumentUiStatus {
    */
   descriptionVars?: Record<string, string | number>;
   loading: boolean;
+  /** False for internal loading/unavailable/history markers that should draw no list badge. */
+  badgeVisible: boolean;
   countsAsUnassigned: boolean;
   priority: number;
   elapsedSeconds: number | null;
@@ -111,7 +113,7 @@ export const DOCUMENT_STUCK_IDLE_SECONDS = 30 * 60;
 export const DOCUMENT_STUCK_ATTEMPT_COUNT = 8;
 
 const ACTIVE_RAW_STATUSES: ReadonlySet<string> = new Set([
-  'queued', 'leased', 'extracted', 'interpreting', 'processing',
+  'queued', 'awaiting_scan', 'leased', 'extracted', 'interpreting', 'processing',
 ]);
 
 /**
@@ -159,10 +161,8 @@ function isArchived(document: FilingDocument | null | undefined): boolean {
   return document?.entity_type === 'archive';
 }
 
-function assignedLabelKey(document: FilingDocument | null | undefined, autoAssigned: boolean): TKey {
+function assignedLabelKey(autoAssigned: boolean): TKey {
   if (autoAssigned) return 'documentStatus.assignedAutomatically';
-  if (document?.entity_type === 'invoice') return 'documentStatus.assignedToInvoice';
-  if (document?.entity_type === 'goods_receipt') return 'documentStatus.assignedToReceipt';
   return 'documentStatus.assignedGeneric';
 }
 
@@ -174,6 +174,7 @@ function result(
   loading = false,
   elapsedSeconds: number | null = null,
   progress: { done: number; total: number } | null = null,
+  badgeVisible = true,
 ): DocumentUiStatus {
   const priorities: Record<DocumentStatusState, number> = {
     stuck: 0,
@@ -193,6 +194,7 @@ function result(
     tone,
     descriptionKey,
     loading,
+    badgeVisible,
     countsAsUnassigned: state === 'unassigned',
     priority: priorities[state],
     elapsedSeconds,
@@ -282,7 +284,8 @@ export function isDocumentProcessingStuck(input: DocumentStatusInput): boolean {
  */
 export function documentUiStatus(input: DocumentStatusInput): DocumentUiStatus {
   if (input.status === null && !input.job) {
-    return result('unavailable', 'documentStatus.statusLoading', 'idle', null);
+    return result('unavailable', 'documentStatus.statusLoading', 'idle', null,
+      false, null, null, false);
   }
   const status = input.job?.status ?? input.status ?? 'unprocessed';
   const evaluatedAt = input.evaluatedAt ?? Date.now();
@@ -290,7 +293,8 @@ export function documentUiStatus(input: DocumentStatusInput): DocumentUiStatus {
     ?? ageSeconds(input.job?.created_at, evaluatedAt);
 
   if (status === 'failed' && isSupersededProcessingFailure(input.job?.last_error_code)) {
-    return result('historical', 'documentStatus.replacedByNewAttempt', 'idle', documentProcessingFailureKey(input.job?.last_error_code));
+    return result('historical', 'documentStatus.replacedByNewAttempt', 'idle',
+      documentProcessingFailureKey(input.job?.last_error_code), false, null, null, false);
   }
   // Everything below picks a label first and a description second, and the description is allowed
   // to be empty. See DocumentUiStatus.description: a sentence that restates the badge is not
@@ -335,7 +339,7 @@ export function documentUiStatus(input: DocumentStatusInput): DocumentUiStatus {
   if (input.document) {
     // The only sentence worth carrying here is the supervisory one a machine filing brings with
     // it. "המסמך שויך ליעד עסקי" under a badge reading "שויך לחשבונית" said nothing twice.
-    const assigned = result('assigned', assignedLabelKey(input.document, input.autoAssigned ?? false), 'done',
+    const assigned = result('assigned', assignedLabelKey(input.autoAssigned ?? false), 'done',
       input.autoAssignmentDescriptionKey ?? null);
     return input.autoAssignmentDescriptionVars
       ? { ...assigned, descriptionVars: input.autoAssignmentDescriptionVars }
@@ -344,7 +348,8 @@ export function documentUiStatus(input: DocumentStatusInput): DocumentUiStatus {
   if (status === 'completed') {
     return result('completed', 'documentStatus.completed', 'done', null);
   }
-  return result('unavailable', 'documentStatus.statusUnavailable', 'idle', null);
+  return result('unavailable', 'documentStatus.statusUnavailable', 'idle', null,
+    false, null, null, false);
 }
 
 /**

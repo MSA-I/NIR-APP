@@ -7,6 +7,7 @@ export function DocumentStatusBadge({ status, ...attributes }: {
   status: DocumentUiStatus;
 } & Omit<React.ComponentPropsWithoutRef<'span'>, 'children'>) {
   const { t } = useT();
+  if (!status.badgeVisible) return null;
   // The badge is where a status stops being a decision and becomes words, so it is where the keys
   // resolve. `documentStatus.ts` decides WHICH state this is; it no longer decides in what
   // language, which is what let the same module be read by a screen, a spec and a spreadsheet.

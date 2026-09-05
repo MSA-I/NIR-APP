@@ -1,0 +1,36 @@
+{
+  "desktop": {
+    "progressStates": [
+      "queued",
+      "scan",
+      "reading",
+      "preparing",
+      "interpreting"
+    ],
+    "list": {
+      "visibleBadges": 2,
+      "labels": [
+        "assigned",
+        "assigned"
+      ],
+      "supersededBadge": false
+    }
+  },
+  "mobile": {
+    "progressStates": [
+      "queued",
+      "scan",
+      "reading",
+      "preparing",
+      "interpreting"
+    ],
+    "list": {
+      "visibleBadges": 2,
+      "labels": [
+        "assigned",
+        "assigned"
+      ],
+      "supersededBadge": false
+    }
+  }
+}

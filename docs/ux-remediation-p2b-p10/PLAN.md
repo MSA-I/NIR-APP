@@ -20,8 +20,8 @@ Authorized by the owner on 05.09.2026. Runs serially in the current worktree; no
 | L2B | VERIFIED | — | P2b replacements and density proof |
 | L3 | VERIFIED | L2B | Supplier resolution UI, read model and creation RPC |
 | L4 | VERIFIED | L3 | Remove training controls and add document-level feedback |
-| L5 | READY | L4 | Status/recovery vocabulary and expanded progress states |
-| L6 | WAITING | L5 | Mobile-first document review order and density |
+| L5 | VERIFIED | L4 | Status/recovery vocabulary and expanded progress states |
+| L6 | READY | L5 | Mobile-first document review order and density |
 | L8 | WAITING | L6 | Failure-specific scan recovery and soft supersede |
 | L9A | WAITING | L8 | Assistant recovery and 10-minute auto-restore boundary |
 | L9B | WAITING | L9A | Product help, entry-by-entry roles, Edge contract and live proof |
@@ -37,3 +37,4 @@ Authorized by the owner on 05.09.2026. Runs serially in the current worktree; no
 - 05.09.2026: L3 verified. Focused Vitest 109/109, p109 passed five DB cases before and after a clean 0001-0316 reset, three demo roles signed in after restore, and desktop/mobile browser proved selection, confirmed creation, order warnings, approval payload and one batched folder read. L4 promoted to READY.
 - 05.09.2026: integration note — `check:migration-numbers` remains open because 0315 is reserved in live branch `worktree-agent-a37194cd6c1d29194`; 0316 came from a fresh `next-number` run and must not be renumbered onto that WIP.
 - 05.09.2026: L4 verified. The annotation/rule training console is absent even when backend rows exist; one document action stores and rereads one note. Focused Vitest passed 7/7, p110 passed four DB cases, and desktop/mobile browser proved rest, entry and reread states. L5 promoted to READY. P4b remains cancelled with no replacement surface.
+- 05.09.2026: L5 verified. The action matrix covers all ten canonical states; list badges merge only the three ordinary assignment labels and hide loading/unavailable/superseded markers; upload safety states remain distinct in human wording. The watched progress strip expands from three visible work labels to five real stages. Focused Vitest passed 62/62, build passed, and desktop/mobile browser captured every progress stage plus compact list badges. L6 promoted to READY.

@@ -24,12 +24,14 @@ import type { DocumentProcessingSnapshot } from '../../lib/useDocumentProcessing
  * between the steps; they wait. A waiting screen needs to say what is happening, not enumerate
  * what will.
  */
-type StepKey = 'queued' | 'reading' | 'interpreting' | 'review';
+type StepKey = 'queued' | 'scan' | 'reading' | 'preparing' | 'interpreting' | 'review';
 
 function activeStep(status: string): StepKey | null {
-  if (status === 'queued' || status === 'awaiting_scan') return 'queued';
+  if (status === 'queued') return 'queued';
+  if (status === 'awaiting_scan') return 'scan';
   if (status === 'leased') return 'reading';
-  if (status === 'extracted' || status === 'interpreting') return 'interpreting';
+  if (status === 'extracted') return 'preparing';
+  if (status === 'interpreting') return 'interpreting';
   if (status === 'review' || status === 'completed') return 'review';
   return null;
 }
@@ -85,34 +87,33 @@ export function DocumentProcessingProgress({ snapshot, now = Date.now() }: {
     // Measured from the upload, which is what the person waiting is measuring too.
     const waitedParts = documentStatusElapsed(job.queue_age_seconds ?? seconds(job.created_at, now));
     const waited = waitedParts ? t(waitedParts.key, waitedParts.vars) : null;
-    detail = job.status === 'awaiting_scan'
-      ? t('documentProcessingProgress.awaitingScanApproval')
-      : waited
-        ? t('documentProcessingProgress.queuedWaited', { waited })
-        : t('documentProcessingProgress.queuedAutomatic');
+    detail = waited
+      ? t('documentProcessingProgress.queuedWaited', { waited })
+      : t('documentProcessingProgress.queuedAutomatic');
+  } else if (current === 'scan') {
+    detail = t('documentProcessingProgress.awaitingScanApproval');
   } else if (current === 'reading') {
     // An unknown page count stays unknown. A "0 מתוך 0" here would be a claim about the document
     // that nobody has made yet — the constitution's dash rule, applied to a counter.
     detail = hasProgress
       ? t('documentProcessingProgress.pageProgress', { done: done as number, total: total as number })
       : t('documentProcessingProgress.pageCountUnknown');
+  } else if (current === 'preparing') {
+    detail = t('documentProcessingProgress.interpretationNotStarted');
   } else {
     detail = hasProgress
       ? t('documentProcessingProgress.chunkProgress', { done: done as number, total: total as number })
-      : job.status === 'extracted'
-        // Says only what is true in every environment. The server dispatcher runs once a minute in
-        // production, but its configuration row is written by hand rather than by a migration
-        // (0081:21-22 says so on purpose), so an environment can exist where nothing dispatches and
-        // only opening the document starts the work. A sentence promising that it "starts by itself
-        // shortly" would be a claim about deployment state this component cannot see.
-        ? t('documentProcessingProgress.interpretationNotStarted')
-        : t('documentProcessingProgress.chunkCountUnknown');
+      : t('documentProcessingProgress.chunkCountUnknown');
   }
 
   const stage = current === 'queued'
     ? t('documentProcessingProgress.queued')
+    : current === 'scan'
+      ? t('documentProcessingProgress.scan')
     : current === 'reading'
       ? t('documentProcessingProgress.reading')
+      : current === 'preparing'
+        ? t('documentProcessingProgress.preparing')
       : t('documentProcessingProgress.interpreting');
 
   return (

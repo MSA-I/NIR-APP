@@ -1,6 +1,6 @@
 # Gates: UX remediation P2b-P10
 
-OWNS: docs/UX-REMEDIATION-DOCUMENTS-20260904.md, docs/UX-REMEDIATION-REVIEW-LOG-20260904.md, docs/ux-remediation-p2b-p10/**, DESIGN.md, src/App.tsx, src/index.css, src/components/assistant/**, src/components/document-review/**, src/components/QuickCreateSupplier.tsx, src/components/QuickSupplierPicker.tsx, src/components/DocumentStatusBadge.tsx, src/components/FileUpload.tsx, src/components/UploadCenter.tsx, src/pages/DocumentsInbox.tsx, src/pages/DocumentReview.tsx, src/pages/PriceLists.tsx, src/lib/assistant/**, src/lib/documentStatus.ts, src/lib/useDocumentProcessing.ts, src/lib/i18n/dictionaries/he.ts, src/lib/i18n/dictionaries/en.ts, src/**/*.spec.ts, src/**/*.spec.tsx, scripts/check-ux-remediation-p2b-p10-browser.cjs, scripts/check-ux-remediation-p3-browser.cjs, scripts/check-ux-remediation-p4-browser.cjs, scripts/i18n-baseline.json, supabase/migrations/**, supabase/tests/**, supabase/functions/assistant/**, scripts/check-quality-gates.ps1, artifacts/ux-remediation-p2b-p10/**
+OWNS: docs/UX-REMEDIATION-DOCUMENTS-20260904.md, docs/UX-REMEDIATION-REVIEW-LOG-20260904.md, docs/ux-remediation-p2b-p10/**, DESIGN.md, src/App.tsx, src/index.css, src/components/assistant/**, src/components/document-review/**, src/components/QuickCreateSupplier.tsx, src/components/QuickSupplierPicker.tsx, src/components/DocumentStatusBadge.tsx, src/components/FileUpload.tsx, src/components/UploadCenter.tsx, src/pages/DocumentsInbox.tsx, src/pages/DocumentReview.tsx, src/pages/PriceLists.tsx, src/lib/assistant/**, src/lib/documentStatus.ts, src/lib/documentStateRecovery.ts, src/lib/useDocumentProcessing.ts, src/lib/i18n/dictionaries/he.ts, src/lib/i18n/dictionaries/en.ts, src/**/*.spec.ts, src/**/*.spec.tsx, scripts/check-ux-remediation-p2b-p10-browser.cjs, scripts/check-ux-remediation-p3-browser.cjs, scripts/check-ux-remediation-p4-browser.cjs, scripts/check-ux-remediation-p5-browser.cjs, scripts/i18n-baseline.json, supabase/migrations/**, supabase/tests/**, supabase/functions/assistant/**, scripts/check-quality-gates.ps1, artifacts/ux-remediation-p2b-p10/**
 
 Scope: complete every authorized package from P2b through P10, excluding cancelled P7 and P4b, then prove local integration, CI, rollout and live behavior required by each changed surface.
 
@@ -34,13 +34,13 @@ Scope: complete every authorized package from P2b through P10, excluding cancell
 - [x] P4B: document feedback mutation rejects role and cross-tenant access, replays idempotently and audits a non-null reason
   EVIDENCE: p110 passed four Postgres cases: owner create/read, exact replay, duplicate-press collapse, immutable changed-note conflict, accountant/reason/cross-tenant/interpretation zero-write refusals, non-null audit reason and no direct browser DML. The old annotation feedback ledger stayed untouched. Browser RPC body carried document, interpretation, note, stable key and reason.
 
-- [ ] P5A: state matrix maps every state to wait, retry, review, file or explicit no-action without erasing safety distinctions
+- [x] P5A: state matrix maps every state to wait, retry, review, file or explicit no-action without erasing safety distinctions
   CHECK: npm.cmd run test -- src/lib/documentStateRecovery.spec.tsx
   EXPECT: passed
-  EVIDENCE: pending
+  EVIDENCE: documentStateRecovery passed 3/3 and the focused status/upload/progress set passed 62/62. All ten canonical states map to wait, retry, review, file or explicit none; failed and stuck remain distinct. Upload states still distinguish stored-without-registry from registered-without-reading, including their different retry safety.
 
-- [ ] P5B: progress strip exposes more real processing states while list badges stay compact
-  EVIDENCE: pending
+- [x] P5B: progress strip exposes more real processing states while list badges stay compact
+  EVIDENCE: DocumentProcessingProgress passed 13/13 and browser captured queued, scan approval, reading, reading-complete/preparing and interpreting in both viewports. Compact list screenshots show two ordinary assignments as the same single-word badge, no loading/unavailable/superseded badges, and no queue jargon. Owner reversal #375 is therefore implemented as more watched-progress states, not fewer.
 
 - [ ] P6A: mobile source starts above y=1200, approval follows the source, and page height is at most 3.0 screens; desktop is at most 2.5 screens
   CHECK: npm.cmd run test -- src/components/document-review/documentReviewLayoutUx.spec.tsx
