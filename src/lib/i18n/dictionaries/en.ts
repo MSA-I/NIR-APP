@@ -3289,6 +3289,8 @@ export const en: Dictionary = {
     recordsOnlyAfter: ' a transfer that was already made at the bank — it does not make it. Do not press it before the transfer has actually happened.',
     openCreditsBefore: 'The open credits totalling ',
     openCreditsAfter: ' were not offset automatically.',
+    overrideObservedAtApproval: 'That figure was measured at the moment of approval, in the view of the approver, and does not necessarily appear in the credit list below.',
+    creditsOutOfRoleScope: 'The supplier credits cannot be shown here — this role sees approved invoices only, and a credit that hangs on an invoice not yet approved stays outside that picture.',
     overrideReasonLabel: 'Reason for the exceptional approval:',
     unlinkedCreditsAre: ' of the open credits are not attributed',
     otherRequestCreditsAre: ' open credits are attributed',

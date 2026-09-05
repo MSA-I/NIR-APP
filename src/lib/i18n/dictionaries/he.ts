@@ -3318,6 +3318,8 @@ export const he = {
     recordsOnlyAfter: ' העברה שכבר בוצעה בבנק — הוא אינו מבצע אותה. אין ללחוץ עליו לפני שההעברה נעשתה בפועל.',
     openCreditsBefore: 'הזיכויים הפתוחים בסך ',
     openCreditsAfter: ' לא קוזזו אוטומטית.',
+    overrideObservedAtApproval: 'הסכום נמדד ברגע האישור, בתמונה של המאשר, ואינו בהכרח מופיע ברשימת הזיכויים שלמטה.',
+    creditsOutOfRoleScope: 'לא ניתן להציג כאן את זיכויי הספק — תפקיד זה רואה חשבוניות מאושרות בלבד, וזיכוי שתלוי בחשבונית שטרם אושרה נשאר מחוץ לתמונה.',
     overrideReasonLabel: 'סיבת אישור החריגה:',
     unlinkedCreditsAre: ' מהזיכויים הפתוחים אינם משויכים',
     otherRequestCreditsAre: ' זיכויים פתוחים משויכים',

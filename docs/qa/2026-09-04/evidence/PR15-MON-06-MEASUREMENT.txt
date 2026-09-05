@@ -1,0 +1,179 @@
+MON-06 — MEASUREMENT, read-only against the PRODUCTION project (rkftlbctohswhbbiaqin)
+Date: 2026-09-05.  Tool: scripts/db-query.ps1 -ProjectRef rkftlbctohswhbbiaqin -AllowProduction
+Nothing below wrote anything. Every role probe ran inside `begin read only;`.
+The LOCAL stack was never touched — this PR did not hold its lock.
+
+================================================================================
+1. THE FINDING'S OWN CLAIM, AND WHY BOTH HALVES OF IT ARE WRONG
+================================================================================
+
+The ledger row reads: "a SECURITY DEFINER function counting credits that the RLS reader
+beneath it hides — 2 of N", and names `payment_request_financial_check_signals`.
+
+(a) THAT DEFINER CANNOT BE CALLED BY AN ACCOUNTANT AT ALL.
+    Live body, line 24 of `pg_get_functiondef(...)` — not the creating migration, the LIVE
+    body, fetched 2026-09-05:
+
+        if v_org is null or auth.uid() is null or v_role not in ('owner', 'office') then
+          raise exception 'not_authorized' using errcode = '42501';
+
+    prosecdef = true, args (uuid, numeric, uuid[], uuid), md5(prosrc) 9ff85a7574d5a344471c08c59c1372bb.
+    Its only client caller is src/lib/checks.ts:224, from /payment-requests — an owner/office
+    screen. No definer counts credits under the accountant's reader. So there is nothing to
+    patch: NO MIGRATION ACCOMPANIES THIS FINDING, and assigned migration 0321 is UNUSED.
+
+(b) IT IS NOT 2 OF N. IT IS 0 OF 9.
+
+================================================================================
+2. THE GUARDED-PATH PROBE — role `authenticated`, real JWT subjects
+================================================================================
+
+    begin read only;
+    set local role authenticated;
+    set local request.jwt.claims = '{"sub":"<subject>","role":"authenticated"}';
+
+  accountant@gamos.demo  sub 4ca9a395-e386-48e1-9e4e-9ac5f7e77e2d
+  owner@gamos.demo       sub 273d686e-f15e-4af7-a4ee-d21269e5b6a0
+  org                    11111111-1111-4111-8111-111111111111
+
+  | reader                            | owner | accountant |
+  |-----------------------------------|-------|------------|
+  | invoices visible                  |    18 |         10 |
+  | credit_requests open/req/received |     9 |          0 |
+  | credit_request_balance_rows(...)  |     8 |          0 |
+
+  (The owner's 8 vs 9 is the probe's own supplier list, which named six of the seven suppliers
+  holding open credits. The 9th credit belongs to the seventh and was not probed. It does not
+  move the finding: the accountant's answer is 0 for every supplier.)
+
+  auth_role() = 'accountant'; auth_org() resolved; auth_scopes() returned four units including
+  ae082cfb-e6c3-4d51-8673-e16dc0442716, which is the unit every one of the nine credits resolves
+  to. So this is NOT a scope-closure gap — the accountant HOLDS the unit and still sees nothing.
+
+  THE NINE, PER ROW (ground truth, read as the migration role):
+
+    credit  currency  amount     credit status  invoice review_status  visible to accountant
+      8     ILS         50.000   received       received                     no
+     10     ILS         37.000   open           received                     no
+      9     ILS       1623.600   open           (no invoice - receipt)       no
+      2     ILS        500.000   requested      pending_approval             no
+      3     ILS        390.000   open           in_review                    no
+      7     ILS        450.000   open           (no invoice - receipt)       no
+      1     ILS        246.600   open           investigation                no
+      6     ILS         84.000   open           (no invoice - receipt)       no
+     11     ILS         42.000   open           (no invoice - receipt)       no
+                    ----------
+                      3423.200   = 9 credits, 3,423.20 ILS
+
+  NOT ONE of the nine hangs on an `approved` invoice. That is why the answer is 0 and not 2.
+
+  This is the SAME population, to the agora, that `ASSIST-12` measured on 04.09.2026 for the
+  accountant's DASHBOARD and wrote into src/pages/dashboards/AccountantDashboard.tsx in its own
+  words: "an accountant can be shown NOTHING while the organisation holds nine credits worth
+  3,423.20 ILS". That finding drew `—` instead of `0`. /pay never received the same treatment.
+
+================================================================================
+3. THE MECHANISM — three policies in deliberate agreement, not one bug
+================================================================================
+
+`credit_request_balance_rows` is SECURITY INVOKER (prosecdef = false) and admits
+`auth_role() in ('owner','accountant')`, so the function itself is not the gate. The gate is RLS:
+
+  credit_requests_select            org_id = auth_org() AND role IN (owner, office, accountant)
+                                    -- no approval predicate here at all
+
+  credit_requests_derived_scope_rider (cmd ALL)
+      (invoice_id IS NOT NULL OR receipt_item_id IS NOT NULL)
+      AND (invoice_id IS NULL OR EXISTS (SELECT 1 FROM invoices i WHERE ... i.unit_id = ANY(auth_scopes())))
+      AND (receipt_item_id IS NULL OR EXISTS (SELECT 1 FROM goods_receipt_items gri JOIN goods_receipts gr ... ))
+
+THE POINT: those EXISTS subqueries read `invoices` and `goods_receipts` under the CALLER's own
+RLS. They are not exempt.
+
+  invoices_select        ... OR (auth_role() = 'accountant' AND review_status = 'approved')
+  goods_receipts_select  ... OR (auth_role() = 'accountant' AND EXISTS (invoice_receipt_links
+                                 -> invoices i WHERE i.review_status = 'approved'))
+
+So the accountant's horizon is "approved invoices and what hangs off them", enforced identically
+in three places. A credit anchored to an unapproved invoice fails the first EXISTS; a credit
+anchored to a receipt with no approved invoice fails the second. Both legs close.
+
+THIS IS DECIDED PRODUCT BEHAVIOUR, NOT A DEFECT. docs/OPEN-DECISIONS.md #13:
+  "תפקיד accountant — הנהלת חשבונות תפעולית: חשבוניות מאושרות והקשר רכש מינימלי בלבד"
+  (operational bookkeeping: APPROVED INVOICES and minimal purchasing context only).
+
+================================================================================
+4. WHAT THE ACCOUNTANT IS ACTUALLY SHOWN, AND WHY IT WAS A CONTRADICTION
+================================================================================
+
+/pay is `<Guard roles={['accountant']} …>` (src/App.tsx:409) — accountant ONLY.
+
+The number the screen quotes is NOT from a definer call made under this reader. It is the column
+`payment_requests.open_credit_override_total`, frozen by the approval command from what the
+APPROVER saw. Its own column comment (0073) says: "Open supplier-credit total in this legal
+entity observed by the trusted approval command; informational only."
+
+Production payment requests carrying it, right now:
+
+    #13 executed  ILS 262  override 50   supplier ...0002
+    #14 executed  ILS 300  override 50   supplier ...0002
+    #15 approved  ILS 299  override 50   supplier ...0002   <-- IN THE QUEUE NOW
+    #19 executed  ILS 340  override 40   supplier ...0015
+
+#15 is `approved`, so it sits in the accountant's execution queue today, quoting 50.00 ILS —
+while `credit_request_balance_rows` returns 0 rows for its supplier under this reader.
+Supplier ...0002 is חוות השדה, and 50.00 is credit #8. This is the same 50 ILS the `FIN-01` row
+recorded from the payment dialog.
+
+Screenshots, 1440x900, headed system Edge (Playwright's bundled chromium fails `spawn UNKNOWN`
+on this machine), compiled stylesheet from a dev server, fixtures reproducing #15 exactly:
+
+  PR15-MON-06-pay-dialog-before-1440x900.png
+  PR15-MON-06-pay-dialog-after-1440x900.png
+
+BEFORE, the two panels, adjacent, in one dialog:
+  "אושר באישור חריג ללא קיזוז הזיכוי. הזיכויים הפתוחים בסך ‏50.00 ‏₪ לא קוזזו אוטומטית."
+  "זיכויים זמינים לקיזוז / אין זיכויים פתוחים לספק זה"      <-- "this supplier has NO open credits"
+
+The second sentence is a positive claim about the world, printed by a reader that had just
+proved it cannot see the world. It is the `0`-instead-of-`—` mistake in prose.
+
+AFTER:
+  the override note gains "הסכום נמדד ברגע האישור, בתמונה של המאשר, ואינו בהכרח מופיע ברשימת
+  הזיכויים שלמטה." — the figure now names whose view it is and when.
+  the empty state becomes "לא ניתן להציג כאן את זיכויי הספק — תפקיד זה רואה חשבוניות מאושרות
+  בלבד, וזיכוי שתלוי בחשבונית שטרם אושרה נשאר מחוץ לתמונה."
+
+================================================================================
+5. WHY NEITHER OF THE TWO OBVIOUS FIXES WAS TAKEN
+================================================================================
+
+(a) SCOPE THE QUOTED FIGURE TO THE READER. Refused. `open_credit_override_total` is an immutable
+    audit fact with a table constraint binding it to a reason and a timestamp
+    (payment_requests_open_credit_override_complete, 0073). Recomputing it per reader would
+    destroy the record of what the approver saw and, for this role, always yield 0 — deleting the
+    very warning that exists to tell the executor an exception was taken. That removes a control.
+
+(b) WIDEN THE READER SO THE LIST MATCHES. Refused. That is the privilege leak the plan forbids,
+    and ruling #13 already decided the opposite. It would disclose unapproved-invoice activity to
+    the accountant, and it would have to be done in three policies at once.
+
+The two figures differ because their POPULATIONS differ — the approver's view then, this
+reader's view now — so the plan's own rule applies: the label states its scope. That is a client
+and dictionary change. Nothing in the database is wrong.
+
+RESIDUAL, recorded rather than silently decided: whether the accountant should be shown the
+override AMOUNT at all, as opposed to only the fact of the override and its reason, is a product
+question this PR did not settle. It kept the amount, because removing a money figure from an
+approval-override audit note is a larger decision than a display fix. If the owner would rather
+the figure did not appear on a screen that cannot corroborate it, that is a one-line follow-up
+in the same Note.
+
+================================================================================
+6. NOT THE MON-03 MECHANISM
+================================================================================
+
+MON-03 is being fixed in `p0_supplier_balance_rows_by_currency` on migration 0320 by another PR.
+This finding touches no SQL at all, and the function it examines is a different one
+(`credit_request_balance_rows`) reached from a different screen. There is no overlap and no
+double-patching of any body.

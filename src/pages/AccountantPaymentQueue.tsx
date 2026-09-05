@@ -733,6 +733,16 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
               <span className="min-w-0 flex-1">
                 <strong>{t('payQueue.text_17')}</strong>{' '}
                 {t('payQueue.openCreditsBefore')}<span className="num">{fmtMoneyExact(pr.open_credit_override_total, pr.currency)}</span>{t('payQueue.openCreditsAfter')}
+                {/* `MON-06`. This figure and the credit list below it answer DIFFERENT questions,
+                    and printed adjacent with nothing said, they read as one. It is
+                    `open_credit_override_total` — frozen by the approval command from what the
+                    APPROVER could see, at the moment of approval, and immutable thereafter. The
+                    list below is what THIS reader can see NOW, and ruling #13 stops that at
+                    approved invoices. Measured 05.09.2026: the accountant reads 0 of the tenant's
+                    9 open credits. So the number stays — deleting an approval-override warning
+                    from the executor's screen would remove a control — and it now says whose view
+                    it is, which is the plan's rule when two figures differ by population. */}
+                <span className="block mt-1">{t('payQueue.overrideObservedAtApproval')}</span>
                 <span className="block mt-1">{t('payQueue.overrideReasonLabel')} {pr.open_credit_override_reason}</span>
               </span>
             </Note>
@@ -743,8 +753,21 @@ function ExecuteModal({ pr, onClose, onDone }: { pr: Row; onClose: () => void; o
           <h3 className="text-sm font-medium text-ink-soft">{t('payQueue.text_18')}</h3>
           {creditsLoading && <p className="mt-2 text-sm text-ink-muted" role="status">{t('payQueue.text_19')}</p>}
           {creditsError && <p className="mt-2 text-sm text-alert-fg" role="alert">{creditsError}</p>}
+          {/* `MON-06`, and it is `ASSIST-12`'s conclusion arriving on the screen next door.
+              `openCredits` is empty in two unrelated situations, and one sentence used to speak
+              for both. Either the reader ANSWERED and nothing in the answer is open — a
+              measurement, and "no open credits" is the true thing to say — or the reader returned
+              NOTHING, in which case it has measured its own blind spot and must not report it as
+              a fact about the supplier. For this role the second case is the common one: the
+              `credit_requests` derived-scope rider resolves its anchor through `invoices` and
+              `goods_receipts` under the CALLER's RLS, and the accountant's stops at approved
+              (#13). Measured against production 05.09.2026 on the guarded path: 0 rows returned
+              while the tenant held 9 open credits worth 3,423.20 ILS.
+              The constitution's `—`-not-`0` rule is the same rule in numeric form. */}
           {!creditsLoading && !creditsError && openCredits.length === 0 && (
-            <p className="mt-2 text-sm text-ink-muted">{t('payQueue.text_20')}</p>
+            <p className="mt-2 text-sm text-ink-muted">
+              {creditBalances?.length ? t('payQueue.text_20') : t('payQueue.creditsOutOfRoleScope')}
+            </p>
           )}
           {!creditsLoading && !creditsError && openCredits.length > 0 && selectableCredits.length === 0 && (
             <p className="mt-2 text-sm text-ink-muted">
