@@ -1,8 +1,18 @@
 resource=local-supabase-stack + SQL suites + npm run quality
 SINGLE OCCUPANCY. Read this file before ANY command that touches the local stack.
 
-HELD BY: PR 17 (agent a07c7ed4197820ffa, DOC-02/DOC-03/DOC-04/DOC-08)
-since: 2026-09-05
+HELD BY: PR 14 (MON-03/FIN-04/FIN-07) — granted 05.09.2026 06:45 local.
+
+  PR 17 HELD THIS AND LOST IT, and the reason is written down rather than left as a judgement
+  call. Measured at 06:41: no file written in its worktree since 04:54, and NO APPLICATION
+  BACKEND HAS QUERIED THE LOCAL DATABASE SINCE 01:59 UTC — one hour forty-seven minutes on both
+  clocks. Beyond that, the stack it had prepared was rebuilt at 04:58 by the other campaign and
+  its 0315 is gone, so whatever fixtures it laid down no longer exist. It cannot be mid-
+  measurement on a database that was destroyed under it.
+
+  PR 17 IS NOT CANCELLED. Its production diagnosis needs no lock and can continue. If it reaches
+  a local-stack command it will read this file, see it is not the holder, and re-queue — which is
+  the protocol working, not a failure. Its slot is at the FRONT of the queue when PR 14 releases.
 
 QUEUE (coordinator grants in this order, one at a time, by SendMessage):
   1. PR 5+6   PERM-01                 migration 0319, suite p112

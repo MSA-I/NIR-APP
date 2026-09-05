@@ -26,8 +26,11 @@ RESERVED for the qa-sweep-20260904 campaign. No agent may draw a number. Ask the
   SQL suite     p112  -- PR 5+6's suite.
   migration     0320  -- PR 14, MON-03/FIN-04/FIN-07: the supplier-balance role predicate
   SQL suite     p113  -- PR 14's suite.
-  migration     0321  -- PR 15, MON-06: the credits a definer counts and the reader cannot show
-  SQL suite     p114  -- PR 15's suite.
+  migration     0321  -- RETURNED UNUSED. PR 15 (MON-06) needed no database change at all: the
+                         finding's premise was wrong twice over — the definer it names cannot be
+                         called by an accountant, and the count is 0 of 9, not 2 of N. Three
+                         policies agreeing under ruling #13, not a bug. Free again.
+  SQL suite     p114  -- RETURNED UNUSED with 0321. Free again.
   migration     0322  -- PR 11, MON-04: the bank allocation constraint trigger
   SQL suite     p115  -- PR 11's suite.
   migration     0323  -- PR 13, PERM-02: the audit read-model scope
