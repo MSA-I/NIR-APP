@@ -13,27 +13,52 @@
 -- path. A read performed as postgres would prove nothing at all here -- postgres owns the tables
 -- and is exempt from the very policies under test.
 --
+-- THE HARNESS ACCUMULATES; IT DOES NOT ABORT ON THE FIRST FALSE CASE. Every case is recorded in
+-- pg_temp.p112_cases as an expected/observed PAIR, the whole table is printed, and one verdict at
+-- the end raises with the list of mismatches. That is not a stylistic preference: a REVOKE is the
+-- one change in this area that can break every open tab in the product, so the red must show WHICH
+-- cases moved and, in the SAME RUN, that the deliberate controls did not. A harness that stops at
+-- the first failure cannot show a control passing beside it, and "everything failed" is
+-- indistinguishable from a broken harness.
+--
+-- THE CONTROLS, named here so a reader does not have to infer them. They are marked `control` in
+-- the printed table and are green BEFORE the migration and after it:
+--   * catalogue/other-columns-still-readable -- the half of a column REVOKE that breaks screens.
+--   * catalogue/self-service-update-kept     -- 0255:152 granted update(backup_email) on purpose.
+--   * catalogue/config-tables-keep-grant     -- the narrowing belongs in the policy, not the grant.
+--   * live/roster and live/organizations, for all four actors -- nothing in 0319 narrows a name,
+--     so a red on one of these means the harness lost its tenant, not that the boundary moved.
+--
 -- EVERY LIVE ASSERTION IS PER ROW. The surfaces are aggregated as `name=value` strings ordered by
 -- name and compared to a literal, never counted: a count of 3 passes for a tenant whose three rows
 -- are the wrong three, and "office receives nothing" is a claim about which rows, not how many.
 --
--- THE ONE PLACE THIS SUITE EXECUTES A REFUSAL rather than reading the catalogue is section 5, and
--- it is a COLUMN privilege denial inside the ordinary executor ACL check. That is not the
--- function-EXECUTE denial that segfaults this Postgres image (calling a function a role holds no
--- EXECUTE on takes the whole container down; every privilege question about a FUNCTION in this
--- repository is therefore answered from `has_function_privilege`). A table/column denial raises
--- 42501 cleanly, which is what p0_client_dml_acl.sql has relied on for twenty-odd assertions.
+-- THE PLACES THIS SUITE EXECUTES A REFUSAL rather than reading the catalogue are the two
+-- `live/direct.*` surfaces, and they are COLUMN privilege denials inside the ordinary executor ACL
+-- check. That is not the function-EXECUTE denial that segfaults this Postgres image (calling a
+-- function a role holds no EXECUTE on takes the whole container down; every privilege question
+-- about a FUNCTION in this repository is therefore answered from `has_function_privilege`). A
+-- table/column denial raises 42501 cleanly, which is what p0_client_dml_acl.sql has relied on for
+-- twenty-odd assertions. Those two surfaces are also where the LEAK ITSELF is stated: before 0319
+-- an office clerk's own `observed` column literally lists a colleague's telephone number.
 \set ON_ERROR_STOP on
 
 begin;
 
-create function pg_temp.p112_assert(p_condition boolean, p_message text)
-returns void language plpgsql as $$
-begin
-  if not coalesce(p_condition, false) then
-    raise exception 'P112 settings boundary assertion failed: %', p_message;
-  end if;
-end
+create table pg_temp.p112_cases (
+  seq        int generated always as identity,
+  case_id    text not null,
+  kind       text not null,
+  expected   text not null,
+  observed   text not null
+);
+
+create function pg_temp.p112_case(
+  p_case text, p_expected text, p_observed text, p_control boolean default false)
+returns void language sql as $$
+  insert into pg_temp.p112_cases (case_id, kind, expected, observed)
+  values (p_case, case when p_control then 'control' else 'case' end,
+          p_expected, coalesce(p_observed, '(null)'));
 $$;
 
 -- ===== Fixtures =====
@@ -74,106 +99,134 @@ insert into public.org_autonomy_policies (org_id, policy_key, autonomy_enabled, 
   ('11200000-0000-4000-8000-000000000001', 'p112.autonomy-a', true, 0.950),
   ('11200000-0000-4000-8000-000000000002', 'p112.autonomy-b', true, 0.950);
 
--- ===== 1. The catalogue: the four columns are out of every client role's reach =====
-select pg_temp.p112_assert(
-  not has_column_privilege('authenticated', 'public.profiles', 'phone', 'select')
-  and not has_column_privilege('authenticated', 'public.profiles', 'backup_email', 'select')
-  and not has_column_privilege('anon', 'public.profiles', 'phone', 'select')
-  and not has_column_privilege('anon', 'public.profiles', 'backup_email', 'select'),
-  'a client role can still select a colleague''s phone or backup address straight off profiles. '
-  'RLS cannot mask a column, so the column privilege is the only thing standing here');
+-- ===== 1. The catalogue =====
+-- Guarded inside a block rather than written as bare SELECTs because three of these ask questions
+-- about a view that does not exist before the migration, and `has_table_privilege` on a missing
+-- relation raises rather than returning false.
+do $p112_catalogue$
+declare
+  v_view text;
+begin
+  -- The four columns leave every client role's reach. RLS cannot mask a column -- 0097 says so in
+  -- its first line -- so the column privilege is the only instrument that can stand here.
+  perform pg_temp.p112_case('catalogue/profiles.phone as authenticated', 'revoked',
+    case when has_column_privilege('authenticated', 'public.profiles', 'phone', 'select')
+         then 'READABLE' else 'revoked' end);
+  perform pg_temp.p112_case('catalogue/profiles.backup_email as authenticated', 'revoked',
+    case when has_column_privilege('authenticated', 'public.profiles', 'backup_email', 'select')
+         then 'READABLE' else 'revoked' end);
+  perform pg_temp.p112_case('catalogue/profiles.phone as anon', 'revoked',
+    case when has_column_privilege('anon', 'public.profiles', 'phone', 'select')
+         then 'READABLE' else 'revoked' end);
+  perform pg_temp.p112_case('catalogue/profiles.backup_email as anon', 'revoked',
+    case when has_column_privilege('anon', 'public.profiles', 'backup_email', 'select')
+         then 'READABLE' else 'revoked' end);
+  perform pg_temp.p112_case('catalogue/organizations.trial_ends_at as authenticated', 'revoked',
+    case when has_column_privilege('authenticated', 'public.organizations', 'trial_ends_at', 'select')
+         then 'READABLE' else 'revoked' end);
+  perform pg_temp.p112_case('catalogue/organizations.created_at as authenticated', 'revoked',
+    case when has_column_privilege('authenticated', 'public.organizations', 'created_at', 'select')
+         then 'READABLE' else 'revoked' end);
+  perform pg_temp.p112_case('catalogue/organizations.trial_ends_at as anon', 'revoked',
+    case when has_column_privilege('anon', 'public.organizations', 'trial_ends_at', 'select')
+         then 'READABLE' else 'revoked' end);
+  perform pg_temp.p112_case('catalogue/organizations.created_at as anon', 'revoked',
+    case when has_column_privilege('anon', 'public.organizations', 'created_at', 'select')
+         then 'READABLE' else 'revoked' end);
 
-select pg_temp.p112_assert(
-  not has_column_privilege('authenticated', 'public.organizations', 'trial_ends_at', 'select')
-  and not has_column_privilege('authenticated', 'public.organizations', 'created_at', 'select')
-  and not has_column_privilege('anon', 'public.organizations', 'trial_ends_at', 'select')
-  and not has_column_privilege('anon', 'public.organizations', 'created_at', 'select'),
-  'a client role can still select the tenant''s commercial columns straight off organizations');
+  -- CONTROL. The other half of a column REVOKE, and the half that breaks screens: EVERY remaining
+  -- column must still be readable. Derived from information_schema so it keeps covering a column
+  -- added later, and it NAMES the casualty -- the symptom of getting this wrong is a 403 on a
+  -- whole statement, nowhere near the cause.
+  perform pg_temp.p112_case('catalogue/other-columns-still-readable', '(none unreadable)',
+    coalesce((
+      select string_agg(c.table_name || '.' || c.column_name, ', ' order by c.table_name, c.column_name)
+      from information_schema.columns c
+      where c.table_schema = 'public'
+        and ((c.table_name = 'profiles' and c.column_name not in ('phone', 'backup_email'))
+          or (c.table_name = 'organizations' and c.column_name not in ('created_at', 'trial_ends_at')))
+        and not has_column_privilege('authenticated', format('public.%I', c.table_name), c.column_name, 'select')
+    ), '(none unreadable)'), true);
 
--- The other half of a column REVOKE, and the half that breaks screens: EVERY remaining column
--- must still be readable. This re-derives the list from information_schema and names the casualty,
--- because the symptom of getting it wrong is a 403 on a whole statement, nowhere near the cause.
-select pg_temp.p112_assert(
-  not exists (
-    select 1 from information_schema.columns c
-    where c.table_schema = 'public'
-      and ((c.table_name = 'profiles' and c.column_name not in ('phone', 'backup_email'))
-        or (c.table_name = 'organizations' and c.column_name not in ('created_at', 'trial_ends_at')))
-      and not has_column_privilege('authenticated', format('public.%I', c.table_name), c.column_name, 'select')),
-  'an account column the product reads became unreadable: ' || coalesce((
-    select string_agg(c.table_name || '.' || c.column_name, ', ' order by c.table_name, c.column_name)
-    from information_schema.columns c
-    where c.table_schema = 'public'
-      and ((c.table_name = 'profiles' and c.column_name not in ('phone', 'backup_email'))
-        or (c.table_name = 'organizations' and c.column_name not in ('created_at', 'trial_ends_at')))
-      and not has_column_privilege('authenticated', format('public.%I', c.table_name), c.column_name, 'select')
-  ), '(none)'));
+  -- CONTROL. Reading a colleague's number and maintaining your own are two different boundaries,
+  -- and 0319 moves only the first. 0255:152 granted `update (backup_email)` deliberately.
+  perform pg_temp.p112_case('catalogue/self-service-update-kept', 'phone+backup_email updatable',
+    case when has_column_privilege('authenticated', 'public.profiles', 'phone', 'update')
+          and has_column_privilege('authenticated', 'public.profiles', 'backup_email', 'update')
+         then 'phone+backup_email updatable' else 'a person lost a write on their own row' end, true);
 
--- Reading a colleague's number and maintaining your own are two different boundaries, and 0319
--- moved only the first. 0255:152 granted `update (backup_email)` deliberately.
-select pg_temp.p112_assert(
-  has_column_privilege('authenticated', 'public.profiles', 'phone', 'update')
-  and has_column_privilege('authenticated', 'public.profiles', 'backup_email', 'update'),
-  'a person lost the ability to maintain their own phone or backup address -- the revoke was '
-  'meant to be SELECT only');
+  -- The owner's route back: read-only for the browser role, closed to anon.
+  if to_regclass('public.organization_people_directory') is null then
+    perform pg_temp.p112_case('catalogue/directory is a read-only browser surface',
+      'select only, anon none', '(view absent)');
+    perform pg_temp.p112_case('catalogue/directory is not security_invoker and keeps barrier',
+      'definer-privileged, security_barrier=true', '(view absent)');
+    perform pg_temp.p112_case('catalogue/directory carries role and tenant predicates',
+      'auth_role()+owner+auth_org()', '(view absent)');
+  else
+    perform pg_temp.p112_case('catalogue/directory is a read-only browser surface',
+      'select only, anon none',
+      case when has_table_privilege('authenticated', 'public.organization_people_directory', 'select')
+            and not has_table_privilege('authenticated', 'public.organization_people_directory', 'insert')
+            and not has_table_privilege('authenticated', 'public.organization_people_directory', 'update')
+            and not has_table_privilege('authenticated', 'public.organization_people_directory', 'delete')
+            and not has_table_privilege('anon', 'public.organization_people_directory', 'select')
+           then 'select only, anon none' else 'wrong privilege set' end);
 
--- ===== 2. The catalogue: the shapes the boundary depends on =====
-select pg_temp.p112_assert(
-  has_table_privilege('authenticated', 'public.organization_people_directory', 'select')
-  and not has_table_privilege('authenticated', 'public.organization_people_directory', 'insert')
-  and not has_table_privilege('authenticated', 'public.organization_people_directory', 'update')
-  and not has_table_privilege('authenticated', 'public.organization_people_directory', 'delete')
-  and not has_table_privilege('anon', 'public.organization_people_directory', 'select'),
-  'the owner directory is not a read-only surface for the browser role alone');
+    -- A security_invoker view would read with the CALLER's privileges -- which no longer include
+    -- the two columns -- so the OWNER would get an error instead of a roster. And without
+    -- security_barrier a caller's own WHERE can be evaluated before the role predicate.
+    perform pg_temp.p112_case('catalogue/directory is not security_invoker and keeps barrier',
+      'definer-privileged, security_barrier=true',
+      (select case when coalesce(reloptions::text, '') like '%security_invoker=%'
+                   then 'security_invoker view'
+                   when coalesce(reloptions::text, '') not like '%security_barrier=true%'
+                   then 'lost security_barrier'
+                   else 'definer-privileged, security_barrier=true' end
+       from pg_class where oid = 'public.organization_people_directory'::regclass));
 
--- If it were a security_invoker view it would read with the CALLER's privileges -- which no
--- longer include the two columns -- and the OWNER would get an error instead of a roster. And
--- without security_barrier a caller's own WHERE can run before the role predicate.
-select pg_temp.p112_assert(
-  (select coalesce(reloptions::text, '') not like '%security_invoker=%'
-     and reloptions::text like '%security_barrier=true%'
-   from pg_class where oid = 'public.organization_people_directory'::regclass),
-  'the owner directory is a security_invoker view, or lost security_barrier');
+    -- The predicate is what separates the three product roles; a grant cannot, because all three
+    -- are the same database role. Both halves pinned by text: an edit that dropped either would
+    -- leave a view that still works and no longer refuses anybody.
+    select pg_get_viewdef('public.organization_people_directory'::regclass) into v_view;
+    perform pg_temp.p112_case('catalogue/directory carries role and tenant predicates',
+      'auth_role()+owner+auth_org()',
+      case when position('auth_role()' in v_view) > 0
+            and position('''owner''' in v_view) > 0
+            and position('auth_org()' in v_view) > 0
+           then 'auth_role()+owner+auth_org()' else 'a predicate is missing' end);
+  end if;
 
--- The predicate is what separates the three product roles; a grant cannot, because all three are
--- the same database role. Both halves pinned by text: a later edit that dropped either would
--- leave a view that still works and no longer refuses anybody.
-select pg_temp.p112_assert(
-  (select position('auth_role()' in pg_get_viewdef('public.organization_people_directory'::regclass)) > 0
-      and position('''owner''' in pg_get_viewdef('public.organization_people_directory'::regclass)) > 0
-      and position('auth_org()' in pg_get_viewdef('public.organization_people_directory'::regclass)) > 0),
-  'the owner directory lost its role predicate or its tenant predicate');
+  -- CONTROL. The two configuration tables are narrowed in the POLICY and KEEP their grant. That is
+  -- not an oversight: p1_financial_commands.sql:21 asserts, for every public table, that a
+  -- permissive read policy exists <=> authenticated can read at least one column. Revoking here
+  -- would break that contract and buy nothing the predicate does not already say.
+  perform pg_temp.p112_case('catalogue/config-tables-keep-grant', 'both granted',
+    case when has_table_privilege('authenticated', 'public.org_flag_configurations', 'select')
+          and has_table_privilege('authenticated', 'public.org_autonomy_policies', 'select')
+         then 'both granted' else 'a configuration table lost its SELECT grant' end, true);
 
--- The two configuration tables are narrowed in the POLICY and keep their grant. That is not an
--- oversight: p1_financial_commands.sql:21 asserts, for every public table, that a permissive read
--- policy exists <=> authenticated holds SELECT. Revoking here would break that contract and buy
--- nothing the predicate does not already say.
-select pg_temp.p112_assert(
-  has_table_privilege('authenticated', 'public.org_flag_configurations', 'select')
-  and has_table_privilege('authenticated', 'public.org_autonomy_policies', 'select'),
-  'a configuration table lost its SELECT grant -- the narrowing belongs in the policy');
-select pg_temp.p112_assert(
-  not exists (
-    select 1 from pg_policy p
-    where p.polrelid in ('public.org_flag_configurations'::regclass,
-                         'public.org_autonomy_policies'::regclass)
-      and p.polcmd = 'r'
-      and position('auth_role()' in coalesce(pg_get_expr(p.polqual, p.polrelid), '')) = 0),
-  'a configuration table''s read policy still answers every role in the tenant');
+  perform pg_temp.p112_case('catalogue/config-read-policies name the role', 'both name auth_role()',
+    coalesce((
+      select 'still answers every role: ' || string_agg(c.relname || '.' || p.polname, ', ' order by c.relname)
+      from pg_policy p
+      join pg_class c on c.oid = p.polrelid
+      where p.polrelid in ('public.org_flag_configurations'::regclass,
+                           'public.org_autonomy_policies'::regclass)
+        and p.polcmd = 'r'
+        and position('auth_role()' in coalesce(pg_get_expr(p.polqual, p.polrelid), '')) = 0
+    ), 'both name auth_role()'));
+end
+$p112_catalogue$;
 
--- ===== 3. The live reads, one row per role, every surface named =====
-create table pg_temp.p112_live (
-  as_role   text not null,
-  surface   text not null,
-  observed  text not null,
-  expected  text not null
-);
-
+-- ===== 2. The live reads, one row per actor per surface =====
 do $p112_live$
 declare
   r record;
   v_directory_phone  text;
   v_directory_backup text;
+  v_direct_phone     text;
+  v_direct_trial     text;
   v_flags            text;
   v_autonomy         text;
   v_roster           text;
@@ -191,15 +244,35 @@ begin
     perform set_config('request.jwt.claim.role', 'authenticated', true);
     set local role authenticated;
 
-    -- Aggregated per row and ordered by name, never counted. `-` is a value the fixture put
-    -- there (the accountant has neither), so a NULL that survives the view is distinguishable
-    -- from a row that never arrived.
-    select coalesce(string_agg(d.full_name || '=' || coalesce(d.phone, '-'), ', ' order by d.full_name), '(none)')
-      into v_directory_phone
-    from public.organization_people_directory d;
-    select coalesce(string_agg(d.full_name || '=' || coalesce(d.backup_email, '-'), ', ' order by d.full_name), '(none)')
-      into v_directory_backup
-    from public.organization_people_directory d;
+    -- The owner's route back. `-` is a value the fixture put there (the accountant has neither),
+    -- so a NULL that survives the view stays distinguishable from a row that never arrived.
+    if to_regclass('public.organization_people_directory') is null then
+      v_directory_phone  := '(view absent)';
+      v_directory_backup := '(view absent)';
+    else
+      select coalesce(string_agg(d.full_name || '=' || coalesce(d.phone, '-'), ', ' order by d.full_name), '(none)')
+        into v_directory_phone from public.organization_people_directory d;
+      select coalesce(string_agg(d.full_name || '=' || coalesce(d.backup_email, '-'), ', ' order by d.full_name), '(none)')
+        into v_directory_backup from public.organization_people_directory d;
+    end if;
+
+    -- THE LEAK, EXECUTED. Straight off the table, exactly the shape `select('*')` produced. Before
+    -- 0319 an office clerk reads a colleague's telephone number here and it is printed in this
+    -- row's `observed`; after it, the statement is refused for every actor including the owner --
+    -- the view is the owner's only route, not a convenience beside a door still open.
+    begin
+      select coalesce(string_agg(p.full_name || '=' || coalesce(p.phone, '-'), ', ' order by p.full_name), '(none)')
+        into v_direct_phone from public.profiles p;
+    exception when insufficient_privilege then
+      v_direct_phone := 'refused (42501)';
+    end;
+    begin
+      select coalesce(string_agg(o.name || '=' || coalesce(o.trial_ends_at::text, '-'), ', ' order by o.name), '(none)')
+        into v_direct_trial from public.organizations o;
+    exception when insufficient_privilege then
+      v_direct_trial := 'refused (42501)';
+    end;
+
     select coalesce(string_agg(f.flag_key, ', ' order by f.flag_key), '(none)')
       into v_flags from public.org_flag_configurations f;
     select coalesce(string_agg(a.policy_key, ', ' order by a.policy_key), '(none)')
@@ -211,96 +284,109 @@ begin
 
     reset role;
 
-    insert into pg_temp.p112_live (as_role, surface, observed, expected) values
-      (r.role_label, 'directory.phone',  v_directory_phone,  case r.role_label
-         when 'owner'   then 'P112 accountant=-, P112 office=050-1000002, P112 owner=050-1000001'
-         when 'owner-B' then 'P112 tenant B owner=050-2000001'
-         else '(none)' end),
-      (r.role_label, 'directory.backup', v_directory_backup, case r.role_label
-         when 'owner'   then 'P112 accountant=-, P112 office=office-p112@example.test, P112 owner=owner-p112@example.test'
-         when 'owner-B' then 'P112 tenant B owner=owner-b-p112@example.test'
-         else '(none)' end),
-      (r.role_label, 'flag_configurations', v_flags, case r.role_label
-         when 'owner'   then 'p112.tenant-a'
-         when 'owner-B' then 'p112.tenant-b'
-         else '(none)' end),
-      (r.role_label, 'autonomy_policies', v_autonomy, case r.role_label
-         when 'owner'   then 'p112.autonomy-a'
-         when 'owner-B' then 'p112.autonomy-b'
-         else '(none)' end),
-      -- THE CONTROL. The roster itself is not narrowed by anything here, and every one of the four
-      -- reads it in full within their own tenant, before the migration and after it. A red on this
-      -- line means the harness lost the tenant, not that the boundary moved.
-      (r.role_label, 'roster', v_roster, case r.role_label
-         when 'owner-B' then 'P112 tenant B owner'
-         else 'P112 accountant, P112 office, P112 owner' end),
-      (r.role_label, 'organizations', v_orgs, case r.role_label
-         when 'owner-B' then 'P112 tenant B'
-         else 'P112 tenant A' end);
+    perform pg_temp.p112_case(r.role_label || ' / live/directory.phone',
+      case r.role_label
+        when 'owner'   then 'P112 accountant=-, P112 office=050-1000002, P112 owner=050-1000001'
+        when 'owner-B' then 'P112 tenant B owner=050-2000001'
+        else '(none)' end,
+      v_directory_phone);
+    perform pg_temp.p112_case(r.role_label || ' / live/directory.backup',
+      case r.role_label
+        when 'owner'   then 'P112 accountant=-, P112 office=office-p112@example.test, P112 owner=owner-p112@example.test'
+        when 'owner-B' then 'P112 tenant B owner=owner-b-p112@example.test'
+        else '(none)' end,
+      v_directory_backup);
+    perform pg_temp.p112_case(r.role_label || ' / live/direct.profiles.phone',
+      'refused (42501)', v_direct_phone);
+    perform pg_temp.p112_case(r.role_label || ' / live/direct.organizations.trial_ends_at',
+      'refused (42501)', v_direct_trial);
+    -- The two configuration surfaces carry MORE than this suite's own fixture row. Every
+    -- organization is born with a default set: the `zzz_organizations_prelaunch_assistant` and
+    -- `zzz_organizations_prelaunch_autonomy` triggers write them on insert. They are named in the
+    -- literal rather than filtered out, because the claim is "the owner reads this tenant's
+    -- configuration and nobody else does" -- and a filter that hid the defaults would leave the
+    -- suite unable to notice if a default row started reaching an accountant.
+    perform pg_temp.p112_case(r.role_label || ' / live/flag_configurations',
+      case r.role_label
+        when 'owner'   then 'assistant.history, assistant.ui, p112.tenant-a'
+        when 'owner-B' then 'assistant.history, assistant.ui, p112.tenant-b'
+        else '(none)' end,
+      v_flags);
+    perform pg_temp.p112_case(r.role_label || ' / live/autonomy_policies',
+      case r.role_label
+        when 'owner'   then 'delivery_note.receiving, document.interpretation, document.packet_split, p112.autonomy-a, price_list.intake'
+        when 'owner-B' then 'delivery_note.receiving, document.interpretation, document.packet_split, p112.autonomy-b, price_list.intake'
+        else '(none)' end,
+      v_autonomy);
+    -- CONTROLS. Nothing in 0319 narrows a name. All four actors read their own tenant's roster and
+    -- their own organizations row in full, before the migration and after it. A red on one of
+    -- these means the harness lost its tenant, not that the boundary moved.
+    perform pg_temp.p112_case(r.role_label || ' / live/roster',
+      case r.role_label
+        when 'owner-B' then 'P112 tenant B owner'
+        else 'P112 accountant, P112 office, P112 owner' end,
+      v_roster, true);
+    perform pg_temp.p112_case(r.role_label || ' / live/organizations',
+      case r.role_label
+        when 'owner-B' then 'P112 tenant B'
+        else 'P112 tenant A' end,
+      v_orgs, true);
   end loop;
 end
 $p112_live$;
 
+reset role;
 select set_config('request.jwt.claim.sub', '', true);
 select set_config('request.jwt.claim.role', '', true);
 
-select pg_temp.p112_assert(
-  not exists (select 1 from pg_temp.p112_live where observed is distinct from expected),
-  'a role received a surface it must not, or lost one it must keep:' || coalesce((
+-- ===== 3. The whole table, printed, red or green =====
+select seq,
+       case when observed is not distinct from expected then 'PASS' else 'FAIL' end as verdict,
+       kind,
+       case_id,
+       expected,
+       observed
+from pg_temp.p112_cases
+order by seq;
+
+select count(*) filter (where observed is not distinct from expected) as passed,
+       count(*) filter (where observed is distinct from expected)     as failed,
+       count(*)                                                       as total,
+       count(*) filter (where kind = 'control'
+                          and observed is not distinct from expected) as controls_green,
+       count(*) filter (where kind = 'control')                       as controls_total
+from pg_temp.p112_cases;
+
+-- ===== 4. The verdict =====
+do $p112_verdict$
+declare
+  v_failed   int;
+  v_controls int;
+  v_detail   text;
+begin
+  select count(*) filter (where observed is distinct from expected),
+         count(*) filter (where kind = 'control' and observed is distinct from expected)
+    into v_failed, v_controls
+  from pg_temp.p112_cases;
+
+  if v_controls > 0 then
+    -- Said before the finding's own cases, because it changes what the run means. A control that
+    -- moved is a harness that lost its tenant or its fixtures; nothing below it is evidence.
+    raise warning 'P112: % CONTROL case(s) failed -- read this run as a broken harness, not as a finding.', v_controls;
+  end if;
+
+  if v_failed > 0 then
     select string_agg(
-      e'\n  ' || as_role || ' / ' || surface
-        || e'\n      expected: ' || expected
-        || e'\n      observed: ' || observed,
-      '' order by as_role, surface)
-    from pg_temp.p112_live where observed is distinct from expected), ''));
-
--- ===== 4. The two ends of the claim, said separately =====
--- Stated on their own so a red run names the specific thing that failed rather than a wall of
--- rows: office and accountant get NOTHING from the three narrowed surfaces, and the owner gets
--- all of them. The aggregate above already covers this; these two make the sentence readable.
-select pg_temp.p112_assert(
-  (select count(*) = 8 from pg_temp.p112_live
-   where as_role in ('office', 'accountant')
-     and surface in ('directory.phone', 'directory.backup', 'flag_configurations', 'autonomy_policies')
-     and observed = '(none)'),
-  'office or accountant still receives one of the four narrowed surfaces');
-select pg_temp.p112_assert(
-  (select count(*) = 4 from pg_temp.p112_live
-   where as_role = 'owner'
-     and surface in ('directory.phone', 'directory.backup', 'flag_configurations', 'autonomy_policies')
-     and observed <> '(none)'),
-  'the owner lost one of the four surfaces the fix must keep');
-
--- ===== 5. The direct path, executed =====
--- The catalogue says the privilege is gone; this says the statement is actually refused, for the
--- OWNER too -- the view is the owner's only route, not a convenience beside a door still open.
--- This is a column ACL denial (42501), not the function-EXECUTE denial that crashes this image.
-select set_config('request.jwt.claim.sub', '21200000-0000-4000-8000-000000000001', true);
-do $p112_direct$
-begin
-  set local role authenticated;
-  perform phone from public.profiles limit 1;
-  reset role;
-  raise exception 'P112 settings boundary assertion failed: the owner still selected '
-    'profiles.phone directly, so the column privilege is not what is standing here';
-exception when insufficient_privilege then
-  null;
+             e'\n  ' || case_id || '  [' || kind || ']'
+               || e'\n      expected: ' || expected
+               || e'\n      observed: ' || observed,
+             '' order by seq)
+      into v_detail
+    from pg_temp.p112_cases
+    where observed is distinct from expected;
+    raise exception 'P112 settings boundary: % case(s) failed:%', v_failed, v_detail;
+  end if;
 end
-$p112_direct$;
-
-do $p112_direct_org$
-begin
-  set local role authenticated;
-  perform trial_ends_at from public.organizations limit 1;
-  reset role;
-  raise exception 'P112 settings boundary assertion failed: a tenant member still selected '
-    'organizations.trial_ends_at directly';
-exception when insufficient_privilege then
-  null;
-end
-$p112_direct_org$;
-
-reset role;
-select set_config('request.jwt.claim.sub', '', true);
+$p112_verdict$;
 
 rollback;
