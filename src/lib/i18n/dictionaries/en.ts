@@ -3757,6 +3757,7 @@ export const en: Dictionary = {
     newConnection: 'New connection',
     provePossession: 'Ownership of the endpoint must be proved before it is switched on. The system will send it one signed request, and it must return the verification code it received.',
     verificationOpenUntil: 'A verification request is open until {date}.',
+    verificationFailedNext: 'The verification request is closed and there is nothing to wait for. Fix the endpoint and then send a new verification.',
     secretRule: 'At least {min} characters. The secret is kept in a secret store and cannot be read back — keep a copy yourself; it is what verifies the signature on the messages.',
   },
 

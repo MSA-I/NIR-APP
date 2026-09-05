@@ -1,0 +1,77 @@
+OWN-10 — "a webhook subscription cannot be deleted; the lifecycle has no last step"
+Measured 2026-09-05 on the PR 40 tree (base 74bd43ab). Nothing here is a fix. It is the proof that
+the fix is not a client-side one, which is why this row is BLOCKED rather than FIXED.
+
+The gate oracle is "A webhook subscription can be removed." Removal is a server capability that
+does not exist, and the campaign brief forbids this agent from drawing a migration number or
+writing a migration. So the row is recorded, not guessed at.
+
+
+1. EVERY webhook command the database exposes
+-------------------------------------------------------------------------------
+$ grep -rn 'create function public\.[a-z_]*webhook[a-z_]*(' supabase/migrations/
+
+  supabase/migrations/0066_integration_adapters.sql:216:create function public.configure_webhook_subscription(
+  supabase/migrations/0066_integration_adapters.sql:287:create function public.set_webhook_subscription_active(
+  supabase/migrations/0066_integration_adapters.sql:351:create function public.read_webhook_subscriptions()
+  supabase/migrations/0198_owner_webhook_verification.sql:225:create function public.register_webhook_subscription(
+  supabase/migrations/0198_owner_webhook_verification.sql:322:create function public.request_webhook_verification(
+  supabase/migrations/0198_owner_webhook_verification.sql:401:create function public.service_begin_webhook_verification(p_verification_id uuid)
+  supabase/migrations/0198_owner_webhook_verification.sql:475:create function public.service_complete_webhook_verification(
+  supabase/migrations/0198_owner_webhook_verification.sql:622:create function public.read_webhook_subscriptions()
+
+  Register, configure, activate/deactivate, read, and the two service-role halves of the
+  handshake. There is no delete, no archive, and no rename of one. The `0198` copy of
+  `read_webhook_subscriptions` is a redefinition of the `0066` one, not a second surface.
+
+  The client mirrors exactly that set and nothing more —
+  src/lib/webhooks.ts calls read_webhook_subscriptions, register_webhook_subscription,
+  request_webhook_verification, set_webhook_subscription_active and the webhook-verify Edge
+  function. Five doors, none of which is an exit.
+
+
+2. The table has no soft-delete column either
+-------------------------------------------------------------------------------
+supabase/migrations/0066_integration_adapters.sql:36-54 — `create table public.webhook_subscriptions`
+carries id, org_id, target, url, event_types, secret_id, active, description, created_at,
+updated_at. No `deleted_at`, no `archived_at`, no status enum. So "removal" cannot even be
+expressed as an UPDATE today; `set_webhook_subscription_active(false)` is revocation, and the
+finding is explicit that revocation is the exit it already found and is complaining about.
+
+
+3. Why a delete is not a one-line command, and what it would have to move
+-------------------------------------------------------------------------------
+  a. `secret_id uuid not null references vault.secrets(id) on delete restrict` (0066:45).
+     A row cannot be removed while its Vault secret exists, and the secret cannot be dropped
+     from the browser. Any removal command has to release the secret inside the same
+     SECURITY DEFINER body, or the delete fails at the constraint.
+
+  b. `target text ... generated always as ('webhook:' || id::text) stored unique` (0066:39) is the
+     join key `private.integration_outbox` and `private.integration_deliveries` use
+     (0198:680-692 reads them by `o.target = w.target`). Deleting the subscription orphans or
+     cascades delivery history, which is the ledger a failure investigation reads.
+
+  c. `private.webhook_verification_attempts` holds one row per handshake, with `org_id`,
+     `requested_by` and a failure code, and `audit_logs` + `record_security_event` rows already
+     name the subscription id. CLAUDE.md's soft-delete rule is written for financial records, and
+     a webhook connection is not one — but the history attached to it is the reason "delete" here
+     has to be decided rather than assumed. The honest shapes are (i) a soft delete: a
+     `deleted_at` column, a `delete_webhook_subscription(p_id, p_reason)` command that requires
+     owner + step-up + a reason, releases the Vault secret, and a `read_webhook_subscriptions`
+     that filters it out; or (ii) the finding's own alternative — the screen states plainly that
+     deactivation IS the removal and why the row stays. Which of the two is a product decision
+     with an OPEN-DECISIONS row attached, not something an implementing agent should pick quietly.
+
+     No copy was added for (ii) either: a sentence explaining that deactivation is the only
+     removal becomes wrong the moment (i) lands, and this row would still not read FIXED.
+
+
+4. What could NOT be tested, and why that is part of the finding
+-------------------------------------------------------------------------------
+The sweep's own note: it did not register a second subscription for the create half of the
+lifecycle test BECAUSE nothing could remove it afterwards. The live tenant still carries
+47b1a019-b4e5-4f56-836b-304d145f9b09 (https://app.inplace.digital/inplace-qa-webhook-sink) from an
+earlier sweep. So the accumulation is not hypothetical, and the fix must not depend on creating a
+connection to prove itself — which is a further reason it belongs on the server, where a
+`to_regprocedure` assertion in a SQL suite can prove the command exists without registering
+anything.

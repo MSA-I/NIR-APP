@@ -284,3 +284,76 @@ describe('WebhookSettings — registration', () => {
     );
   });
 });
+
+describe('WebhookSettings — a handshake the server settled as failed (OWN-03)', () => {
+  /**
+   * The sweep watched the wire answer `{"verified":false,"code":"webhook_verification_status_405"}`
+   * and the screen answer "a verification request is open until 02:54". Both halves of that are
+   * asserted here, and both are scoped INSIDE the card on purpose: a toast carries the same
+   * sentence for a few seconds and then leaves, and a screen that only ever said it in a toast is
+   * the defect, not the fix.
+   */
+  it('shows the failure on the card and stops showing an open verification window', async () => {
+    readWebhookSubscriptions
+      .mockResolvedValueOnce([row({
+        verification_state: 'pending',
+        verification_expires_at: '2026-08-23T09:15:00+00:00',
+      })])
+      // What `read_webhook_subscriptions` returns once the attempt is settled: the lateral join
+      // in 0198 only calls a subscription 'pending' while an attempt is BOTH pending and unexpired.
+      .mockResolvedValue([row()]);
+    runWebhookVerification.mockResolvedValue({
+      verified: false,
+      code: 'webhook_verification_status_405',
+    });
+
+    const user = userEvent.setup();
+    renderScreen();
+    const opened = await screen.findByRole('article', { name: /hooks\.example\.com/ });
+    expect(within(opened).getByText(/בקשת אימות פתוחה/)).toBeInTheDocument();
+
+    await user.click(within(opened).getByRole('button', { name: /אימות נקודת הקצה/ }));
+    await user.type(await screen.findByLabelText(/סיבת הפעולה/), 'חיבור ERP');
+    await user.click(screen.getByRole('button', { name: /שליחת אימות/ }));
+
+    await vi.waitFor(() => expect(runWebhookVerification).toHaveBeenCalled(), { timeout: 5_000 });
+
+    const settled = await screen.findByRole('article', { name: /hooks\.example\.com/ });
+    await vi.waitFor(
+      () => expect(within(settled).getByText(/החזירה סטטוס 405/)).toBeInTheDocument(),
+      { timeout: 5_000 },
+    );
+    expect(within(settled).getByText(/לשלוח אימות מחדש/)).toBeInTheDocument();
+    expect(within(settled).queryByText(/בקשת אימות פתוחה/)).toBeNull();
+  }, 20_000);
+});
+
+describe('WebhookSettings — the URL refusal arrives while typing (OWN-15)', () => {
+  /**
+   * `webhooks.ts` says why `webhookUrlRejection` exists: "so the owner learns that address is not
+   * reachable from here WHILE TYPING, instead of after a round trip". The field used to compute
+   * that rejection and then throw the code away, keeping only a boolean that recoloured one static
+   * sentence — identical text for a valid address and for all seven refused classes.
+   */
+  it('names which class the typed address falls into, and takes it back when it is fixed', async () => {
+    const user = userEvent.setup();
+    renderScreen();
+    await user.click(await screen.findByRole('button', { name: /חיבור חדש/ }));
+    const url = screen.getByLabelText(/כתובת נקודת הקצה/);
+
+    fireEvent.change(url, { target: { value: 'http://hooks.example.com/inplace' } });
+    expect(await screen.findByText(/רק כתובת HTTPS מתקבלת/)).toBeInTheDocument();
+
+    fireEvent.change(url, { target: { value: 'https://127.0.0.1/hook' } });
+    expect(await screen.findByText(/יש להזין שם מארח, לא כתובת IP/)).toBeInTheDocument();
+
+    fireEvent.change(url, { target: { value: 'https://hooks.example.com:8443/inplace' } });
+    expect(await screen.findByText(/רק פורט 443 מתקבל/)).toBeInTheDocument();
+
+    fireEvent.change(url, { target: { value: 'https://hooks.example.com/inplace' } });
+    await vi.waitFor(() => expect(screen.queryByText(/רק פורט 443 מתקבל/)).toBeNull());
+    expect(screen.getByText(/רק HTTPS על פורט 443/)).toBeInTheDocument();
+
+    expect(registerWebhookSubscription).not.toHaveBeenCalled();
+  });
+});

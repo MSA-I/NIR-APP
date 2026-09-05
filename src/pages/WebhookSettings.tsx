@@ -1,5 +1,5 @@
 import { useT } from '../lib/i18n/LocaleProvider';
-import { useCallback, useEffect, useId, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Loader2, Plug, Plus, RefreshCw, ShieldCheck, ShieldAlert } from 'lucide-react';
 import {
   Card, ConfirmDialog, EmptyState, ErrorNote, ICON, Modal, Note, PageHeader, SkeletonList, useToast,
@@ -101,6 +101,21 @@ export default function WebhookSettings() {
   const [pendingToggle, setPendingToggle] =
     useState<{ id: string; next: boolean; reason: string } | null>(null);
 
+  /**
+   * The last handshake refusal, per subscription, kept on the SCREEN rather than in a toast.
+   *
+   * A failed verification is settled server-side the moment the Edge helper answers: `0198`'s
+   * `service_complete_webhook_verification` writes `outcome = 'failed'`, so the fifteen-minute
+   * window is already closed. The screen used to say the opposite — the card still read "a
+   * verification request is open until 02:54" while the only mention of the failure was a toast
+   * that leaves after a few seconds. An owner who looked away waited out a window for a handshake
+   * that had definitively failed, and nothing told them when it expired either.
+   *
+   * A code, resolved to a sentence through `refusalText` — the server's own words still never
+   * cross this line (#98).
+   */
+  const [verifyFailure, setVerifyFailure] = useState<Record<string, string>>({});
+
   const load = useCallback(async () => {
     try {
       setRows(await readWebhookSubscriptions());
@@ -114,13 +129,19 @@ export default function WebhookSettings() {
 
   useEffect(() => { void load(); }, [load]);
 
-  async function run(action: () => Promise<string>): Promise<void> {
+  async function run(
+    action: () => Promise<string>,
+    /** Given the refusal already resolved to a sentence, for a caller that must OUTLIVE the toast. */
+    onFailure?: (refusal: string) => void | Promise<void>,
+  ): Promise<void> {
     setBusy(true);
     try {
       toast(await action(), 'success');
       await load();
     } catch (error) {
-      toast(refusalText(t, error), 'error');
+      const refusal = refusalText(t, error);
+      toast(refusal, 'error');
+      await onFailure?.(refusal);
     } finally {
       setBusy(false);
     }
@@ -175,6 +196,7 @@ export default function WebhookSettings() {
             key={row.id}
             row={row}
             busy={busy}
+            failure={verifyFailure[row.id]}
             onVerify={() => setVerifying(row)}
             onToggle={(next) => setToggling({ row, next })}
           />
@@ -243,13 +265,29 @@ export default function WebhookSettings() {
           const request = pendingVerify;
           setPendingVerify(null);
           if (!request) return;
-          void run(async () => {
-            const authorized = await requestWebhookVerification(
-              request.id, request.reason.trim() || t('webhookSettings.trim_2'));
-            const outcome = await runWebhookVerification(authorized.verification_id);
-            if (!outcome.verified) throw new Error(outcome.code);
-            return t('webhookSettings.text_5');
+          // Cleared before the attempt, not after it: a success then leaves nothing behind, and a
+          // second failure replaces the first instead of being read as the same one.
+          setVerifyFailure((current) => {
+            const next = { ...current };
+            delete next[request.id];
+            return next;
           });
+          void run(
+            async () => {
+              const authorized = await requestWebhookVerification(
+                request.id, request.reason.trim() || t('webhookSettings.trim_2'));
+              const outcome = await runWebhookVerification(authorized.verification_id);
+              if (!outcome.verified) throw new Error(outcome.code);
+              return t('webhookSettings.text_5');
+            },
+            async (refusal) => {
+              setVerifyFailure((current) => ({ ...current, [request.id]: refusal }));
+              // The one failure path that must re-read: the attempt is settled in the database
+              // even though the command "failed" here, so the card is still displaying a window
+              // that no longer exists. Every other refusal on this screen changed nothing.
+              await load();
+            },
+          );
         }}
         onCancel={() => setPendingVerify(null)}
       />
@@ -296,9 +334,11 @@ export default function WebhookSettings() {
   );
 }
 
-function SubscriptionCard({ row, busy, onVerify, onToggle }: {
+function SubscriptionCard({ row, busy, failure, onVerify, onToggle }: {
   row: WebhookSubscription;
   busy: boolean;
+  /** The last handshake refusal for THIS connection, already in the reader's language. */
+  failure?: string;
   onVerify: () => void;
   onToggle: (next: boolean) => void;
 }) {
@@ -353,6 +393,17 @@ function SubscriptionCard({ row, busy, onVerify, onToggle }: {
         </Note>
       )}
 
+      {/* The refusal, on the card and not only in a toast — the failure is the durable fact here,
+          and the toast is the transient one. Still the resolved CODE, never a delivery body. */}
+      {!verified && failure && (
+        <Note tone="alert" role="alert">
+          <ShieldAlert size={ICON.sm} className="mt-0.5 shrink-0" aria-hidden="true" />
+          <span className="min-w-0 flex-1">
+            {failure} {t('webhookSettings.verificationFailedNext')}
+          </span>
+        </Note>
+      )}
+
       <div className="flex flex-wrap gap-2">
         <button type="button" className="btn-secondary" disabled={busy} onClick={onVerify}>
           {busy ? <Loader2 size={ICON.sm} className="animate-spin" aria-hidden="true" /> : <ShieldCheck size={ICON.sm} aria-hidden="true" />}
@@ -395,6 +446,7 @@ function RegistrationModal({ draft, error, busy, onChange, onClose, onSubmit }: 
   onSubmit: () => void;
 }) {
   const { t } = useT();
+  const urlRef = useRef<HTMLInputElement>(null);
   const urlId = useId();
   const secretId = useId();
   const descriptionId = useId();
@@ -403,7 +455,13 @@ function RegistrationModal({ draft, error, busy, onChange, onClose, onSubmit }: 
   // The same two checks `submitDraft` runs, evaluated live so the FIELD carries its own validity
   // instead of one shared banner standing over four boxes with nothing tying it to any of them.
   // Only a typed value is judged: an untouched field is not a mistake yet.
-  const urlProblem = draft.url.trim().length > 0 && webhookUrlRejection(draft.url) !== null;
+  //
+  // The URL keeps its rejection CODE rather than collapsing it to a boolean. That collapse was the
+  // whole of OWN-15: eight addresses of seven different refused classes each produced the same
+  // static sentence in red, so the one thing the owner needed — WHICH rule the address broke — was
+  // computed on every keystroke and thrown away, and only `submitDraft` ever said it. The sentences
+  // already exist and are already sanitised; this is a matter of showing the one that applies.
+  const urlRejection = draft.url.trim().length > 0 ? webhookUrlRejection(draft.url) : null;
   const secretProblem = draft.secret.length > 0 && webhookSecretRejection(draft.secret) !== null;
 
   function toggleEvent(value: string): void {
@@ -416,15 +474,24 @@ function RegistrationModal({ draft, error, busy, onChange, onClose, onSubmit }: 
   return (
     <Modal open onClose={onClose} title={t('webhookSettings.title_7')} wide busy={busy}
       description={t('webhookSettings.description_2')}>
-      <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); onSubmit(); }}>
+      <form className="space-y-4" onSubmit={(event) => {
+        event.preventDefault();
+        // The field below is already naming which rule this address breaks. Handing the same
+        // sentence to the form-level banner as well would print it twice on one form; taking the
+        // caret to the box that has to change is the useful thing a refused press can do instead.
+        // `submitDraft` still runs both checks for every other path — this is presentation, not a
+        // second gate, and removing it would change what the owner reads, not what is allowed.
+        if (urlRejection) { urlRef.current?.focus(); return; }
+        onSubmit();
+      }}>
         <div>
           <label className="label" htmlFor={urlId}>{t('webhookSettings.text_22')}</label>
-          <input id={urlId} className="input" dir="ltr" inputMode="url" autoComplete="off"
-            aria-invalid={urlProblem || undefined}
+          <input ref={urlRef} id={urlId} className="input" dir="ltr" inputMode="url" autoComplete="off"
+            aria-invalid={urlRejection !== null || undefined}
             aria-describedby={`${urlId}-rule${error ? ` ${problemId}` : ''}`}
             value={draft.url} onChange={(event) => onChange({ ...draft, url: event.target.value })} />
-          <p id={`${urlId}-rule`} className={`mt-1 text-xs ${urlProblem ? 'text-alert-fg' : 'text-ink-muted'}`}>
-            {t('webhookSettings.text_23')}
+          <p id={`${urlId}-rule`} className={`mt-1 text-xs ${urlRejection ? 'text-alert-fg' : 'text-ink-muted'}`}>
+            {urlRejection ? refusalText(t, urlRejection) : t('webhookSettings.text_23')}
           </p>
         </div>
 

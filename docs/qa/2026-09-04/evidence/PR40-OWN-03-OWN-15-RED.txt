@@ -1,0 +1,1211 @@
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-aa6eda680eee47171
+
+stderr | src/pages/webhookSettings.spec.tsx > WebhookSettings — a handshake the server settled as failed (OWN-03) > shows the failure on the card and stops showing an open verification window
+An update to ToastProvider inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+ ❯ src/pages/webhookSettings.spec.tsx (13 tests | 2 failed) 10870ms
+     × shows the failure on the card and stops showing an open verification window 5429ms
+     × names which class the typed address falls into, and takes it back when it is fixed 3139ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/webhookSettings.spec.tsx > WebhookSettings — a handshake the server settled as failed (OWN-03) > shows the failure on the card and stops showing an open verification window
+TestingLibraryElementError: Unable to find an element with the text: /החזירה סטטוס 405/. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<article[39m
+  [33maria-label[39m=[32m"https://hooks.example.com/inplace"[39m
+  [33mclass[39m=[32m"card card-pad  space-y-3"[39m
+[36m>[39m
+  [36m<div[39m
+    [33mclass[39m=[32m"flex flex-wrap items-start gap-x-3 gap-y-2"[39m
+  [36m>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"min-w-0 flex-1"[39m
+    [36m>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"text-sm font-medium text-ink break-all"[39m
+        [33mdir[39m=[32m"ltr"[39m
+      [36m>[39m
+        [0mhttps://hooks.example.com/inplace[0m
+      [36m</p>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"mt-0.5 text-xs text-ink-muted"[39m
+      [36m>[39m
+        [0mERP[0m
+      [36m</p>[39m
+    [36m</div>[39m
+    [36m<span[39m
+      [33mclass[39m=[32m"badge-idle"[39m
+    [36m>[39m
+      [0mכבוי[0m
+    [36m</span>[39m
+    [36m<span[39m
+      [33mclass[39m=[32m"badge-await"[39m
+    [36m>[39m
+      [0mאימות ממתין[0m
+    [36m</span>[39m
+  [36m</div>[39m
+  [36m<div[39m
+    [33mclass[39m=[32m"flex flex-wrap gap-1"[39m
+  [36m>[39m
+    [36m<span[39m
+      [33mclass[39m=[32m"badge-info"[39m
+    [36m>[39m
+      [0mחשבונית אושרה[0m
+    [36m</span>[39m
+  [36m</div>[39m
+  [36m<dl[39m
+    [33mclass[39m=[32m"grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4"[39m
+  [36m>[39m
+    [36m<div>[39m
+      [36m<dt[39m
+        [33mclass[39m=[32m"text-xs text-ink-muted"[39m
+      [36m>[39m
+        [0mמסירה מוצלחת אחרונה[0m
+      [36m</dt>[39m
+      [36m<dd[39m
+        [33mclass[39m=[32m"text-sm text-ink-muted"[39m
+        [33mdata-testid[39m=[32m"webhook-last-success"[39m
+      [36m>[39m
+        [0m—[0m
+      [36m</dd>[39m
+    [36m</div>[39m
+    [36m<div>[39m
+      [36m<dt[39m
+        [33mclass[39m=[32m"text-xs text-ink-muted"[39m
+      [36m>[39m
+        [0mממתינות למסירה[0m
+      [36m</dt>[39m
+      [36m<dd[39m
+        [33mclass[39m=[32m"text-sm text-ink num"[39m
+        [33mdata-testid[39m=[32m"webhook-pending"[39m
+      [36m>[39m
+        [0m0[0m
+      [36m</dd>[39m
+    [36m</div>[39m
+    [36m<div>[39m
+      [36m<dt[39m
+        [33mclass[39m=[32m"text-xs text-ink-muted"[39m
+      [36m>[39m
+        [0mניסיונות שנכשלו[0m
+      [36m</dt>[39m
+      [36m<dd[39m
+        [33mclass[39m=[32m"text-sm text-ink num"[39m
+        [33mdata-testid[39m=[32m"webhook-failed"[39m
+      [36m>[39m
+        [0m0[0m
+      [36m</dd>[39m
+    [36m</div>[39m
+    [36m<div>[39m
+      [36m<dt[39m
+        [33mclass[39m=[32m"text-xs text-ink-muted"[39m
+      [36m>[39m
+        [0mהועברו למכתב מת[0m
+      [36m</dt>[39m
+      [36m<dd[39m
+        [33mclass[39m=[32m"text-sm text-ink num"[39m
+        [33mdata-testid[39m=[32m"webhook-dead-letter"[39m
+      [36m>[39m
+        [0m0[0m
+      [36m</dd>[39m
+    [36m</div>[39m
+  [36m</dl>[39m
+  [36m<div[39m
+    [33mclass[39m=[32m"note-idle "[39m
+  [36m>[39m
+    [36m<svg[39m
+      [33maria-hidden[39m=[32m"true"[39m
+      [33mclass[39m=[32m"lucide lucide-shield-alert mt-0.5 shrink-0"[39m
+      [33mfill[39m=[32m"none"[39m
+      [33mheight[39m=[32m"15"[39m
+      [33mstroke[39m=[32m"currentColor"[39m
+      [33mstroke-linecap[39m=[32m"round"[39m
+      [33mstroke-linejoin[39m=[32m"round"[39m
+      [33mstroke-width[39m=[32m"2"[39m
+      [33mviewBox[39m=[32m"0 0 24 24"[39m
+      [33mwidth[39m=[32m"15"[39m
+      [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+    [36m>[39m
+      [36m<path[39m
+        [33md[39m=[32m"M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"[39m
+      [36m/>[39m
+      [36m<path[39m
+        [33md[39m=[32m"M12 8v4"[39m
+      [36m/>[39m
+      [36m<path[39m
+        [33md[39m=[32m"M12 16h.01"[39m
+      [36m/>[39m
+    [36m</svg>[39m
+    [36m<span[39m
+      [33mclass[39m=[32m"min-w-0 flex-1"[39m
+    [36m>[39m
+      [0mלפני הפעלה יש להוכיח בעלות על נקודת הקצה. המערכת תשלח אליה בקשה חתומה אחת, ועליה להחזיר את קוד האימות שקיבלה.[0m
+      [0m בקשת אימות פתוחה בתוקף עד 23.08.2026, 12:15.[0m
+    [36m</span>[39m
+  [36m</div>[39m
+  [36m<div[39m
+    [33mclass[39m=[32m"flex flex-wrap gap-2"[39m
+  [36m>[39m
+    [36m<button[39m
+      [33mclass[39m=[32m"btn-secondary"[39m
+      [33mtype[39m=[32m"button"[39m
+    [36m>[39m
+      [36m<svg[39m
+        [33maria-hidden[39m=[32m"true"[39m
+        [33mclass[39m=[32m"lucide lucide-shield-check"[39m
+        [33mfill[39m=[32m"none"[39m
+        [33mheight[39m=[32m"15"[39m
+        [33mstroke[39m=[32m"currentColor"[39m
+        [33mstroke-linecap[39m=[32m"round"[39m
+        [33mstroke-linejoin[39m=[32m"round"[39m
+        [33mstroke-width[39m=[32m"2"[39m
+        [33mviewBox[39m=[32m"0 0 24 24"[39m
+        [33mwidth[39m=[32m"15"[39m
+        [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+      [36m>[39m
+        [36m<path[39m
+          [33md[39m=[32m"M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"[39m
+        [36m/>[39m
+        [36m<path[39m
+          [33md[39m=[32m"m9 12 2 2 4-4"[39m
+        [36m/>[39m
+      [36m</svg>[39m
+      [0mאימות נקודת הקצה[0m
+    [36m</button>[39m
+  [36m</div>[39m
+[36m</article>[39m
+ ❯ Object.getElementError ../../../node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ vi.waitFor.timeout src/pages/webhookSettings.spec.tsx:323:36
+    321|     const settled = await screen.findByRole('article', { name: /hooks\…
+    322|     await vi.waitFor(
+    323|       () => expect(within(settled).getByText(/החזירה סטטוס 405/)).toBe…
+       |                                    ^
+    324|       { timeout: 5_000 },
+    325|     );
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/pages/webhookSettings.spec.tsx > WebhookSettings — the URL refusal arrives while typing (OWN-15) > names which class the typed address falls into, and takes it back when it is fixed
+TestingLibraryElementError: Unable to find an element with the text: /רק כתובת HTTPS מתקבלת/. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body[39m
+  [33mstyle[39m=[32m"overflow: hidden;"[39m
+[36m>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"space-y-5"[39m
+    [36m>[39m
+      [36m<header[39m
+        [33mclass[39m=[32m"flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between "[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"min-w-0 space-y-1"[39m
+        [36m>[39m
+          [36m<h1[39m
+            [33mclass[39m=[32m"page-title break-words"[39m
+          [36m>[39m
+            [0mחיבורי webhook[0m
+          [36m</h1>[39m
+          [36m<span[39m
+            [33maria-hidden[39m=[32m"true"[39m
+            [33mclass[39m=[32m"section-mark"[39m
+          [36m/>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"text-sm text-ink-muted"[39m
+          [36m>[39m
+            [0mשליחה אוטומטית של אירועים עסקיים לנקודת קצה שלך. כל חיבור נחתם, נשלח לפחות פעם אחת, וניתן לכבות אותו בכל רגע.[0m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex shrink-0 flex-wrap items-center gap-2"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex gap-2"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"btn-secondary"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-refresh-cw"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"15"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"15"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M21 3v5h-5"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M8 16H3v5"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [0m [0m
+              [0mרענון[0m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"btn-primary"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-plus"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"15"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"15"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M5 12h14"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M12 5v14"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [0m [0m
+              [0mחיבור חדש[0m
+            [36m</button>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+      [36m</header>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"flex flex-col items-center justify-center text-center py-16 "[39m
+      [36m>[39m
+        [36m<span[39m
+          [33maria-hidden[39m=[32m"true"[39m
+          [33mclass[39m=[32m"mb-3 text-ink-ghost"[39m
+        [36m>[39m
+          [36m<svg[39m
+            [33maria-hidden[39m=[32m"true"[39m
+            [33mclass[39m=[32m"lucide lucide-plug"[39m
+            [33mfill[39m=[32m"none"[39m
+            [33mheight[39m=[32m"36"[39m
+            [33mstroke[39m=[32m"currentColor"[39m
+            [33mstroke-linecap[39m=[32m"round"[39m
+            [33mstroke-linejoin[39m=[32m"round"[39m
+            [33mstroke-width[39m=[32m"2"[39m
+            [33mviewBox[39m=[32m"0 0 24 24"[39m
+            [33mwidth[39m=[32m"36"[39m
+            [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+          [36m>[39m
+            [36m<path[39m
+              [33md[39m=[32m"M12 22v-5"[39m
+            [36m/>[39m
+            [36m<path[39m
+              [33md[39m=[32m"M15 8V2"[39m
+            [36m/>[39m
+            [36m<path[39m
+              [33md[39m=[32m"M17 8a1 1 0 0 1 1 1v4a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1z"[39m
+            [36m/>[39m
+            [36m<path[39m
+              [33md[39m=[32m"M9 8V2"[39m
+            [36m/>[39m
+          [36m</svg>[39m
+        [36m</span>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"text-ink-soft font-medium"[39m
+        [36m>[39m
+          [0mאין עדיין חיבורי webhook[0m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"text-sm text-ink-muted mt-1"[39m
+        [36m>[39m
+          [0mאפשר לרשום נקודת קצה HTTPS, לבחור אילו אירועים יישלחו אליה, ולאמת אותה לפני ההפעלה.[0m
+        [36m</div>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"space-y-3"[39m
+      [36m/>[39m
+    [36m</div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"mobile-overlay-stack fixed z-[60] start-4 end-4 flex flex-col items-center gap-2 pointer-events-none no-print sm:start-6 sm:end-6"[39m
+    [36m/>[39m
+  [36m</div>[39m
+  [36m<div[39m
+    [33mclass[39m=[32m"dialog-backdrop-safe fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-scrim p-0 sm:p-4"[39m
+  [36m>[39m
+    [36m<div[39m
+      [33maria-describedby[39m=[32m"_r_5a_"[39m
+      [33maria-labelledby[39m=[32m"_r_59_"[39m
+      [33maria-modal[39m=[32m"true"[39m
+      [33mclass[39m=[32m"dialog-panel-safe bg-surface rounded-t-2xl sm:rounded-2xl shadow-dialog w-full sm:max-w-3xl flex flex-col focus:outline-none"[39m
+      [33mrole[39m=[32m"dialog"[39m
+      [33mtabindex[39m=[32m"-1"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"flex items-center justify-between px-5 py-4 border-b border-line-soft"[39m
+      [36m>[39m
+        [36m<h3[39m
+          [33mclass[39m=[32m"font-semibold text-ink focus:outline-none"[39m
+          [33mid[39m=[32m"_r_59_"[39m
+          [33mtabindex[39m=[32m"-1"[39m
+        [36m>[39m
+          [0mחיבור webhook חדש[0m
+        [36m</h3>[39m
+        [36m<button[39m
+          [33maria-label[39m=[32m"סגירה"[39m
+          [33mclass[39m=[32m"btn-ghost p-1.5! min-w-11 min-h-11"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [36m<svg[39m
+            [33maria-hidden[39m=[32m"true"[39m
+            [33mclass[39m=[32m"lucide lucide-x"[39m
+            [33mfill[39m=[32m"none"[39m
+            [33mheight[39m=[32m"17"[39m
+            [33mstroke[39m=[32m"currentColor"[39m
+            [33mstroke-linecap[39m=[32m"round"[39m
+            [33mstroke-linejoin[39m=[32m"round"[39m
+            [33mstroke-width[39m=[32m"2"[39m
+            [33mviewBox[39m=[32m"0 0 24 24"[39m
+            [33mwidth[39m=[32m"17"[39m
+            [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+          [36m>[39m
+            [36m<path[39m
+              [33md[39m=[32m"M18 6 6 18"[39m
+            [36m/>[39m
+            [36m<path[39m
+              [33md[39m=[32m"m6 6 12 12"[39m
+            [36m/>[39m
+          [36m</svg>[39m
+        [36m</button>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"dialog-safe-body p-5 overflow-y-auto"[39m
+      [36m>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"text-sm text-ink-soft mb-4"[39m
+          [33mid[39m=[32m"_r_5a_"[39m
+        [36m>[39m
+          [0mהחיבור נוצר כבוי. לאחר אימות נקודת הקצה אפשר יהיה להפעיל אותו.[0m
+        [36m</p>[39m
+        [36m<form[39m
+          [33mclass[39m=[32m"space-y-4"[39m
+        [36m>[39m
+          [36m<div>[39m
+            [36m<label[39m
+              [33mclass[39m=[32m"label"[39m
+              [33mfor[39m=[32m"_r_54_"[39m
+            [36m>[39m
+              [0mכתובת נקודת הקצה (HTTPS) *[0m
+            [36m</label>[39m
+            [36m<input[39m
+              [33maria-describedby[39m=[32m"_r_54_-rule"[39m
+              [33maria-invalid[39m=[32m"true"[39m
+              [33mautocomplete[39m=[32m"off"[39m
+              [33mclass[39m=[32m"input"[39m
+              [33mdir[39m=[32m"ltr"[39m
+              [33mid[39m=[32m"_r_54_"[39m
+              [33minputmode[39m=[32m"url"[39m
+              [33mvalue[39m=[32m"http://hooks.example.com/inplace"[39m
+            [36m/>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"mt-1 text-xs text-alert-fg"[39m
+              [33mid[39m=[32m"_r_54_-rule"[39m
+            [36m>[39m
+              [0mרק HTTPS על פורט 443, שם דומיין ציבורי, בלי שם משתמש או סיסמה בכתובת.[0m
+            [36m</p>[39m
+          [36m</div>[39m
+          [36m<fieldset>[39m
+            [36m<legend[39m
+              [33mclass[39m=[32m"label"[39m
+            [36m>[39m
+              [0mסוגי אירועים[0m
+            [36m</legend>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"mb-2 text-xs text-ink-muted"[39m
+            [36m>[39m
+              [0mבלי בחירה יישלחו כל סוגי האירועים. בחירה מצמצמת את מה שיוצא מהעסק — עדיף לבחור.[0m
+            [36m</p>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex flex-wrap gap-2"[39m
+            [36m>[39m
+              [36m<button[39m
+                [33maria-pressed[39m=[32m"false"[39m
+                [33mclass[39m=[32m"chip-filter "[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mספק נוצר[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33maria-pressed[39m=[32m"false"[39m
+                [33mclass[39m=[32m"chip-filter "[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mספק עודכן[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33maria-pressed[39m=[32m"false"[39m
+                [33mclass[39m=[32m"chip-filter "[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mפרטי בנק של ספק שונו[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33maria-pressed[39m=[32m"false"[39m
+                [33mclass[39m=[32m"chip-filter "[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mמוצר נוצר[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33maria-pressed[39m=[32m"false"[39m
+                [33mclass[39m=[32m"chip-filter "[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mמחיר ספק עודכן[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33maria-pressed[39m=[32m"false"[39m
+                [33mclass[39m=[32m"chip-filter "[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mמחירון ספק הוגש[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33maria-pressed[39m=[32m"false"[39m
+                [33mclass[39m=[32m"chip-filter "[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mהזמנת רכש נוצרה[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33maria-pressed[39m=[32m"false"[39m
+                [33mclass[39m=[32m"chip-filter "[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mהזמנת רכש אושרה[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33maria-pressed[39m=[32m"false"[39m
+                [33mclass[39m=[32m"chip-filter "[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mהזמנת רכש נשלחה[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33maria-pressed[39m=[32m"false"[39m
+                [33mclass[39m=[32m"chip-filter "[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mקבלת סחורה הושלמה[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33maria-pressed[39m=[32m"false"[39m
+                [33mclass[39m=[32m"chip-filter "[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mחשבונית נוצרה[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33maria-pressed[39m=[32m"false"[39m
+                [33mclass[39m=[32m"chip-filter "[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mחשבונית אושרה[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33maria-pressed[39m=[32m"false"[39m
+                [33mclass[39m=[32m"chip-filter "[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mחשבונית דורשת בדיקה[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33maria-pressed[39m=[32m"false"[39m
+                [33mclass[39m=[32m"chip-filter "[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mזיכוי נוצר[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33maria-pressed[39m=[32m"false"[39m
+                [33mclass[39m=[32m"chip-filter "[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mבקשת תשלום נוצרה[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33maria-pressed[39m=[32m"false"[39m
+                [33mclass[39m=[32m"chip-filter "[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mבקשת תשלום אושרה[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33maria-pressed[39m=[32m"false"[39m
+                [33mclass[39m=[32m"chip-filter "[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mתשלום בוצע[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33maria-pressed[39m=[32m"false"[39m
+                [33mclass[39m=[32m"chip-filter "[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mתנועת בנק יובאה[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33maria-pressed[39m=[32m"false"[39m
+                [33mclass[39m=[32m"chip-filter "[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mהתאמה בנקאית הושלמה[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33maria-pressed[39m=[32m"false"[39m
+                [33mclass[39m=[32m"chip-filter "[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mמסמך הועלה[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33maria-pressed[39m=[32m"false"[39m
+                [33mclass[39m=[32m"chip-filter "[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mעיבוד מסמך הושלם[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33maria-pressed[39m=[32m"false"[39m
+                [33mclass[39m=[32m"chip-filter "[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mעיבוד מסמך נכשל[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33maria-pressed[39m=[32m"false"[39m
+                [33mclass[39m=[32m"chip-filter "[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mייצוא חודשי נשלח[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33maria-pressed[39m=[32m"false"[39m
+                [33mclass[39m=[32m"chip-filter "[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mהרשאות משתמש שונו[0m
+              [36m</button>[39m
+            [36m</div>[39m
+          [36m</fieldset>[39m
+          [36m<div>[39m
+            [36m<label[39m
+              [33mclass[39m=[32m"label"[39m
+              [33mfor[39m=[32m"_r_55_"[39m
+            [36m>[39m
+              [0mסוד חתימה *[0m
+            [36m</label>[39m
+            [36m<input[39m
+              [33maria-describedby[39m=[32m"_r_55_-rule"[39m
+              [33mautocomplete[39m=[32m"new-password"[39m
+              [33mclass[39m=[32m"input"[39m
+              [33mdir[39m=[32m"ltr"[39m
+              [33mid[39m=[32m"_r_55_"[39m
+              [33mtype[39m=[32m"password"[39m
+              [33mvalue[39m=[32m""[39m
+            [36m/>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"mt-1 text-xs text-ink-muted"[39m
+              [33mid[39m=[32m"_r_55_-rule"[39m
+            [36m>[39m
+              [0mלפחות 32 תווים. הסוד נשמר במאגר סודות ואינו ניתן לקריאה חוזרת — יש לשמור עותק אצלך, איתו מאמתים את חתימת ההודעות.[0m
+            [36m</p>[39m
+          [36m</div>[39m
+          [36m<div>[39m
+            [36m<label[39m
+              [33mclass[39m=[32m"label"[39m
+              [33mfor[39m=[32m"_r_56_"[39m
+            [36m>[39m
+              [0mתיאור[0m
+            [36m</label>[39m
+            [36m<input[39m
+              [33mclass[39m=[32m"input"[39m
+              [33mid[39m=[32m"_r_56_"[39m
+              [33mvalue[39m=[32m""[39m
+            [36m/>[39m
+          [36m</div>[39m
+          [36m<div>[39m
+            [36m<label[39m
+              [33mclass[39m=[32m"label"[39m
+              [33mfor[39m=[32m"_r_57_"[39m
+            [36m>[39m
+              [0mסיבת הפעולה[0m
+            [36m</label>[39m
+            [36m<textarea[39m
+              [33mclass[39m=[32m"input"[39m
+              [33mid[39m=[32m"_r_57_"[39m
+              [33mmaxlength[39m=[32m"1000"[39m
+              [33mrows[39m=[32m"2"[39m
+            [36m/>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex justify-end gap-2"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"btn-secondary"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [0mביטול[0m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"btn-primary"[39m
+              [33mtype[39m=[32m"submit"[39m
+            [36m>[39m
+              [0mשמירת החיבור[0m
+            [36m</button>[39m
+          [36m</div>[39m
+        [36m</form>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33maria-live[39m=[32m"polite"[39m
+        [33mclass[39m=[32m"sr-only"[39m
+      [36m/>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+
+Ignored nodes: comments, script, style
+[36m<body[39m
+  [33mstyle[39m=[32m"overflow: hidden;"[39m
+[36m>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"space-y-5"[39m
+    [36m>[39m
+      [36m<header[39m
+        [33mclass[39m=[32m"flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between "[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"min-w-0 space-y-1"[39m
+        [36m>[39m
+          [36m<h1[39m
+            [33mclass[39m=[32m"page-title break-words"[39m
+          [36m>[39m
+            [0mחיבורי webhook[0m
+          [36m</h1>[39m
+          [36m<span[39m
+            [33maria-hidden[39m=[32m"true"[39m
+            [33mclass[39m=[32m"section-mark"[39m
+          [36m/>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"text-sm text-ink-muted"[39m
+          [36m>[39m
+            [0mשליחה אוטומטית של אירועים עסקיים לנקודת קצה שלך. כל חיבור נחתם, נשלח לפחות פעם אחת, וניתן לכבות אותו בכל רגע.[0m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex shrink-0 flex-wrap items-center gap-2"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex gap-2"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"btn-secondary"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-refresh-cw"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"15"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"15"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M21 3v5h-5"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M8 16H3v5"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [0m [0m
+              [0mרענון[0m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"btn-primary"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-plus"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"15"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"15"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M5 12h14"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M12 5v14"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [0m [0m
+              [0mחיבור חדש[0m
+            [36m</button>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+      [36m</header>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"flex flex-col items-center justify-center text-center py-16 "[39m
+      [36m>[39m
+        [36m<span[39m
+          [33maria-hidden[39m=[32m"true"[39m
+          [33mclass[39m=[32m"mb-3 text-ink-ghost"[39m
+        [36m>[39m
+          [36m<svg[39m
+            [33maria-hidden[39m=[32m"true"[39m
+            [33mclass[39m=[32m"lucide lucide-plug"[39m
+            [33mfill[39m=[32m"none"[39m
+            [33mheight[39m=[32m"36"[39m
+            [33mstroke[39m=[32m"currentColor"[39m
+            [33mstroke-linecap[39m=[32m"round"[39m
+            [33mstroke-linejoin[39m=[32m"round"[39m
+            [33mstroke-width[39m=[32m"2"[39m
+            [33mviewBox[39m=[32m"0 0 24 24"[39m
+            [33mwidth[39m=[32m"36"[39m
+            [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+          [36m>[39m
+            [36m<path[39m
+              [33md[39m=[32m"M12 22v-5"[39m
+            [36m/>[39m
+            [36m<path[39m
+              [33md[39m=[32m"M15 8V2"[39m
+            [36m/>[39m
+            [36m<path[39m
+              [33md[39m=[32m"M17 8a1 1 0 0 1 1 1v4a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1z"[39m
+            [36m/>[39m
+            [36m<path[39m
+              [33md[39m=[32m"M9 8V2"[39m
+            [36m/>[39m
+          [36m</svg>[39m
+        [36m</span>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"text-ink-soft font-medium"[39m
+        [36m>[39m
+          [0mאין עדיין חיבורי webhook[0m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"text-sm text-ink-muted mt-1"[39m
+        [36m>[39m
+          [0mאפשר לרשום נקודת קצה HTTPS, לבחור אילו אירועים יישלחו אליה, ולאמת אותה לפני ההפעלה.[0m
+        [36m</div>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"space-y-3"[39m
+      [36m/>[39m
+    [36m</div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"mobile-overlay-stack fixed z-[60] start-4 end-4 flex flex-col items-center gap-2 pointer-events-none no-print sm:start-6 sm:end-6"[39m
+    [36m/>[39m
+  [36m</div>[39m
+  [36m<div[39m
+    [33mclass[39m=[32m"dialog-backdrop-safe fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-scrim p-0 sm:p-4"[39m
+  [36m>[39m
+    [36m<div[39m
+      [33maria-describedby[39m=[32m"_r_5a_"[39m
+      [33maria-labelledby[39m=[32m"_r_59_"[39m
+      [33maria-modal[39m=[32m"true"[39m
+      [33mclass[39m=[32m"dialog-panel-safe bg-surface rounded-t-2xl sm:rounded-2xl shadow-dialog w-full sm:max-w-3xl flex flex-col focus:outline-none"[39m
+      [33mrole[39m=[32m"dialog"[39m
+      [33mtabindex[39m=[32m"-1"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"flex items-center justify-between px-5 py-4 border-b border-line-soft"[39m
+      [36m>[39m
+        [36m<h3[39m
+          [33mclass[39m=[32m"font-semibold text-ink focus:outline-none"[39m
+          [33mid[39m=[32m"_r_59_"[39m
+          [33mtabindex[39m=[32m"-1"[39m
+        [36m>[39m
+          [0mחיבור webhook חדש[0m
+        [36m</h3>[39m
+        [36m<button[39m
+          [33maria-label[39m=[32m"סגירה"[39m
+          [33mclass[39m=[32m"btn-ghost p-1.5! min-w-11 min-h-11"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [36m<svg[39m
+            [33maria-hidden[39m=[32m"true"[39m
+            [33mclass[39m=[32m"lucide lucide-x"[39m
+            [33mfill[39m=[32m"none"[39m
+            [33mheight[39m=[32m"17"[39m
+            [33mstroke[39m=[32m"currentColor"[39m
+            [33mstroke-linecap[39m=[32m"round"[39m
+            [33mstroke-linejoin[39m=[32m"round"[39m
+            [33mstroke-width[39m=[32m"2"[39m
+            [33mviewBox[39m=[32m"0 0 24 24"[39m
+            [33mwidth[39m=[32m"17"[39m
+            [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+          [36m>[39m
+            [36m<path[39m
+              [33md[39m=[32m"M18 6 6 18"[39m
+            [36m/>[39m
+            [36m<path[39m
+              [33md[39m=[32m"m6 6 12 12"[39m
+            [36m/>[39m
+          [36m</svg>[39m
+        [36m</button>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"dialog-safe-body p-5 overflow-y-auto"[39m
+      [36m>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"text-sm text-ink-soft mb-4"[39m
+          [33mid[39m=[32m"_r_5a_"[39m
+        [36m>[39m
+          [0mהחיבור נוצר כבוי. לאחר אימות נקודת הקצה אפשר יהיה להפעיל אותו.[0m
+        [36m</p>[39m
+        [36m<form[39m
+          [33mclass[39m=[32m"space-y-4"[39m
+        [36m>[39m
+          [36m<div>[39m
+            [36m<label[39m
+              [33mclass[39m=[32m"label"[39m
+              [33mfor[39m=[32m"_r_54_"[39m
+            [36m>[39m
+              [0mכתובת נקודת הקצה (HTTPS) *[0m
+            [36m</label>[39m
+            [36m<input[39m
+              [33maria-describedby[39m=[32m"_r_54_-rule"[39m
+              [33maria-invalid[39m=[32m"true"[39m
+              [33mautocomplete[39m=[32m"off"[39m
+              [33mclass[39m=[32m"input"[39m
+              [33mdir[39m=[32m"ltr"[39m
+              [33mid[39m=[32m"_r_54_"[39m
+              [33minputmode[39m=[32m"url"[39m
+              [33mvalue[39m=[32m"http://hooks.example.com/inplace"[39m
+            [36m/>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"mt-1 text-xs text-alert-fg"[39m
+              [33mid[39m=[32m"_r_54_-rule"[39m
+            [36m>[39m
+              [0mרק HTTPS על פורט 443, שם דומיין ציבורי, בלי שם משתמש או סיסמה בכתובת.[0m
+            [36m</p>[39m
+          [36m</div>[39m
+          [36m<fieldset>[39m
+            [36m<legend[39m
+              [33mclass[39m=[32m"label"[39m
+            [36m>[39m
+              [0mסוגי אירועים[0m
+            [36m</legend>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"mb-2 text-xs text-ink-muted"[39m
+            [36m>[39m
+              [0mבלי בחירה יישלחו כל סוגי האירועים. בחירה מצמצמת את מה שיוצא מהעסק — עדיף לבחור.[0m
+            [36m</p>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex flex-wrap gap-2"[39m
+            [36m>[39m
+              [36m<button[39m
+                [33maria-pressed[39m=[32m"false"[39m
+                [33mclass[39m=[32m"chip-filter "[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mספק נוצר[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33maria-pressed[39m=[32m"false"[39m
+                [33mclass[39m=[32m"chip-filter "[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mספק עודכן[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33maria-pressed[39m=[32m"false"[39m
+                [33mclass[39m=[32m"chip-filter "[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mפרטי בנק של ספק שונו[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33maria-pressed[39m=[32m"false"[39m
+                [33mclass[39m=[32m"chip-filter "[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mמוצר נוצר[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33maria-pressed[39m=[32m"false"[39m
+                [33mclass[39m=[32m"chip-filter "[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mמחיר ספק עודכן[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33maria-pressed[39m=[32m"false"[39m
+                [33mclass[39m=[32m"chip-filter "[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mמחירון ספק הוגש[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33maria-pressed[39m=[32m"false"[39m
+                [33mclass[39m=[32m"chip-filter "[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mהזמנת רכש נוצרה[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33maria-pressed[39m=[32m"false"[39m
+                [33mclass[39m=[32m"chip-filter "[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mהזמנת רכש אושרה[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33maria-pressed[39m=[32m"false"[39m
+                [33mclass[39m=[32m"chip-filter "[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mהזמנת רכש נשלחה[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33maria-pressed[39m=[32m"false"[39m
+                [33mclass[39m=[32m"chip-filter "[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mקבלת סחורה הושלמה[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33maria-pressed[39m=[32m"false"[39m
+                [33mclass[39m=[32m"chip-filter "[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mחשבונית נוצרה[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33maria-pressed[39m=[32m"false"[39m
+                [33mclass[39m=[32m"chip-filter "[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mחשבונית אושרה[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33maria-pressed[39m=[32m"false"[39m
+                [33mclass[39m=[32m"chip-filter "[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mחשבונית דורשת בדיקה[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33maria-pressed[39m=[32m"false"[39m
+                [33mclass[39m=[32m"chip-filter "[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mזיכוי נוצר[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33maria-pressed[39m=[32m"false"[39m
+                [33mclass[39m=[32m"chip-filter "[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mבקשת תשלום נוצרה[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33maria-pressed[39m=[32m"false"[39m
+                [33mclass[39m=[32m"chip-filter "[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mבקשת תשלום אושרה[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33maria-pressed[39m=[32m"false"[39m
+                [33mclass[39m=[32m"chip-filter "[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mתשלום בוצע[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33maria-pressed[39m=[32m"false"[39m
+                [33mclass[39m=[32m"chip-filter "[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mתנועת בנק יובאה[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33maria-pressed[39m=[32m"false"[39m
+                [33mclass[39m=[32m"chip-filter "[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mהתאמה בנקאית הושלמה[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33maria-pressed[39m=[32m"false"[39m
+                [33mclass[39m=[32m"chip-filter "[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mמסמך הועלה[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33maria-pressed[39m=[32m"false"[39m
+                [33mclass[39m=[32m"chip-filter "[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mעיבוד מסמך הושלם[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33maria-pressed[39m=[32m"false"[39m
+                [33mclass[39m=[32m"chip-filter "[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mעיבוד מסמך נכשל[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33maria-pressed[39m=[32m"false"[39m
+                [33mclass[39m=[32m"chip-filter "[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mייצוא חודשי נשלח[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33maria-pressed[39m=[32m"false"[39m
+                [33mclass[39m=[32m"chip-filter "[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mהרשאות משתמש שונו[0m
+              [36m</button>[39m
+            [36m</div>[39m
+          [36m</fieldset>[39m
+          [36m<div>[39m
+            [36m<label[39m
+              [33mclass[39m=[32m"label"[39m
+              [33mfor[39m=[32m"_r_55_"[39m
+            [36m>[39m
+              [0mסוד חתימה *[0m
+            [36m</label>[39m
+            [36m<input[39m
+              [33maria-describedby[39m=[32m"_r_55_-rule"[39m
+              [33mautocomplete[39m=[32m"new-password"[39m
+              [33mclass[39m=[32m"input"[39m
+              [33mdir[39m=[32m"ltr"[39m
+              [33mid[39m=[32m"_r_55_"[39m
+              [33mtype[39m=[32m"password"[39m
+              [33mvalue[39m=[32m""[39m
+            [36m/>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"mt-1 text-xs text-ink-muted"[39m
+              [33mid[39m=[32m"_r_55_-rule"[39m
+            [36m>[39m
+              [0mלפחות 32 תווים. הסוד נשמר במאגר סודות ואינו ניתן לקריאה חוזרת — יש לשמור עותק אצלך, איתו מאמתים את חתימת ההודעות.[0m
+            [36m</p>[39m
+          [36m</div>[39m
+          [36m<div>[39m
+            [36m<label[39m
+              [33mclass[39m=[32m"label"[39m
+              [33mfor[39m=[32m"_r_56_"[39m
+            [36m>[39m
+              [0mתיאור[0m
+            [36m</label>[39m
+            [36m<input[39m
+              [33mclass[39m=[32m"input"[39m
+              [33mid[39m=[32m"_r_56_"[39m
+              [33mvalue[39m=[32m""[39m
+            [36m/>[39m
+          [36m</div>[39m
+          [36m<div>[39m
+            [36m<label[39m
+              [33mclass[39m=[32m"label"[39m
+              [33mfor[39m=[32m"_r_57_"[39m
+            [36m>[39m
+              [0mסיבת הפעולה[0m
+            [36m</label>[39m
+            [36m<textarea[39m
+              [33mclass[39m=[32m"input"[39m
+              [33mid[39m=[32m"_r_57_"[39m
+              [33mmaxlength[39m=[32m"1000"[39m
+              [33mrows[39m=[32m"2"[39m
+            [36m/>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex justify-end gap-2"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"btn-secondary"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [0mביטול[0m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"btn-primary"[39m
+              [33mtype[39m=[32m"submit"[39m
+            [36m>[39m
+              [0mשמירת החיבור[0m
+            [36m</button>[39m
+          [36m</div>[39m
+        [36m</form>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33maria-live[39m=[32m"polite"[39m
+        [33mclass[39m=[32m"sr-only"[39m
+      [36m/>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+ ❯ waitForWrapper ../../../node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ ../../../node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ src/pages/webhookSettings.spec.tsx:345:25
+    343|
+    344|     fireEvent.change(url, { target: { value: 'http://hooks.example.com…
+    345|     expect(await screen.findByText(/רק כתובת HTTPS מתקבלת/)).toBeInThe…
+       |                         ^
+    346|
+    347|     fireEvent.change(url, { target: { value: 'https://127.0.0.1/hook' …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 11 passed (13)
+   Start at  04:58:19
+   Duration  14.58s (transform 1.07s, setup 615ms, import 1.57s, tests 10.87s, environment 1.18s)
+
