@@ -1,0 +1,94 @@
+PR05 - PERM-01 - RED - the client half, measured on the wire
+=============================================================
+Tree: branch worktree-agent-a3bfa1394780d727a at d9393233 (campaign branch head).
+Nothing behavioural has been edited. The only files that exist beyond the campaign head are the
+oracle itself (src/pages/accountColumnBoundary.spec.tsx), the column module it imports
+(src/lib/accountColumns.ts) and the static guard (scripts/check-profile-columns.ts). All four
+reads in src/auth/AuthContext.tsx and src/pages/Settings.tsx are exactly as the branch has them.
+
+Command: npx vitest run src/pages/accountColumnBoundary.spec.tsx
+Result:  3 failed | 1 passed (4)
+
+The one that passes is the CONTROL: `invitations` was already read by a named column list and this
+change does not touch it. It is green here and green after the fix, so a red in the other three is
+the boundary moving and not the harness losing sight of the requests.
+
+---- output ----
+
+ RUN  v4.1.10 D:/משה פרוייקטים/פיתוח אתרים/NIR-APP/.claude/worktrees/agent-a3bfa1394780d727a
+
+stderr | src/pages/accountColumnBoundary.spec.tsx > the settings roster asks for named columns > reads profiles by name rather than with a star
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • POST http://127.0.0.1:55431/rest/v1/rpc/resolve_export_report_template
+
+  • Request body: {"p_export_key":"accountant_monthly_report"}
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • POST http://127.0.0.1:55431/rest/v1/rpc/resolve_export_report_template
+
+  • Request body: {"p_export_key":"owner_expense_summary"}
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • POST http://127.0.0.1:55431/rest/v1/rpc/resolve_export_report_template
+
+  • Request body: {"p_export_key":"product_purchase_summary"}
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+ ❯ src/pages/accountColumnBoundary.spec.tsx (4 tests | 3 failed) 269ms
+     × reads profiles by name, and never asks for backup_email 81ms
+     × reads the organisation by name, and never asks for the commercial columns 19ms
+     × reads profiles by name rather than with a star 118ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/accountColumnBoundary.spec.tsx > the account bootstrap asks the two account tables for named columns > reads profiles by name, and never asks for backup_email
+AssertionError: expected '*' not to be '*' // Object.is equality
+ ❯ src/pages/accountColumnBoundary.spec.tsx:139:26
+    137|     expect(asked.profiles.length).toBeGreaterThan(0);
+    138|     for (const select of asked.profiles) {
+    139|       expect(select).not.toBe('*');
+       |                          ^
+    140|       expect(columns(select)).toEqual(columns(PROFILE_COLUMNS));
+    141|       expect(columns(select)).not.toContain('backup_email');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  src/pages/accountColumnBoundary.spec.tsx > the account bootstrap asks the two account tables for named columns > reads the organisation by name, and never asks for the commercial columns
+AssertionError: expected '*' not to be '*' // Object.is equality
+ ❯ src/pages/accountColumnBoundary.spec.tsx:151:26
+    149|     expect(asked.organizations.length).toBeGreaterThan(0);
+    150|     for (const select of asked.organizations) {
+    151|       expect(select).not.toBe('*');
+       |                          ^
+    152|       expect(columns(select)).toEqual(columns(ORGANIZATION_COLUMNS));
+    153|       expect(columns(select)).not.toContain('trial_ends_at');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  src/pages/accountColumnBoundary.spec.tsx > the settings roster asks for named columns > reads profiles by name rather than with a star
+AssertionError: expected '*' not to be '*' // Object.is equality
+ ❯ src/pages/accountColumnBoundary.spec.tsx:165:26
+    163|
+    164|     for (const select of asked.profiles) {
+    165|       expect(select).not.toBe('*');
+       |                          ^
+    166|       expect(columns(select)).toEqual(columns(PROFILE_COLUMNS));
+    167|       expect(columns(select)).not.toContain('backup_email');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 1 passed (4)
+   Start at  06:13:35
+   Duration  4.58s (transform 983ms, setup 670ms, import 1.49s, tests 269ms, environment 1.79s)
+

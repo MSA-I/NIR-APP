@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
+import { ORGANIZATION_COLUMNS, PROFILE_COLUMNS } from '../lib/accountColumns';
 import { isActiveRole, type Organization, type Profile } from '../lib/types';
 import { unwrap } from '../lib/useQuery';
 import { OrgScopeProvider } from '../lib/query/orgScope';
@@ -143,15 +144,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // including their own rows. .single() threw there, and the rejection escaped this
         // IIFE and dumped the user at /login with no explanation. Now profile stays null
         // with a live session, which App renders as "account unavailable".
+        //
+        // Named columns, not `*`: `*` asked for every column `profiles` will ever have, which
+        // already included `backup_email` -- the address a person nominates to recover their
+        // account, which nothing in this shell reads. See src/lib/accountColumns.ts.
         const p = unwrap(
-          await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle(),
+          await supabase.from('profiles').select(PROFILE_COLUMNS).eq('id', session.user.id).maybeSingle(),
         ) as Profile | null;
         if (p && (!p.active || !isActiveRole(p.role))) {
           throw new Error('account_role_retired');
         }
         const o = p
           ? (unwrap(
-              await supabase.from('organizations').select('*').eq('id', p.org_id).maybeSingle(),
+              await supabase.from('organizations').select(ORGANIZATION_COLUMNS).eq('id', p.org_id).maybeSingle(),
             ) as Organization | null)
           : null;
         const accessRows = p && o
@@ -255,7 +260,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function refreshOrg() {
     if (!session || !profile || offlineBootstrap) return;
     const next = unwrap(
-      await supabase.from('organizations').select('*').eq('id', profile.org_id).maybeSingle(),
+      await supabase.from('organizations').select(ORGANIZATION_COLUMNS).eq('id', profile.org_id).maybeSingle(),
     ) as Organization | null;
     // A miss leaves the organisation we already hold. Blanking it here would strand the shell on
     // "account unavailable" over a momentary read, which is a worse answer than a stale row.

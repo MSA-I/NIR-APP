@@ -87,6 +87,7 @@ jobs:
           money_inputs='^(src/|scripts/check-money\.ts$)'
           exemption_inputs='^(supabase/migrations/|scripts/check-exemption-pin\.ts$)'
           supplier_inputs='^(src/|scripts/check-supplier-columns\.ts$)'
+          profile_inputs='^(src/|scripts/check-profile-columns\.ts$)'
           # The assistant surface, tests included: the no-send guard reads spec files too (an
           # egress kind or a foreign flag key counts wherever it is written).
           nosend_inputs='^(src/lib/assistant/|src/components/assistant/|src/components/AssistantPanel\.tsx$|supabase/functions/assistant/|scripts/check-assistant-no-send\.mjs$)'
@@ -118,7 +119,7 @@ jobs:
           else
             echo "build=false" >> "$GITHUB_OUTPUT"
           fi
-          if [ ! -s changed-files.txt ] || matches "$workflow|$knip_config|$vitest_config|$knip_inputs|$token_inputs|$money_inputs|$exemption_inputs|$supplier_inputs|$nosend_inputs|$vitest_inputs|$gate_registry|$migration_number_inputs|$closure_inputs|$gate_control_inputs|$key_manifest_inputs|$baseline_inputs|$decision_inputs|$noindex_inputs"; then echo "verify=true" >> "$GITHUB_OUTPUT"; else echo "verify=false" >> "$GITHUB_OUTPUT"; fi
+          if [ ! -s changed-files.txt ] || matches "$workflow|$knip_config|$vitest_config|$knip_inputs|$token_inputs|$money_inputs|$exemption_inputs|$supplier_inputs|$profile_inputs|$nosend_inputs|$vitest_inputs|$gate_registry|$migration_number_inputs|$closure_inputs|$gate_control_inputs|$key_manifest_inputs|$baseline_inputs|$decision_inputs|$noindex_inputs"; then echo "verify=true" >> "$GITHUB_OUTPUT"; else echo "verify=false" >> "$GITHUB_OUTPUT"; fi
           if [ ! -s changed-files.txt ] || matches "$workflow|$knip_config|$vitest_config|$knip_inputs|$vitest_inputs"; then echo "install=true" >> "$GITHUB_OUTPUT"; else echo "install=false" >> "$GITHUB_OUTPUT"; fi
           if [ ! -s changed-files.txt ] || matches "$workflow|$knip_config|$knip_inputs"; then echo "knip=true" >> "$GITHUB_OUTPUT"; else echo "knip=false" >> "$GITHUB_OUTPUT"; fi
           if [ ! -s changed-files.txt ] || matches "$workflow|scripts/check-design-tokens\.ts$" || product_matches '^src/'; then echo "tokens=true" >> "$GITHUB_OUTPUT"; else echo "tokens=false" >> "$GITHUB_OUTPUT"; fi
@@ -132,6 +133,7 @@ jobs:
           if [ ! -s changed-files.txt ] || matches "$workflow|$baseline_inputs"; then echo "baselinedrift=true" >> "$GITHUB_OUTPUT"; else echo "baselinedrift=false" >> "$GITHUB_OUTPUT"; fi
           if [ ! -s changed-files.txt ] || matches "$workflow|$decision_inputs"; then echo "decisions=true" >> "$GITHUB_OUTPUT"; else echo "decisions=false" >> "$GITHUB_OUTPUT"; fi
           if [ ! -s changed-files.txt ] || matches "$workflow|scripts/check-supplier-columns\.ts$" || product_matches '^src/'; then echo "supplier=true" >> "$GITHUB_OUTPUT"; else echo "supplier=false" >> "$GITHUB_OUTPUT"; fi
+          if [ ! -s changed-files.txt ] || matches "$workflow|scripts/check-profile-columns\.ts$" || product_matches '^src/'; then echo "profile=true" >> "$GITHUB_OUTPUT"; else echo "profile=false" >> "$GITHUB_OUTPUT"; fi
           if [ ! -s changed-files.txt ] || matches "$workflow|$nosend_inputs"; then echo "nosend=true" >> "$GITHUB_OUTPUT"; else echo "nosend=false" >> "$GITHUB_OUTPUT"; fi
           if [ ! -s changed-files.txt ] || matches "$workflow|$noindex_inputs"; then echo "noindex=true" >> "$GITHUB_OUTPUT"; else echo "noindex=false" >> "$GITHUB_OUTPUT"; fi
           if [ ! -s changed-files.txt ] || matches "$workflow|$vitest_config|$vitest_inputs"; then echo "vitest=true" >> "$GITHUB_OUTPUT"; else echo "vitest=false" >> "$GITHUB_OUTPUT"; fi
@@ -197,6 +199,12 @@ jobs:
       - name: Supplier-column guard
         if: needs.changes.outputs.supplier == 'true'
         run: npm run check:supplier-columns
+      # The same class as the step above, on the two account tables. `select('*')` there hands the
+      # browser every colleague's phone and backup_email, and 403s the whole statement once 0319
+      # revokes those column privileges.
+      - name: Profile-column guard
+        if: needs.changes.outputs.profile == 'true'
+        run: npm run check:profile-columns
       - name: Assistant no-send guard
         if: needs.changes.outputs.nosend == 'true'
         run: npm run check:assistant-no-send
@@ -254,8 +262,8 @@ jobs:
       # -- and a green `verify` check meant half the guards, not all of them. Measured
       # 01.09.2026: 13 of the 27 sub-commands ran in no workflow at all.
       #
-      # Measured 04.09.2026: `verify` has 32 sub-commands and ALL 32 are named in this file --
-      # 18 in the focused steps above, the 14 below. The gap is closed, and it stays closed
+      # Measured 05.09.2026: `verify` has 33 sub-commands and ALL 33 are named in this file --
+      # 19 in the focused steps above, the 14 below. The gap is closed, and it stays closed
       # because check:gate-controls now derives "every `verify` sub-command has a step here"
       # from package.json rather than from a hand-kept list, so the next guard added to `verify`
       # alone turns that control red instead of running nowhere.

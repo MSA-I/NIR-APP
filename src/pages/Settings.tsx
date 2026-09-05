@@ -25,6 +25,7 @@ import {
   sendInvite, resendInvite, revokeInvite, type Invitation,
 } from '../lib/invitations';
 import { isActiveRole, type ActiveRole, type Profile } from '../lib/types';
+import { PROFILE_COLUMNS } from '../lib/accountColumns';
 import { CurrencyTolerancesPanel } from '../components/CurrencyTolerancesPanel';
 import { SupportContact } from '../components/SupportContact';
 import {
@@ -120,8 +121,11 @@ export default function Settings() {
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [passwordBusy, setPasswordBusy] = useState(false);
 
+  // Named columns, not `*`. The roster draws four fields; `*` fetched every column the table
+  // has, which handed this screen each colleague's `backup_email` -- the address they nominated
+  // to recover their account -- for nothing. See src/lib/accountColumns.ts.
   const { data: users, loading, error, refetch } = useQuery<Profile[]>(async () =>
-    unwrap(await supabase.from('profiles').select('*').order('full_name')));
+    unwrap(await supabase.from('profiles').select(PROFILE_COLUMNS).order('full_name')));
 
   const { data: invitations, refetch: refetchInvites } = useQuery<Invitation[]>(async () =>
     unwrap(await supabase.from('invitations').select(INVITATION_COLUMNS).order('created_at', { ascending: false })));

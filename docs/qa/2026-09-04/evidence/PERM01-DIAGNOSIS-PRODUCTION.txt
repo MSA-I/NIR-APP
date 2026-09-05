@@ -1,0 +1,83 @@
+PERM-01 - diagnosis, measured READ-ONLY against production
+===========================================================
+Project ref rkftlbctohswhbbiaqin, 05.09.2026, through scripts/db-query.ps1 (Management API).
+Every statement below is a SELECT. Nothing was written. No password, token or key appears here.
+
+The finding claims: "the /settings refusal is cosmetic -- every row the screen displays is served
+to office and accountant by the API". It is accurate, and it understates it by one column.
+
+1) COLUMN PRIVILEGES -- has_column_privilege(role, table, column, 'select')
+   All 10 columns of public.profiles and all 12 of public.organizations answered TRUE for BOTH
+   `authenticated` and `anon`. There is no column-level narrowing on either table today, which is
+   the whole reason `select('*')` returns what it returns.
+
+   profiles:      id, org_id, full_name, role, phone, active, created_at, supplier_id, locale,
+                  backup_email, theme            -> authenticated=t anon=t on every one
+   organizations: id, name, vat_rate, settings, created_at, status, trial_ends_at, logo_path,
+                  logo_updated_at, base_currency, country_code, onboarding_completed_at
+                                                 -> authenticated=t anon=t on every one
+
+2) TABLE GRANTS AND READ POLICIES
+   org_autonomy_policies    authenticated SELECT=t  anon=f  RLS=t  policy: (org_id = auth_org())
+   org_flag_configurations  authenticated SELECT=t  anon=f  RLS=t  policy: (org_id = auth_org())
+   organizations            authenticated SELECT=t  anon=t  RLS=t  org_select (id = auth_org())
+                                                                   org_platform_select is_platform_admin()
+   profiles                 authenticated SELECT=t  anon=t  RLS=t  profiles_select (org_id = auth_org())
+
+   Neither configuration table's read policy mentions a role. Row access is "any member of the
+   tenant", which is what "office and accountant read the feature-flag and AI-autonomy
+   configuration" means in practice.
+
+3) LIVE READS, ONE PER ROLE, on the guarded path
+   For each of the three demo identities: set request.jwt.claims to that subject, `set local role
+   authenticated`, then count. Same six statements each time.
+
+   as_role      colleague_rows  phone_values  backup_email_values  org_rows  flag_rows  autonomy_rows
+   owner                     6             5                    0         1          3              4
+   office                    6             5                    0         1          3              4
+   accountant                6             5                    0         1          3              4
+
+   Identical. All three roles receive all four surfaces in full -- exactly what the ledger row says
+   fails today.
+
+   `backup_email_values = 0` is NOT a defence and must not be read as one. It is 0 because nobody
+   in this tenant has nominated a backup address yet; the COLUMN is fully readable (section 1), so
+   the first person who nominates one publishes their account-recovery address to every colleague.
+   That column is why the client half of this fix matters on its own: `select('*')` was already
+   fetching it into the browser of every office clerk and accountant on every visit to /settings.
+
+4) BLAST RADIUS OF THE REVOKE -- measured before writing it, not after
+   a. Dependent views. Exactly one view in `public` reads either table:
+      inventory_movement_feed {security_invoker=on, security_barrier=on}. It selects pr.full_name,
+      pr.org_id and pr.id from profiles -- none of the four columns. A security_invoker view runs
+      with the CALLER's privileges, so this was the one that could have broken. It does not.
+   b. INVOKER routines a browser role may execute that name any of the four columns AND either
+      table: one hit, management_dashboard_snapshot(date). Its `created_at` references are on other
+      tables -- migration 0263 does not read organizations or profiles at all -- so it is unaffected.
+      Every other reader (auth_role, my_backup_email, the platform_* RPCs in src/lib/platform.ts)
+      is SECURITY DEFINER and runs with its owner's privileges.
+   c. Existing SQL suites that read the columns to be revoked, and the role they read them as:
+        p22_trial_read_only.sql:98            organizations.trial_ends_at   -- before `set local role`, runs as postgres
+        p25_tenant_offboarding_export.sql:1614 organizations.trial_ends_at  -- after `reset role`, runs as postgres
+        p70_launch_plans_and_usage_anchor.sql:288  organizations.created_at -- no role block, runs as postgres
+        p75_platform_lifecycle.sql:717,722    organizations.created_at      -- after `reset role`, runs as postgres
+        p44_trial_retirement_document_control.sql:135,167,183 -- reads `trial_ends_at` while
+          `set local role authenticated` IS in force, but from the RETURN COLUMN of
+          public.organization_access_state(), a SECURITY DEFINER RPC, not from public.organizations.
+      No existing suite reads any of the four columns from the table as `authenticated`.
+   d. Client code. Two `select('*')` call sites on profiles (AuthContext, Settings) and two on
+      organizations (both AuthContext). Nothing in src/ renders organizations.created_at or
+      organizations.trial_ends_at; profiles.phone is rendered in exactly one place, the settings
+      roster; profiles.backup_email is rendered nowhere -- the person's own is answered by
+      my_backup_email() (0255), a definer, for the caller alone.
+
+5) WHY A VIEW AND NOT JUST A REVOKE
+   Every application role -- owner, office, accountant -- is the SAME database role,
+   `authenticated`. A column privilege therefore cannot tell them apart, and RLS cannot mask a
+   column. So the only shape that satisfies "office and accountant receive no phone, owner still
+   does" is 0112's: revoke the column from `authenticated`, and hand it back through a view that
+   runs with its OWNER's privileges and carries its own role predicate. Row-level surfaces
+   (org_flag_configurations, org_autonomy_policies) need no such thing -- their RLS policy can name
+   the role directly, which is why they are narrowed in the policy and keep their table grant, so
+   the "a permissive read policy exists <=> authenticated holds SELECT" contract in
+   p1_financial_commands.sql:21 continues to hold on both.
