@@ -170,3 +170,40 @@ DO
 DO
 ROLLBACK
 EXIT=0
+
+
+================================================================================
+A THIRD RUN, ON THE FINAL 0324
+================================================================================
+
+`check:exemptions` requires every post-0057 migration to re-run
+`private.scope_enforcement_violations()`, and 0324 was missing that block when the green above
+was measured. The block was added and the whole thing re-run from a fresh rebuild rather than
+reasoning that an assertion cannot change an outcome. 0324 APPLYING AT ALL is itself the proof
+that the A1/A3/A5 re-assertion passes.
+
+    head, read immediately before:  0315 0319 0320 0322 0323 0324
+    suite sha256 inside container:  4025bffe2cee68422849c6c1f016c5d9020994250e9e176732879cabedde7650
+    result:                         36 passed / 0 failed / 36, controls 10 of 10, exit 0
+
+That rebuild was itself the fifth attempt at a clean stack: one `supabase db reset` died at 0097
+with a deadlock between the migration runner and PostgREST's schema introspection (retried once,
+on a stated hypothesis, and passed), and two others were the OTHER campaign rebuilding the shared
+database out from under this agent. All of it is measured in
+PR17-STACK-CONTENTION-AND-THE-SCREENSHOT.txt.
+
+--- raw tail ---
+  34 | filing/date-unreadable-names-the-date                | case    | invoice_date_missing                              | invoice_date_missing                              | ok
+  35 | filing/number-unreadable-names-the-number            | case    | invoice_number_missing                            | invoice_number_missing                            | ok
+  36 | control/filing-both-missing-unchanged                | control | invoice_identity_missing                          | invoice_identity_missing                          | ok
+(36 rows)
+
+ passed | failed | total | controls_green | controls_total 
+--------+--------+-------+----------------+----------------
+     36 |      0 |    36 |             10 |             10
+(1 row)
+
+DO
+ROLLBACK
+EXIT=0
+

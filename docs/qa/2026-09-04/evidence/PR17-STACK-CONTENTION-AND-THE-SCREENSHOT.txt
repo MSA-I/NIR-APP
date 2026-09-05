@@ -1,0 +1,103 @@
+PR 17 — QA-sweep-20260904 — what was NOT measured, and the measurement that says why
+================================================================================
+
+THE SHORT VERSION. The rendered review screen was NOT photographed. Everything else in this PR
+was measured. The reason is not a shortcut: the shared local database was rebuilt out from under
+this agent FOUR times while it held the lock, by a campaign that does not read the lock file, and
+a screenshot of a database somebody else is halfway through rebuilding is evidence of nothing.
+
+--------------------------------------------------------------------------------
+THE CONTENTION, MEASURED
+--------------------------------------------------------------------------------
+
+`.claude/locks/supabase` already records this happening twice today to PR 13, and names the
+cause: `docs/ux-remediation-documents-assistant` does not read this campaign's lock file. It
+happened twice more to PR 17.
+
+  * Clobber 3, seen at the moment it began. Mid-way through preparing the screenshot fixture, a
+    query for `supabase_migrations.schema_migrations` returned
+        ERROR: relation "supabase_migrations.schema_migrations" does not exist
+    while `pg_stat_activity` showed
+        @effect/sql-pg | active | create extension if not exists pgcrypto with schema extensio…
+    `@effect/sql-pg` is the other campaign's migration runner. Their rebuild ran to completion at
+    their own head, `0318` — so OUR `0315` was gone again, exactly as the lock file predicted.
+
+  * Clobber 4, immediately after this PR's own `npm run demo:restore` succeeded.
+    `pg_postmaster_start_time()` = 2026-09-05 11:22:44+00, `schema_migrations` absent again, and
+        @effect/sql-pg | active | -- ===== 4. A1/A3/A5 re-assertion =====
+    which is their runner inside a migration body. The demo tenant this PR had just restored and
+    proved no longer existed thirty seconds later.
+
+  * A fifth interruption was ENVIRONMENTAL rather than contention, and is recorded as such: one
+    `supabase db reset` died at `0097` with
+        LegacyMigrationApplyError: deadlock detected (SQLSTATE 40P01)
+        Process 224 waits for AccessExclusiveLock on relation 16458; blocked by process 318.
+        Process 318 waits for AccessShareLock on relation 17674; blocked by process 224.
+        At statement: … drop policy if exists suppliers_select on public.suppliers
+    That is the migration runner deadlocking against PostgREST's schema-cache introspection. The
+    hypothesis was that PostgREST was mid-introspection and that a retry with it idle would pass;
+    it was retried once, on that hypothesis, and passed. Not waved at, not re-run in hope.
+
+A full rebuild of this migration set measures roughly thirty-five minutes on this machine. The
+other campaign rebuilds at intervals shorter than that.
+
+--------------------------------------------------------------------------------
+WHY THE RED AND THE GREEN ARE STILL EVIDENCE
+--------------------------------------------------------------------------------
+
+Because the head was READ immediately before each side and quoted in the evidence, never
+inherited — which is the rule the lock file states and the reason PR 13's measurements survived
+the same contention:
+
+    RED    0315 0319 0320 0322 0323            (0324 physically moved out of supabase/migrations)
+    GREEN  0315 0319 0320 0322 0323 0324
+    and a THIRD run, after the fourth rebuild was undone by this agent's own reset, on the FINAL
+    0324 (the one carrying the A1/A3/A5 re-assertion added for `check:exemptions`):
+    GREEN  0315 0319 0320 0322 0323 0324  ->  36 passed / 0 failed / 36, 10 of 10 controls, exit 0
+
+with the same suite SHA-256 (`4025bffe…`) printed by `sha256sum` INSIDE the container on every
+one of those runs. A run whose head was not read is not evidence; these were.
+
+--------------------------------------------------------------------------------
+WHAT THE MISSING SCREENSHOT WOULD AND WOULD NOT HAVE ADDED
+--------------------------------------------------------------------------------
+
+DOC-08's oracle is a claim about a rendered cell: `מחיר במסמך` shows the extracted price. What
+was proved instead, and it is one expression short of the photograph:
+
+  * The cell is `fmtMoneyExact(line.unit_price, intakeCurrency)` at
+    `src/components/document-review/DocumentAssessmentPanel.tsx:560` — unconditional, no branch
+    between the value and the cell.
+  * `line` comes from `assessment.lines`, which comes from
+    `public.get_document_review_assessment` — the definer the screen calls, exercised in `p111`
+    as role `authenticated` with a real JWT subject, `auth.uid()`/`auth_org()`/`auth_role()`/
+    `auth_scopes()` all in the path.
+  * On that path `lines[0].unit_price` moves `(null)` -> `4.20`, and `(null)` is what
+    `fmtMoneyExact` draws as the em dash the sweep photographed.
+  * The other half of the finding — "the price for that same line is rendered elsewhere on the
+    page" — is `DocumentReviewProposals.tsx:718`, which prints every key of
+    `line_items[].values` verbatim, which is where `4.20 ש"ח` was already on screen.
+
+So the value the screen prints is measured on the screen's own data path. What is NOT measured is
+the pixels: font, direction, truncation, and whether anything else on that panel moved. That gap
+is real and it is why these rows say what they say rather than claiming a photograph.
+
+A COMPONENT-LEVEL ORACLE WAS CONSIDERED AND REJECTED as a substitute, and the reason is worth
+recording so nobody adds one thinking it closes this. The panel renders `line.unit_price`
+unconditionally, so a component test would assert "null draws an em dash, 4.20 draws ₪4.20" —
+both true BEFORE this change and after it. It would be green on the unfixed tree. A test that
+cannot fail for the defect is not an oracle for it; the defect is entirely server-side.
+
+--------------------------------------------------------------------------------
+THE STATE OF THE STACK AT HANDOFF
+--------------------------------------------------------------------------------
+
+`npm run demo:restore` was run and PROVED twice by this agent — three real password sign-ins and
+three profiles in the right roles, the second time on this PR's own final reset at head
+`0315 0319 0320 0322 0323 0324`. That database was destroyed by the other campaign's fourth
+rebuild about thirty seconds later, and at the time of writing their runner is still inside a
+migration body. Whoever takes the lock next inherits THEIR set, not ours, and must do what the
+lock file says: reset from their own worktree and read the head rather than trust it.
+
+The dev server this agent started for the screenshot attempt ran on port 5207 with
+`--strictPort` and was stopped. Port 5199, held by another worktree since 03.09, was not touched.
