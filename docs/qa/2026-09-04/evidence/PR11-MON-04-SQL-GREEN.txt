@@ -1,0 +1,130 @@
+PR 11 — MON-04 — SQL GREEN
+supabase/tests/p115_a_statement_line_is_spent_once.sql with migration 0322 applied
+Measured 05.09.2026, local stack supabase_db_supplyflow-p0, branch worktree-agent-aa7200391f1c9d18e.
+
+SAME SUITE FILE, UNCHANGED. SHA-256 read back INSIDE the container in both the red and the green:
+
+    cf42ec1758dab5058d814b8c004a8310842429d785fb52a4f701178657f25886  /var/lib/postgresql/p115.sql
+
+Migration 0322 SHA-256 on disk:
+    5205d9561a956c1d10d0d2a5791ba21c61e8bcd58651446e721ef8bc41e6a4ed
+
+WHY THE DATABASE WAS RESET BETWEEN THE TWO RUNS
+------------------------------------------------
+p115 COMMITS its fixtures and the red aborts inside the report block, before the suite's own
+`drop schema p115 cascade`. Re-running against the wreckage would collide on
+`bank_transactions_org_row_hash_idx` and on the organisation's primary key, so the reset is
+required by the suite's shape, not tidiness. Both runs therefore start from the same head.
+
+THE HEAD THE GREEN WAS MEASURED ON — READ, NOT ASSUMED, AFTER THE RESET
+------------------------------------------------------------------------
+    select version from supabase_migrations.schema_migrations where version >= '0310' order by version;
+    -> 0310 0311 0312 0313 0314 0315 0322
+
+`0315` present, so PR 7's committed-amount guard is in the database. `0316`-`0321` belong to other
+PRs in this campaign and are not on this branch; nothing was added to HISTORICAL_GAPS.
+
+The guard, as installed by 0322 — this is the property that stops a session switching it off with
+`set constraints`, and the suite asserts it again at the end:
+
+    select tgname, tgconstraint <> 0, tgdeferrable from pg_trigger
+    where tgname = 'bank_allocations_statement_line_guard';
+    -> bank_allocations_statement_line_guard | constraint=true | deferrable=false
+
+COMMAND
+-------
+    docker exec -e PGPASSWORD=postgres -e PGTZ=Asia/Jerusalem supabase_db_supplyflow-p0 \
+      psql -U supabase_admin -d postgres -v ON_ERROR_STOP=1 -f /var/lib/postgresql/p115.sql
+
+    exit code 0
+
+RESULT
+------
+                   result
+    --------------------------------------------
+     p115_a_statement_line_is_spent_once_passed
+    (1 row)
+
+No ERROR line anywhere in the 205 lines of output. The report block did not raise, which means
+every one of the nine expectations matched its recorded outcome and both race arms landed on their
+required shape:
+
+  command_second_full_match      -> refused: bank_allocation_exceeds_statement_line
+  suggestion_beside_a_full_line  -> ok            (control, green in BOTH runs)
+  direct_second_confirmed        -> refused: bank_allocation_exceeds_statement_line
+  direct_suggestion_on_full_line -> ok            (control, green in BOTH runs)
+  direct_split_first             -> ok            (control, green in BOTH runs)
+  direct_split_second            -> ok            (control, green in BOTH runs)
+  direct_split_one_over          -> refused: bank_allocation_exceeds_statement_line
+  move_onto_a_full_line          -> refused: bank_allocation_exceeds_statement_line   (UPDATE)
+  move_onto_a_line_with_room     -> ok            (control, green in BOTH runs)
+  race that overflows            -> exactly 1 insert stood and exactly 1 was refused BY NAME
+  race that fits                 -> both 1,000 + 1,000 inserts stood
+
+Ten `p115.assert` calls followed, all silent, i.e. all true. They assert ARITHMETIC PER LINE rather
+than a count:
+
+  * the line the command tried to match twice holds 2,950.00 confirmed in exactly ONE row;
+  * the refused match left NO payment behind — the refusal was a refusal, not a partial write;
+  * the suggested line holds its 2,950.00 suggestion AND exactly one 2,950.00 confirmed match;
+  * the directly-written line holds 2,950.00 confirmed, not 5,900.00;
+  * the split line holds exactly its two halves, 1,000 + 1,950 = 2,950.00;
+  * the moved allocation ended on the line WITH ROOM, not on the full one;
+  * the raced line holds 2,000.00, i.e. one of the two 2,000.00 inserts;
+  * the race that fits left BOTH of its inserts standing;
+  * the guard is a NON-DEFERRABLE constraint trigger;
+  * `bank_allocations.bank_transaction_id` is indexed, which it was not before 0322 — the guard
+    reads that column on every write to a financial table.
+
+THE CONCURRENCY PROOF IS A MEASUREMENT, NOT AN ARGUMENT
+--------------------------------------------------------
+p115 runs the race through two independent `dblink` sessions: session A inserts 2,000.00 and then
+SLEEPS 1.2s INSIDE ITS TRANSACTION — after the guard has taken the line's row lock, before it
+commits — and session B is dispatched 0.2s later, so B is measurably behind rather than merely
+second in the file. p115 asserts the shape and passed; but it drops its own schema on success, so
+the per-session messages cannot be read out of it afterwards. They were therefore reproduced
+verbatim by a supplementary probe on the SAME guarded database immediately after the green run,
+racing 2,000.00 + 2,000.00 at a fresh 2,950.00 line:
+
+    === the two sessions, verbatim ===
+      session  |                 result
+    -----------+----------------------------------------
+     session_a | ok
+     session_b | bank_allocation_exceeds_statement_line
+    (2 rows)
+
+    === what the 2,950.00 line ended up holding ===
+        reference    | line_amount | currency | confirmed_claimed | confirmed_rows
+    -----------------+-------------+----------+-------------------+----------------
+     P115-PROBE-OVER |    2950.000 | ILS      |          2000.000 |              1
+    (1 row)
+
+Session B did not fail on a deadlock, a serialisation error or a timeout — it blocked on the row
+lock the guard takes over the affected statement lines in id order, and when session A committed it
+re-read under a fresh statement snapshot that contained A's row and was refused BY THE PROJECT'S OWN
+NAMED ERROR. On the unfixed tree the identical race left 4,000.00 on that 2,950.00 line.
+
+The probe is supplementary and is not a suite; it lives only in this evidence file. It was run on
+the guarded database and its row was removed by the following reset.
+
+WHAT WAS PROVED ON THE GUARDED PATH, AND WHAT ON THE PRIVILEGED ONE
+---------------------------------------------------------------------
+`command_second_full_match` and `suggestion_beside_a_full_line` run as role `authenticated` with a
+real `request.jwt.claim.sub`, calling `public.match_bank_transaction` — RLS, `auth_role()` and
+`p1_financial_command_guard` all in front of the write. The refusal reaches an end user by name
+through the product's own door.
+
+The TABLE arm writes `public.bank_allocations` directly and cannot do otherwise: `0023:166` revokes
+insert, update and delete on this table from `authenticated`, so every product write to it already
+happens inside a SECURITY DEFINER function at the definer owner's privilege. A direct write here is
+not a way around the guard — it is the exact level at which every real write runs, and the only way
+to reach two of the oracle's three cases at all, since no command moves an allocation between lines
+and `match_bank_transaction` locks the line before this guard can ever see two commands at once.
+
+RESIDUAL, RECORDED RATHER THAN SILENTLY FIXED
+-----------------------------------------------
+`match_bank_transaction` never clears the suggestions on a line it confirms, so every confirmed
+match leaves its suggestion beside it. That is the "two rows of 2,950.00" appearance the finding
+reported. Correcting it would delete financial rows and decide which row is real, so it stays the
+owner's decision; DEBT §122 carries the reason. The existing production pair on line
+`fa000000-…-0008` was not touched.
